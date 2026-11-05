@@ -88,21 +88,35 @@ def place(w: int, h: int, corner: str, margin: int = 24) -> tuple[int, int]:
     return x, y
 
 
+_pinned: dict = {}
+
+
 def pin(hwnd: int, x: int, y: int, w: int, h: int, opacity: int, click_through: bool) -> None:
-    """Place the browser window: its top-left is (x, y), size w x (h + CHROME_BAR). The WoW frame covers the bar."""
+    """Place the browser window: its top-left is (x, y), size w x (h + CHROME_BAR). The WoW frame covers the bar.
+
+    Called every tick, but only touches the window when something changed (re-applying style, region and position
+    4x per second made the page blink); the clip region is refreshed now and then because Chrome may reset it.
+    """
+    key = (hwnd, x, y, w, h, opacity, click_through)
+    n = _pinned.get("n", 0) + 1
+    if _pinned.get("key") == key and n % 20:
+        _pinned["n"] = n
+        return
+    _pinned.update(key=key, n=n)
     ex = user32.GetWindowLongW(hwnd, GWL_EXSTYLE) | WS_EX_TOOLWINDOW
     ex = ex | WS_EX_TRANSPARENT if click_through else ex & ~WS_EX_TRANSPARENT
     # Chrome draws through DirectComposition: a layered style makes the page invisible, so only use it for see-through
     see_through = opacity < 100
     ex = ex | WS_EX_LAYERED if see_through else ex & ~WS_EX_LAYERED
-    user32.SetWindowLongW(hwnd, GWL_EXSTYLE, ex)
+    if ex != user32.GetWindowLongW(hwnd, GWL_EXSTYLE):
+        user32.SetWindowLongW(hwnd, GWL_EXSTYLE, ex)
     if see_through:
         user32.SetLayeredWindowAttributes(hwnd, 0, int(255 * max(10, min(100, opacity)) / 100), LWA_ALPHA)
     user32.SetWindowPos.argtypes = [wintypes.HWND, wintypes.HWND, ctypes.c_int, ctypes.c_int, ctypes.c_int,
                                     ctypes.c_int, wintypes.UINT]
     user32.SetWindowPos(wintypes.HWND(hwnd), wintypes.HWND(HWND_TOPMOST), x, y - CHROME_BAR, w, h + CHROME_BAR,
                         SWP_NOACTIVATE | SWP_SHOWWINDOW)
-    # Chrome's own title bar is the top CHROME_BAR pixels: cut them off (re-applied, Chrome resets the region)
+    # Chrome's own title bar is the top CHROME_BAR pixels: cut them off
     rgn = ctypes.windll.gdi32.CreateRectRgn(0, CHROME_BAR, w, h + CHROME_BAR)
     user32.SetWindowRgn(wintypes.HWND(hwnd), ctypes.c_void_p(rgn), False)
 
