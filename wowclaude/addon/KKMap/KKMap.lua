@@ -4,7 +4,7 @@
 --   #ver|n  #screen|w|h  #msg|seq|slot|text  #ack|seq  #edit|0/1  #ctx|...  #img|n  #slot|n  name|type|text|x|y|w|h
 -- The decoder (wowclaude/decode.py) finds the cell size itself. tests/ run this very file inside a fake WoW API.
 local CELL, COLS, ROWS = 1, 128, 40
--- The button list is sent only with a question (so the AI can click in menus); /kkmap frames keeps it on permanently.
+-- The button list is sent only with a question (so the AI can click in menus); /strip frames keeps it on permanently.
 local MAGIC = {{255,0,255},{0,255,255},{255,255,0},{0,0,0},{255,255,255},{255,0,0},{0,255,0},{0,0,255}}
 KKMapDB = KKMapDB or {}
 local pending  -- set while a question waits for its answer (declared early: the frame scan reads it)
@@ -311,6 +311,8 @@ local function buildMenu()
   button("Help", function()
     say("Type in the Claude tab to chat. /wac opens this menu, /browser [url] opens the browser, /browser off closes it. AI Setup picks the AI.")
     say("Ask for macros, lists, or pages (the AI can create macros and open videos for you).")
+    say("/c text = ask  |  /wac = menu  |  /browser [url] or /wb = browser, /browser off = close  |  /ol = show overlay window")
+    say("/wm = macro  |  /strip always|auto|off = colour strip  |  /img, /hdr, /rc, /wacdbg = tools")
   end)
   f:Hide()
   menu = f
@@ -476,7 +478,8 @@ function KKShowOverlay(data)
   C_Timer.After(data.secs or 45, autoClose)
 end
 
-SLASH_KKOVERLAY1 = "/kko"
+SLASH_KKOVERLAY1 = "/ol"
+SLASH_KKOVERLAY2 = "/kko"
 SlashCmdList["KKOVERLAY"] = function()
   local f = buildOverlay()
   if f:IsShown() then f:Hide() elseif KKMapDB.lastOverlay then KKShowOverlay(KKMapDB.lastOverlay) else print(L("Kein Overlay vorhanden.", "No overlay yet.")) end
@@ -638,7 +641,8 @@ if C_Timer and C_Timer.NewTicker then
   end)
 end
 
-SLASH_KKIMG1 = "/kkimg"
+SLASH_KKIMG1 = "/img"
+SLASH_KKIMG2 = "/kkimg"
 SlashCmdList["KKIMG"] = function(msg)
   local n = tonumber(msg) or 1
   if not KKImgFrame then
@@ -654,7 +658,8 @@ SlashCmdList["KKIMG"] = function(msg)
   say("KKMap: image " .. n)
 end
 
-SLASH_KKHDR1 = "/kkhdr"
+SLASH_KKHDR1 = "/hdr"
+SLASH_KKHDR2 = "/kkhdr"
 SlashCmdList["KKHDR"] = function()
   local eb = _G["ChatFrame4EditBox"]
   if not eb then say("kein ChatFrame4EditBox") return end
@@ -666,7 +671,8 @@ SlashCmdList["KKHDR"] = function()
 end
 
 -- Notweg: Antwort per /kkc (getippt von der Bruecke) wirkt wie eine zugestellte Antwort
-SLASH_KKREPLY1 = "/kkc"
+SLASH_KKREPLY1 = "/rc"
+SLASH_KKREPLY2 = "/kkc"
 SlashCmdList["KKREPLY"] = function(msg)
   say(msg)
   if pending then KKMapState.ack = pending.seq; pending = nil end
@@ -679,11 +685,14 @@ host:SetScript("OnUpdate", function(_, dt)
   if acc >= 0.4 then acc = 0; if not KKMapDB.off then pcall(applyVisible); if stripOn then render() end end end
 end)
 
-SLASH_KKMAP1 = "/kkmap"
+SLASH_KKMAP1 = "/strip"
+SLASH_KKMAP2 = "/kkmap"
 -- /kkm Name~Text mit \n als Zeilenumbruch  (optional  Name~Text~char  = nur dieser Charakter)
-SLASH_KKDBG1 = "/kkdbg"
+SLASH_KKDBG1 = "/wacdbg"
+SLASH_KKDBG2 = "/kkdbg"
 SlashCmdList["KKDBG"] = function() KKMapDB.dbg = not KKMapDB.dbg; say("KKMap dbg " .. tostring(KKMapDB.dbg)) end
-SLASH_KKMACRO1 = "/kkm"
+SLASH_KKMACRO1 = "/wm"
+SLASH_KKMACRO2 = "/kkm"
 SlashCmdList["KKMACRO"] = function(msg)
   local name, body, scope = strsplit("~", msg or "", 3)
   if not name or name == "" or not body or body == "" then say("KKMap: /kkm Name~Text (\\n = newline)") return end

@@ -36,11 +36,11 @@ If `wowclaude` is not found, use `py -3 -m wowclaude ...`.
 ## In the game
 
 - `/wac` opens a small menu: **AI Setup**, **Open Browser**, **Bridge: always visible / only when needed**, **Show
-  Overlay Window**, **Help**. Other commands: `/browser [url]`, `/c question`, `/kkm Name~line one\nline two`
+  Overlay Window**, **Help**. `/ol` shows the overlay window, `/strip always|auto|off` controls the colour strip. Other commands: `/browser [url]`, `/c question`, `/wm Name~line one\nline two`
   (creates a macro and puts it on your cursor).
 - Run the game in **windowed or borderless** mode and do not cover the top-left corner of the game window; exclusive
   fullscreen does not work. The strip is only visible while you type in the Claude tab and while the AI is thinking
-  (a small label next to it says so). `/kkmap always` keeps it visible, `/kkmap auto` is the default, `/kkmap off`
+  (a small label next to it says so). `/strip always` keeps it visible, `/strip auto` is the default, `/strip off`
   switches the addon off.
 - The conversation in the Claude tab survives `/reload` and restarts (last 100 lines). Windows you moved (menu, answer
   window) stay where you put them.

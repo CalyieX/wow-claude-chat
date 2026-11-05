@@ -97,7 +97,7 @@ def cmd_doctor(args) -> int:
         st = decode.decode(img) if img is not None else None
         if st is None:
             print("strip         : not visible. It only shows while you type in the Claude tab. In the game type "
-                  "`/kkmap always`, run this again, and if it is still not visible check that the game is in windowed "
+                  "`/strip always`, run this again, and if it is still not visible check that the game is in windowed "
                   "or borderless mode and the addon is enabled.")
         else:
             print("strip         : OK, addon version", st.addon_version, "- next reply slot", st.slot_next)

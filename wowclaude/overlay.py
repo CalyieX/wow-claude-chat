@@ -793,7 +793,23 @@ def frame_loop(hwnd: int, x: int, y: int, w: int, h: int, opacity: int, click_th
         fw = S["w"] + 2 * EDGE
         lw = label_width()
         gx = buttons(fw)["ghost"][0]
-        bar.geometry(f"{max(60, gx - 4 - lw)}x18+{S['x'] - EDGE + lw}+{S['y'] - TOP + 14}")
+        bw, bh = max(60, gx - 4 - lw), 18
+        bx, by = S["x"] - EDGE + lw, S["y"] - TOP + 14
+        bar.geometry(f"{bw}x{bh}+{bx}+{by}")
+        # Tk applies geometry lazily and sometimes not at all for a borderless window after the game was resized:
+        # put the window where it belongs with the Win32 call as well, and re-check this on every tick.
+        bar.update_idletasks()
+        bh_ = user32.GetParent(bar.winfo_id()) or bar.winfo_id()
+        user32.SetWindowPos(ctypes.c_void_p(bh_), wintypes.HWND(HWND_TOPMOST), bx, by, bw, bh, 0x10)  # NOACTIVATE
+        S["bar"] = (bx, by, bw, bh, bh_)
+
+    def bar_ok() -> bool:
+        b = S.get("bar")
+        if not b:
+            return True
+        r = wintypes.RECT()
+        user32.GetWindowRect(ctypes.c_void_p(b[4]), ctypes.byref(r))
+        return (r.left, r.top, r.right - r.left, r.bottom - r.top) == b[:4]
 
     def dims():
         return S["w"] + 2 * EDGE, S["h"] + TOP + EDGE
@@ -875,7 +891,27 @@ def frame_loop(hwnd: int, x: int, y: int, w: int, h: int, opacity: int, click_th
     root.bind("<Leave>", lambda e: (S.update(hover=""), draw()) if S["hover"] else None)
     layout()
 
+    def frame_ok() -> bool:
+        r = wintypes.RECT()
+        user32.GetWindowRect(ctypes.c_void_p(top_hwnd), ctypes.byref(r))
+        fw, fh = dims()
+        return (r.left, r.top, r.right - r.left, r.bottom - r.top) == (S["x"] - EDGE, S["y"] - TOP, fw, fh)
+
     def tick():
+        """Never let one failed round stop the loop: the frame must keep following the browser."""
+        try:
+            _tick()
+        except tk.TclError:
+            raise  # window destroyed: end
+        except Exception as exc:  # noqa: BLE001
+            try:
+                with open(config.HOME / "overlay.log", "a", encoding="utf-8") as f:
+                    f.write(f"tick error: {exc!r}\n")
+            except OSError:
+                pass
+            root.after(500, tick)
+
+    def _tick():
         if not user32.IsWindow(wintypes.HWND(hwnd)):
             persist()
             root.destroy()
@@ -911,6 +947,10 @@ def frame_loop(hwnd: int, x: int, y: int, w: int, h: int, opacity: int, click_th
             user32.SetWindowPos(ctypes.c_void_p(top_hwnd), wintypes.HWND(HWND_TOPMOST), 0, 0, 0, 0, 0x13)
             bar.attributes("-topmost", True)
             bar.lift()
+            if not frame_ok():  # frame lost its place (or its picture): redo the whole layout
+                layout()
+            if not bar_ok():  # the bar drifted away from the frame: put it back
+                place_bar()
             n = cache.get("n", 0) + 1
             cache["n"] = n
             if port and n % 8 == 0 and root.focus_get() is not entry:  # keep the address bar in sync with the page
