@@ -228,7 +228,7 @@ local function addMarks(f)
   f.kkMarks = true
   local function mark(point, r, g, b)  -- own frame on the top strata: other frames (unit frame, action bar) must not cover it
     local m = CreateFrame("Frame", nil, f)
-    m:SetFrameStrata("TOOLTIP"); m:SetSize(6, 6); m:SetPoint(point, f, point, 0, 0)
+    m:SetFrameStrata("TOOLTIP"); m:SetSize(4, 4); m:SetPoint(point, f, point, 0, 0)
     local t = m:CreateTexture(nil, "OVERLAY")
     t:SetAllPoints(m); t:SetColorTexture(r, g, b, 1)
     return m
