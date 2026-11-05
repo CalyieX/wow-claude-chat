@@ -29,8 +29,14 @@ button{margin-top:16px;background:#5c1a10;color:#ffd100;border:1px solid #c9a227
 button:hover{background:#7d2417}
 #msg{margin-top:12px;min-height:20px}.ok{color:#7fd17f}.bad{color:#ff8a80}
 small{color:#8c7b4d;display:block;margin-top:2px}
+.card{display:block;width:100%;text-align:left;margin-top:8px}details{margin-top:14px}summary{cursor:pointer;color:#c9a227}
 </style></head><body>
 <h1>AI setup</h1>
+<div id="found"></div>
+<label>Name of the AI (shown as the chat tab and before every answer)</label><input id="ainame" maxlength="20" placeholder="Claude">
+<small>The tab is renamed with the next answer (or after /reload).</small>
+<label>Chat text size</label><input id="fsize" type="number" min="10" max="32" style="width:80px">
+<details id="adv"><summary>Choose by hand / more options</summary>
 <label>Backend</label><select id="backend"></select>
 <small id="hint"></small>
 <div id="modelrow"><label>Model (empty = default)</label><input id="model"></div>
@@ -38,10 +44,9 @@ small{color:#8c7b4d;display:block;margin-top:2px}
 <div id="keyrow"><label>API key <span id="keystate"></span></label><input id="api_key" type="password" autocomplete="off"
  placeholder="leave empty to keep the saved key"><small>Stored only in ~/.wowclaude/config.json on this computer.</small></div>
 <div id="cmdrow"><label>Command (reads the prompt on stdin)</label><input id="command" placeholder="ollama run llama3.1"></div>
-<label>Name of the AI (shown as the chat tab and before every answer)</label><input id="ainame" maxlength="20" placeholder="Claude">
-<small>The tab is renamed with the next answer (or after /reload).</small>
 <label>Extra instructions (optional, e.g. how it should talk)</label>
 <textarea id="persona"></textarea>
+</details>
 <button id="save">Save and test</button><div id="msg"></div>
 <script>
 const T=new URLSearchParams(location.search).get("t");
@@ -55,14 +60,19 @@ function show(){const b=$("backend").value,isApi=!["claude","codex","command"].i
  $("keyrow").style.display=isApi?"block":"none";$("cmdrow").style.display=b==="command"?"block":"none"}
 (async()=>{const s=await api("/state");const sel=$("backend");
  for(const b of s.backends){const o=document.createElement("option");o.value=o.textContent=b;sel.appendChild(o)}
- sel.value=s.backend;$("model").value=s.model||"";$("base_url").value=s.base_url||"";$("command").value=s.command||"";
- $("persona").value=s.persona||"";$("ainame").value=s.name||"";$("keystate").textContent=s.has_key?"(saved)":"";show();sel.onchange=show;
+ sel.value=s.backend;
+ const F=$("found");
+ if(s.found.length){F.innerHTML="<label>Found on this PC - click to use</label>";
+  s.found.forEach((f,i)=>{const b=document.createElement("button");b.className="card";b.textContent=(i?"":"★ ")+f.label;
+   b.onclick=()=>{sel.value=f.backend;show();$("save").click()};F.appendChild(b)})}
+ else{F.innerHTML="<label>Nothing found on this PC yet</label><small>Easiest: install Claude Code and log in, or install Ollama. Or open the options below and enter an API key.</small>";$("adv").open=true}$("model").value=s.model||"";$("base_url").value=s.base_url||"";$("command").value=s.command||"";
+ $("persona").value=s.persona||"";$("ainame").value=s.name||"";$("fsize").value=s.font_size||17;$("keystate").textContent=s.has_key?"(saved)":"";show();sel.onchange=show;
  recheck()})();
 async function recheck(){$("msg").textContent="Checking the AI ...";$("msg").className="";
  try{const r=await api("/check");$("msg").textContent=r.status;$("msg").className=r.ok?"ok":"bad"}catch(e){$("msg").textContent="Check failed: "+e;$("msg").className="bad"}}
 $("save").onclick=async()=>{$("msg").textContent="Saving ...";$("msg").className="";
  const r=await api("/save",{backend:$("backend").value,model:$("model").value,base_url:$("base_url").value,
-  api_key:$("api_key").value,command:$("command").value,name:$("ainame").value,persona:$("persona").value});
+  api_key:$("api_key").value,command:$("command").value,name:$("ainame").value,font_size:$("fsize").value,persona:$("persona").value});
  $("msg").textContent=r.status;$("msg").className=r.ok?"ok":"bad";if(r.has_key)$("keystate").textContent="(saved)";$("api_key").value="";await recheck()};
 </script></body></html>"""
 
@@ -81,7 +91,7 @@ def _state() -> dict:
     return {"backends": ["claude", "codex", "command", "openai-compatible", *backends.PRESETS],
             "backend": backends.name(), "model": cfg.get("model", ""), "base_url": cfg.get("base_url", ""),
             "command": cfg.get("command", ""), "has_key": bool(cfg.get("api_key")),
-            "name": name, "persona": rest.strip("\n")}
+            "name": name, "persona": rest.strip("\n"), "found": backends.detect(), "font_size": cfg.get("font_size", 17)}
 
 
 def _check() -> dict:
@@ -108,6 +118,10 @@ def apply(data: dict) -> dict:
         cfg["name"] = name
     else:
         cfg.pop("name", None)
+    try:
+        cfg["font_size"] = max(10, min(32, int(data.get("font_size") or 17)))
+    except (TypeError, ValueError):
+        pass
     key = str(data.get("api_key", "")).strip()
     if key:
         cfg["api_key"] = key

@@ -59,9 +59,16 @@ def apply_events(entries: list[tuple[str, str]], events: list[dict]) -> list[tup
     return entries[-MAX_ENTRIES:]
 
 
-def paint(entries: list[tuple[str, str]], size: tuple[int, int], scroll: int = 0) -> Image.Image:
+def font_size() -> int:
+    try:
+        return max(10, min(32, int(config.load().get("font_size", 17))))
+    except (TypeError, ValueError):
+        return 17
+
+
+def paint(entries: list[tuple[str, str]], size: tuple[int, int], scroll: int = 0, fsize: int = 17) -> Image.Image:
     # no background of its own: the real tab's see-through background shows, like a normal chat tab
-    img = chat_marks.render(entries, size, scroll=scroll, bg=(0, 0, 0, 0), shadow=True)
+    img = chat_marks.render(entries, size, scroll=scroll, bg=(0, 0, 0, 0), shadow=True, font_size=fsize)
     d = ImageDraw.Draw(img)
     d.rectangle((0, 0, MARK_HOLE - 1, MARK_HOLE - 1), fill=(0, 0, 0, 0))
     d.rectangle((size[0] - MARK_HOLE, 0, size[0] - 1, MARK_HOLE - 1), fill=(0, 0, 0, 0))
@@ -137,12 +144,13 @@ def run(poll: float = 0.25, find_every: float = 0.5) -> None:
                 shown_key = None
             time.sleep(poll)
             continue
-        key = (frame, len(entries), entries[-1] if entries else None)
+        fs = font_size()
+        key = (frame, len(entries), entries[-1] if entries else None, fs)
         if key != shown_key or not visible:
             shown_key = key
             w, h = frame[2] - frame[0], frame[3] - frame[1]
             print(f'paint {frame} entries={len(entries)}', flush=True)
-            overlay.update_layered(hwnd, paint(entries, (w, h)), frame[0], frame[1])
+            overlay.update_layered(hwnd, paint(entries, (w, h), fsize=fs), frame[0], frame[1])
             visible = True
             u.SetWindowPos(hwnd, -1, 0, 0, 0, 0, 0x1 | 0x2 | 0x10)  # topmost: NOSIZE|NOMOVE|NOACTIVATE
         time.sleep(poll)

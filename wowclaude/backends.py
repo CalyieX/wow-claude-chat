@@ -144,3 +144,29 @@ def ask(system: str, history: list[tuple[str, str]], prompt: str, model: str | N
     if b in PRESETS or b == "openai-compatible":
         return _ask_api(system, history, prompt, model)
     raise RuntimeError(f"unknown backend {b}")
+
+
+def _port_open(port: int, timeout: float = 0.3) -> bool:
+    import socket
+    try:
+        with socket.create_connection(("127.0.0.1", port), timeout=timeout):
+            return True
+    except OSError:
+        return False
+
+
+def detect() -> list[dict]:
+    """What is already usable on this PC, best first: [{backend, label}]. Cheap checks only (no AI call, no network)."""
+    found = []
+    if shutil.which("claude"):
+        found.append({"backend": "claude", "label": "Claude Code (the one you are logged in with)"})
+    if shutil.which("codex"):
+        found.append({"backend": "codex", "label": "Codex (ChatGPT login)"})
+    if _port_open(11434):
+        found.append({"backend": "ollama", "label": "Ollama (runs on this PC, free)"})
+    if _port_open(1234):
+        found.append({"backend": "lmstudio", "label": "LM Studio (runs on this PC, free)"})
+    for b, (_, _, env) in PRESETS.items():
+        if env and os.environ.get(env):
+            found.append({"backend": b, "label": f"{b} (API key found in {env})"})
+    return found

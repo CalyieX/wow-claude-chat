@@ -81,31 +81,31 @@ def wrap(text: str, width_px: int, font) -> list[str]:
     return lines
 
 
-_FONT = None
+_FONTS: dict[int, object] = {}
 
 
-def default_font():
+def default_font(size: int = 17):
     """The game's own chat font where it exists (Arial Narrow on German clients), else Pillow's default."""
-    global _FONT
-    if _FONT is None:
-        for path in (r"C:\Windows\Fonts\ARIALN.TTF", r"C:\Windows\Fontsrial.ttf"):
+    size = max(10, min(32, int(size)))
+    if size not in _FONTS:
+        for path in (r"C:\Windows\Fonts\ARIALN.TTF", r"C:\Windows\Fonts\arial.ttf"):
             try:
-                _FONT = ImageFont.truetype(path, 17)
+                _FONTS[size] = ImageFont.truetype(path, size)
                 break
             except OSError:
                 continue
         else:
-            _FONT = ImageFont.load_default(size=15)
-    return _FONT
+            _FONTS[size] = ImageFont.load_default(size=size)
+    return _FONTS[size]
 
 
 COLOURS = {"user": (255, 255, 153), "ai": (153, 217, 255), "sys": (170, 170, 170), "think": (200, 200, 120)}
 
 
 def render(entries: list[tuple[str, str]], size: tuple[int, int], font=None, scroll: int = 0,
-           bg: tuple = (12, 12, 16, 255), shadow: bool = False) -> Image.Image:
+           bg: tuple = (12, 12, 16, 255), shadow: bool = False, font_size: int = 17) -> Image.Image:
     """Dark box ``size`` with the newest entries at the bottom. ``entries`` = [(kind, text)]; ``scroll`` = lines up."""
-    font = font or default_font()
+    font = font or default_font(font_size)
     img = Image.new("RGBA", size, bg)
     draw = ImageDraw.Draw(img, "RGBA")
     lh = int(font.size * 1.3) if hasattr(font, "size") else 16

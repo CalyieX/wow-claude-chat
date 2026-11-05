@@ -90,3 +90,18 @@ def test_first_message_after_a_game_start_is_not_swallowed():
     assert bridge.is_fresh(1000, now=1010)        # sent 10 s ago: answer it
     assert not bridge.is_fresh(1000, now=1100)    # left over from an earlier game session: skip it
     assert not bridge.is_fresh(1000, now=900)     # a number from the future is no send time: skip it
+
+
+def test_detect_finds_claude_and_env_key(monkeypatch):
+    from wowclaude import backends
+    monkeypatch.setattr(backends.shutil, "which", lambda n: "C:/x/claude.exe" if n == "claude" else None)
+    monkeypatch.setattr(backends, "_port_open", lambda p, timeout=0.3: p == 11434)
+    monkeypatch.setenv("GROQ_API_KEY", "x")
+    got = [d["backend"] for d in backends.detect()]
+    assert got[:2] == ["claude", "ollama"] and "groq" in got
+
+
+def test_state_lists_found(monkeypatch):
+    from wowclaude import backends, setup_ui
+    monkeypatch.setattr(backends, "detect", lambda: [{"backend": "claude", "label": "Claude Code"}])
+    assert setup_ui._state()["found"][0]["backend"] == "claude"
