@@ -237,9 +237,54 @@ local function addMarks(f)
   mark("TOPRIGHT", 0, 1, 1)
   mark("BOTTOMLEFT", 1, 1, 0)
 end
+
+-- The AI tab only shows what the AI says: message types, channels and colours do not apply to it. Take every message
+-- group away from it (nothing foreign can leak into the tab) and grey the settings out so nobody tries to change them.
+local function lockAiTab(f)
+  if not f or f == DEFAULT_CHAT_FRAME or f.kkLocked then return end
+  f.kkLocked = true
+  pcall(function() if ChatFrame_RemoveAllMessageGroups then ChatFrame_RemoveAllMessageGroups(f) end end)
+  pcall(function() if ChatFrame_RemoveAllChannels then ChatFrame_RemoveAllChannels(f) end end)
+end
+local function greyConfig()
+  local cf = claudeFrame0()
+  local cur = (FCF_GetCurrentChatFrame and FCF_GetCurrentChatFrame()) or SELECTED_CHAT_FRAME
+  if not ChatConfigFrame or not ChatConfigFrame:IsShown() or not cur or cur ~= cf then
+    if ChatConfigFrame and ChatConfigFrame.kkNote then ChatConfigFrame.kkNote:Hide() end
+    return
+  end
+  local n = 0
+  local function grey(region)
+    local nm = region.GetName and region:GetName()
+    local isSwatch = nm and nm:find("Color") and region.GetObjectType and region:GetObjectType() == "Button"
+    if region.GetObjectType and (region:GetObjectType() == "CheckButton" or isSwatch) and region:IsEnabled() then
+      pcall(function() region:Disable() end)
+      region:SetAlpha(0.35)
+      n = n + 1
+    end
+    if region.GetChildren then for _, c in ipairs({ region:GetChildren() }) do grey(c) end end
+  end
+  grey(ChatConfigFrame)
+  if not ChatConfigFrame.kkNote then
+    local fs = ChatConfigFrame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    fs:SetPoint("BOTTOM", ChatConfigFrame, "BOTTOM", 0, 14)
+    ChatConfigFrame.kkNote = fs
+  end
+  ChatConfigFrame.kkNote:SetText("|cffffd100" .. aiName() .. "|r tab: these settings do not apply (it only shows the AI).")
+  ChatConfigFrame.kkNote:Show()
+end
+local lockWatcher = CreateFrame("Frame")
+lockWatcher.t = 0
+lockWatcher:SetScript("OnUpdate", function(self, dt)
+  self.t = self.t + dt
+  if self.t < 0.3 then return end
+  self.t = 0
+  if ChatConfigFrame and ChatConfigFrame:IsShown() then pcall(greyConfig) end
+end)
 local function claudeFrame()
   local f = claudeFrame0()
   addMarks(f)
+  lockAiTab(f)
   return f
 end
 local function say(text, r, g, b, nohist)
@@ -320,6 +365,14 @@ SlashCmdList["KKTAB"] = function()  -- bring the AI tab to the front (used by to
     local tab = _G[f:GetName() .. "Tab"]
     if tab and FCF_Tab_OnClick then pcall(FCF_Tab_OnClick, tab, "LeftButton") end
   end
+end
+SLASH_KKCFG1 = "/kkcfg"  -- opens the chat settings for the AI tab (used to check the greyed-out look)
+SlashCmdList["KKCFG"] = function()
+  SlashCmdList["KKTAB"]()
+  C_Timer.After(0.4, function()
+    if ChatConfigFrame and ChatConfigFrame:IsShown() then HideUIPanel(ChatConfigFrame) end
+    if ShowUIPanel and ChatConfigFrame then ShowUIPanel(ChatConfigFrame) end
+  end)
 end
 SLASH_KKCHATWIN1 = "/chat"
 SlashCmdList["KKCHATWIN"] = function() sendToClaude("!chat", "Opening chat window ...") end
