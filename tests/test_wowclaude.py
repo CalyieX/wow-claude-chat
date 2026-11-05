@@ -163,3 +163,10 @@ def test_no_private_details_in_sources():
         if f.suffix in (".py", ".lua", ".toc", ".md", ".bat", ".toml") and f.name != "test_wowclaude.py":
             hit = bad.search(f.read_text(encoding="utf-8", errors="replace"))
             assert not hit, f"{f}: {hit.group(0)}"
+
+
+def test_overlay_place_corners(monkeypatch):
+    from wowclaude import overlay
+    monkeypatch.setattr(overlay, "game_rect", lambda: (100, 50, 1100, 650))
+    assert overlay.place(400, 200, "br", 10) == (690, 440)
+    assert overlay.place(400, 200, "tl", 10) == (110, 100)

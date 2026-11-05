@@ -76,3 +76,13 @@ py -3 -m pytest
 ```
 
 MIT licensed.
+
+## Browser overlay (YouTube, Netflix, Twitter ...)
+
+```
+wowclaude overlay https://www.youtube.com --corner br --size 480x270 --opacity 90
+wowclaude overlay https://www.netflix.com --click-through
+```
+
+Opens a small always-on-top Chrome/Edge window (own profile: log in once) over the game. Needs the game in windowed
+or borderless mode. `--click-through` sends mouse clicks to the game. Close the window to stop.

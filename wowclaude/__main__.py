@@ -1,4 +1,4 @@
-"""Command line: wowclaude setup | run | doctor"""
+"""Command line: wowclaude setup | run | doctor | overlay"""
 from __future__ import annotations
 
 import argparse
@@ -76,6 +76,14 @@ def main(argv=None) -> int:
         p = sub.add_parser(name, help=help_)
         p.add_argument("--root", help="game folder (the one containing Wow.exe), only if it is not found automatically")
         p.set_defaults(fn=fn)
+    po = sub.add_parser("overlay", help="show a web page (YouTube, Netflix, ...) in an always-on-top window over the game")
+    po.add_argument("url", nargs="?", default="https://www.youtube.com")
+    po.add_argument("--corner", choices=["tl", "tr", "bl", "br"], default="br")
+    po.add_argument("--size", default="480x270", help="WIDTHxHEIGHT")
+    po.add_argument("--opacity", type=int, default=90, help="10-100")
+    po.add_argument("--click-through", action="store_true", help="mouse clicks go to the game")
+    po.set_defaults(fn=lambda a: __import__("wowclaude.overlay", fromlist=["run"]).run(
+        a.url, a.corner, a.size, a.opacity, a.click_through))
     args = ap.parse_args(argv)
     return args.fn(args)
 
