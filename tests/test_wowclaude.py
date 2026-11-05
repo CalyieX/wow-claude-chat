@@ -288,8 +288,8 @@ def test_window_geometry_follows_game_window():
 
 def test_publish_writes_only_the_next_slots():
     assert slots.target_slots(None) == list(range(1, slots.SLOTS + 1))
-    t = slots.target_slots(50)
-    assert {50, 51, 52, 53} <= set(t) and {1, 2, 3} <= set(t) and len(t) < 12
+    t = slots.target_slots(20)
+    assert {20, 21, 22, 23} <= set(t) and {1, 2, 3} <= set(t) and len(t) < 12
     assert max(slots.target_slots(slots.SLOTS)) == slots.SLOTS  # never beyond the last slot
     with tempfile.TemporaryDirectory() as tmp:
         root = Path(tmp)
