@@ -856,3 +856,12 @@ def test_run_returns_immediately_when_another_bridge_holds_the_lock(monkeypatch,
     finally:
         held.close()
     assert "already running" in capsys.readouterr().out
+
+
+def test_claude_runs_without_the_players_claude_md(monkeypatch):
+    import sys
+    from wowclaude import claude
+    monkeypatch.delenv("CLAUDE_CODE_DISABLE_CLAUDE_MDS", raising=False)
+    code, out, err = claude._exec([sys.executable, "-c",
+                                   "import os; print(os.environ.get('CLAUDE_CODE_DISABLE_CLAUDE_MDS'), os.environ.get('CLAUDE_CODE_DISABLE_AUTO_MEMORY'))"], "")
+    assert out.strip() == "1 1"

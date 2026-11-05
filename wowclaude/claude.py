@@ -150,11 +150,19 @@ def check_login() -> tuple[bool, str]:
                    + chr(10) + "Fix: open a terminal, run `claude`, log in once, then try again.")
 
 
+def _clean_env() -> dict:
+    """The player's own CLAUDE.md files and auto-memory must not shape (or leak into) game chat answers."""
+    env = dict(os.environ)
+    env["CLAUDE_CODE_DISABLE_CLAUDE_MDS"] = "1"
+    env["CLAUDE_CODE_DISABLE_AUTO_MEMORY"] = "1"
+    return env
+
+
 def _exec(cmd: list, prompt: str, timeout: float | None = None) -> tuple:
     """Run the command with a hard time limit. On timeout the whole process tree is killed (a .cmd wrapper would
     otherwise keep running) and AskTimeout is raised. Returns (exit code, stdout, stderr)."""
     proc = subprocess.Popen(cmd, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-                            text=True, encoding="utf-8", errors="replace", cwd=str(config.HOME),
+                            text=True, encoding="utf-8", errors="replace", cwd=str(config.HOME), env=_clean_env(),
                             creationflags=CREATE_NO_WINDOW if os.name == "nt" else 0)
     try:
         out, err = proc.communicate(prompt, timeout=timeout or TIMEOUT)
