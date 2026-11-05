@@ -1036,3 +1036,9 @@ def test_lua_reloads_before_asking_when_slots_are_nearly_gone_and_asks_again():
         lua.eval("function() __update(8.0) end")()
     assert lua.eval("reloads") == 1 and asked < slots.SLOTS            # reloaded before the slots ran out
     assert lua.eval("KKMapDB.resend ~= nil")                            # ... and remembered the question
+
+
+def test_overlay_always_starts_solid_not_in_ghost_mode():
+    """A saved ghost mode made a freshly opened browser look like it did not open at all (35 % opacity, click-through)."""
+    src = (Path(__file__).parent.parent / "wowclaude" / "overlay.py").read_text(encoding="utf-8")
+    assert '"ghost": False' in src and 'bool(saved.get("ghost"))' not in src

@@ -40,3 +40,11 @@ put into a copy of the repo, the whole test suite must fail. Result of the run o
 | M33 | protected frames are measured without protection | KILLED (1 failed, 63 passed) |
 | M34 | Claude runs inside the user's profile folder | KILLED (1 failed, 62 passed) |
 | M35 | `--setting-sources ""` removed | KILLED (1 failed, 6 passed) |
+
+## Live check of the browser overlay
+
+`py -3 tools/live_check.py` (WoW running in windowed mode) starts the overlay the way the bridge does and stresses it:
+game to the front, game window smaller and bigger, overlay started a second time. After every step it checks that the page
+is visible and above the game, and that frame and address bar are present and over the page. 2026-11-05: 4 runs in a row, all OK.
+It found this bug: Windows sometimes ignores "topmost" for the Chrome page, which then hid behind the game (only the frame
+was visible). The overlay now puts the game directly beneath the page whenever it is above it.

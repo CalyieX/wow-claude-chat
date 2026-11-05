@@ -111,6 +111,24 @@ def _game_hwnd() -> int:
             or user32.FindWindowW(None, "World of Warcraft"))
 
 
+def keep_page_above_game(page: int) -> None:
+    """Windows ignores 'topmost' for the Chrome page now and then, and the page then hides behind the game (only the
+    frame is visible). If the game is above the page, put the game directly beneath it."""
+    game = _game_hwnd()
+    if not game or not page:
+        return
+    h = user32.GetWindow(wintypes.HWND(page), 3)  # GW_HWNDPREV: walk upwards
+    n = 0
+    while h and n < 400:
+        if h == game:
+            user32.SetWindowPos.argtypes = [wintypes.HWND, wintypes.HWND, ctypes.c_int, ctypes.c_int, ctypes.c_int,
+                                            ctypes.c_int, wintypes.UINT]
+            user32.SetWindowPos(wintypes.HWND(game), wintypes.HWND(page), 0, 0, 0, 0, 0x13)  # NOMOVE|NOSIZE|NOACTIVATE
+            return
+        h = user32.GetWindow(wintypes.HWND(h), 3)
+        n += 1
+
+
 def game_rect() -> tuple[int, int, int, int] | None:
     """Client area of the game window in screen pixels (without title bar and borders in windowed mode)."""
     hwnd = _game_hwnd()
@@ -180,6 +198,8 @@ def pin(hwnd: int, x: int, y: int, w: int, h: int, opacity: int, click_through: 
     n = _pinned.get("n", 0) + 1
     if _pinned.get("key") == key and n % 20:
         _pinned["n"] = n
+        if not user32.GetWindowLongW(hwnd, GWL_EXSTYLE) & 0x8:  # WS_EX_TOPMOST lost (game or Chrome took it): the page would hide behind the game
+            user32.SetWindowPos(wintypes.HWND(hwnd), wintypes.HWND(HWND_TOPMOST), 0, 0, 0, 0, 0x13)  # NOMOVE|NOSIZE|NOACTIVATE
         # Chrome drops the clip region now and then (page load, navigation): its grey title bar would show: put it back
         probe = ctypes.windll.gdi32.CreateRectRgn(0, 0, 0, 0)
         has_region = user32.GetWindowRgn(wintypes.HWND(hwnd), ctypes.c_void_p(probe)) != 0
@@ -664,7 +684,7 @@ def frame_loop(hwnd: int, x: int, y: int, w: int, h: int, opacity: int, click_th
     st = user32.GetWindowLongW(hwnd, GWL_STYLE) & ~(WS_CAPTION | WS_THICKFRAME | WS_BORDER)
     user32.SetWindowLongW(hwnd, GWL_STYLE, st)
     saved = load_state()
-    S = {"x": x, "y": y, "w": w, "h": h, "hover": "", "down": "", "ghost": bool(saved.get("ghost")), "min": False}
+    S = {"x": x, "y": y, "w": w, "h": h, "hover": "", "down": "", "ghost": False, "min": False}
     top = TOP
     root = tk.Tk()
     root.overrideredirect(True)
@@ -942,6 +962,7 @@ def frame_loop(hwnd: int, x: int, y: int, w: int, h: int, opacity: int, click_th
         if not S["min"]:
             ghost = S["ghost"]
             pin(hwnd, S["x"], S["y"], S["w"], S["h"], 35 if ghost else opacity, click_through or ghost)
+            keep_page_above_game(hwnd)
             user32.SetWindowPos(ctypes.c_void_p(top_hwnd), wintypes.HWND(HWND_TOPMOST), 0, 0, 0, 0, 0x13)
             if ghost:  # ghost mode is click-through: a lone address bar floating over the game would only be a stray dark box
                 if bar.state() != "withdrawn":
