@@ -31,7 +31,7 @@ def cmd_setup(args) -> int:
           "  2. In the game: a chat tab called 'Claude' appears. Use it with the game window in windowed or borderless mode.\n"
           "  3. Start the bridge:  wowclaude run\n"
           "  4. Click the Claude tab and write a message.\n"
-          "  In the game: /kk opens the menu (AI Setup, browser window).")
+          "  In the game: /wac opens the menu (AI Setup, browser window).")
     return 0
 
 
@@ -39,10 +39,7 @@ def cmd_run(args) -> int:
     from . import bridge, claude
     ok, msg = claude.check_login()
     if not ok:
-        print("Cannot start yet: " + msg)
-        print("Opening the AI setup page - pick your AI there, then run `wowclaude run` again.")
-        from . import setup_ui
-        return setup_ui.serve()
+        print("No AI set up yet (" + msg + "). The bridge starts anyway: /wac -> AI Setup and the browser work already.")
     try:
         bridge.run(_root(args))
     except KeyboardInterrupt:
@@ -82,7 +79,7 @@ def main(argv=None) -> int:
     pc = sub.add_parser("config", help="open the AI setup page (backend, model, key, persona) in the WoW browser window")
     pc.set_defaults(fn=lambda a: __import__("wowclaude.setup_ui", fromlist=["serve"]).serve())
     po = sub.add_parser("overlay", help="show a web page (YouTube, Netflix, ...) in an always-on-top window over the game")
-    po.add_argument("url", nargs="?", default=None, help="page to open (default: the last one, else YouTube)")
+    po.add_argument("url", nargs="?", default=None, help="page to open (default: the last one, else Google)")
     po.add_argument("--corner", choices=["tl", "tr", "bl", "br"], default=None, help="start corner (default: remembered position)")
     po.add_argument("--size", default=None, help="WIDTHxHEIGHT (default: remembered size)")
     po.add_argument("--opacity", type=int, default=100, help="10-100")

@@ -203,7 +203,7 @@ def run(url: str | None = None, corner: str | None = None, size: str | None = No
         print("No Chrome/Edge/Brave found.")
         return 2
     saved = load_state()
-    url = url or saved.get("url") or "https://www.youtube.com"
+    url = url or saved.get("url") or "https://www.google.com"
     if size:
         w, h = (int(v) for v in size.lower().split("x"))
     else:
@@ -521,6 +521,12 @@ def frame_loop(hwnd: int, x: int, y: int, w: int, h: int, opacity: int, click_th
     S["by"] = int(saved.get("by", rect[1] + 80))
     fdrag: dict = {}
 
+    def keep_on_game() -> None:
+        """A remembered button spot outside the game window (moved window, other monitor) would be invisible: pull it back in."""
+        r = game_rect() or rect
+        if not (r[0] - 20 <= S["bx"] <= r[2] - 44 and r[1] - 20 <= S["by"] <= r[3] - 44):
+            S["bx"], S["by"] = r[2] - 150, r[1] + 80
+
     def fl_draw(state: str = "") -> None:
         fl.geometry(f"64x64+{S['bx']}+{S['by']}")
         fl.update_idletasks()
@@ -532,6 +538,7 @@ def frame_loop(hwnd: int, x: int, y: int, w: int, h: int, opacity: int, click_th
     def set_min(on: bool) -> None:
         S["min"] = on
         if on:
+            keep_on_game()
             user32.ShowWindow(wintypes.HWND(hwnd), 0)
             root.withdraw()
             bar.withdraw()

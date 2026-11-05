@@ -91,7 +91,7 @@ def run(root: Path, poll: float = 0.6) -> None:
                 cmd_reply = handle_command(state.message) if state.message.lstrip().startswith("!") else None
                 reply = cmd_reply if cmd_reply is not None else session.ask(question, model)
             except Exception as exc:  # noqa: BLE001 - tell the player, keep running
-                reply = f"Error: {exc}"
+                reply = f"No AI answered yet - open /wac and press AI Setup. ({exc})"
             print(f"< {reply}", flush=True)
             if not deliver(root, state, reply):
                 print("no confirmation from the game (is the addon loaded? try /reload in the game)", flush=True)

@@ -89,9 +89,9 @@ or borderless mode. `--click-through` sends mouse clicks to the game. Close the 
 
 ## Choosing the AI (no files to edit)
 
-In the game type `/kk` and press **AI Setup**. A page opens in the WoW browser window where you pick the backend
+In the game type `/wac` and press **AI Setup**. A page opens in the WoW browser window where you pick the backend
 (Claude, Codex, OpenRouter, DeepSeek, OpenAI, Groq, local models such as Ollama ...), the model, paste an API key if the
 backend needs one, and set a persona. Without the game: `wowclaude config`. The page runs on 127.0.0.1 only; an API key
 you enter is stored in `~/.wowclaude/config.json` on your computer.
 
-Other in-game commands: `/browser [url]` opens the browser window, `/browser off` closes it, `/kk` opens the small menu.
+Other in-game commands: `/browser [url]` opens the browser window, `/browser off` closes it, `/wac` opens the small menu.

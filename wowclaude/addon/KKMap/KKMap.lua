@@ -158,7 +158,7 @@ local nextSlot = 1
 -- Die Leiste liegt NUR unter dem Streifen: Ursprung (0,0) und Zellen bleiben unberuehrt.
 local holdUntil, stripOn, lastEdit = 0, true, false
 local deco = CreateFrame("Frame", nil, host, "BackdropTemplate")
-deco:SetPoint("TOPLEFT", host, "BOTTOMLEFT", 0, 0)
+deco:SetPoint("TOPLEFT", host, "TOPRIGHT", 2, 0)
 deco:SetSize(300, 14)
 deco:SetBackdrop({ bgFile = "Interface\\Buttons\\WHITE8X8", edgeFile = "Interface\\Buttons\\WHITE8X8", edgeSize = 1 })
 deco:SetBackdropColor(0.06, 0.05, 0.03, 0.85)
@@ -171,9 +171,9 @@ local function applyVisible()
   if lastEdit and not ae then holdUntil = math.max(holdUntil, GetTime() + 2) end
   lastEdit = ae
   local want = KKMapDB.always or pending ~= nil or ae or GetTime() < holdUntil
-  if pending ~= nil then deco.fs:SetText(L("K&K WoW AI Chat | denkt ...", "K&K WoW AI Chat | thinking ..."))
-  elseif ae then deco.fs:SetText(L("K&K WoW AI Chat | aktiv", "K&K WoW AI Chat | active"))
-  else deco.fs:SetText("K&K WoW AI Chat") end
+  if pending ~= nil then deco.fs:SetText(L("K&K WoW AI Bridge | denkt ...", "K&K WoW AI Bridge | thinking ..."))
+  elseif ae then deco.fs:SetText(L("K&K WoW AI Bridge | aktiv", "K&K WoW AI Bridge | active"))
+  else deco.fs:SetText("K&K WoW AI Bridge") end
   deco:SetWidth(math.max(120, deco.fs:GetStringWidth() + 14))
   if want and not stripOn then stripOn = true; host:SetAlpha(1); render()
   elseif not want and stripOn then stripOn = false; host:SetAlpha(0) end
@@ -225,12 +225,12 @@ SlashCmdList["KKBROWSER"] = function(msg)
   else sendToClaude(("!browser " .. msg):gsub("%s+$", ""), "Opening browser ...") end
 end
 
--- Small addon menu (/kk or /kkmenu)
+-- Small addon menu (/wac)
 local menu
 local function buildMenu()
   if menu then return menu end
   local f = CreateFrame("Frame", "KKMenuFrame", UIParent, "BackdropTemplate")
-  f:SetSize(220, 262)
+  f:SetSize(220, 230)
   f:SetPoint("CENTER", UIParent, "CENTER", -260, 60)
   f:SetFrameStrata("DIALOG")
   f:SetMovable(true); f:EnableMouse(true); f:RegisterForDrag("LeftButton")
@@ -260,7 +260,6 @@ local function buildMenu()
   end
   button("AI Setup", function() sendToClaude("!setup", "Opening AI setup ...") end)
   button("Open Browser", function() sendToClaude("!browser", "Opening browser ...") end)
-  button("Close Browser", function() sendToClaude("!browser off", "Closing browser ...") end)
   local strip
   local function stripText() return KKMapDB.always and "Strip: always visible" or "Strip: only when needed" end
   strip = button(stripText(), function()
@@ -270,14 +269,14 @@ local function buildMenu()
   end)
   button("Show Overlay Window", function() if SlashCmdList["KKOVERLAY"] then SlashCmdList["KKOVERLAY"]("") end end)
   button("Help", function()
-    say("Type in the Claude tab to chat. /kk opens this menu, /browser [url] opens the browser, /browser off closes it. AI Setup picks the AI.")
+    say("Type in the Claude tab to chat. /wac opens this menu, /browser [url] opens the browser, /browser off closes it. AI Setup picks the AI.")
     say("Ask for macros, lists, or pages (the AI can create macros and open videos for you).")
   end)
   f:Hide()
   menu = f
   return f
 end
-SLASH_KKMENU1 = "/kk"
+SLASH_KKMENU1 = "/wac"
 SLASH_KKMENU2 = "/kkmenu"
 SlashCmdList["KKMENU"] = function()
   local f = buildMenu()
