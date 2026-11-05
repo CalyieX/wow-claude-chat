@@ -63,3 +63,10 @@ def test_stray_pixel_ignored():
 def test_font_size_comes_from_yellow_offset():
     assert cm.find_marks(scene(font=22)) == ((100, 80, 500, 300), 22)
     assert cm.find_marks(scene(font=12))[1] == 12
+
+
+def test_large_display_scale_font_is_read_whole():
+    from wowclaude import chat_marks
+    img = scene(font=45, mark=12)  # 4K: yellow sits 45 px right of the tab edge, marks are 12 px
+    found = chat_marks.find_marks(img)
+    assert found is not None and found[1] == 45

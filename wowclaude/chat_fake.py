@@ -88,17 +88,33 @@ def paint(entries: list[tuple[str, str]], size: tuple[int, int], scroll: int = 0
     return img
 
 
+_last_frame: list = [None]  # last tab rectangle relative to the game window: searched first (a small crop is much faster)
+
+
 def find_in_game() -> tuple[tuple[int, int, int, int], int] | None:
     """(screen rectangle of the chat tab, its text size in px), or None (tab hidden, game minimised, marks missing)."""
     g = overlay.game_rect()
     if g is None:
         return None
     from PIL import ImageGrab
-    shot = ImageGrab.grab(bbox=g, all_screens=True)
-    found = chat_marks.find_marks(shot)
+    w, h = g[2] - g[0], g[3] - g[1]
+    last = _last_frame[0]
+    if last:  # near the old place first; the tab rarely moves
+        pad = 120
+        l, t = max(0, last[0] - pad), max(0, last[1] - pad)
+        r, b = min(w, last[2] + pad), min(h, last[3] + pad)
+        found = chat_marks.find_marks(ImageGrab.grab(bbox=(g[0] + l, g[1] + t, g[0] + r, g[1] + b), all_screens=True))
+        if found:
+            f, font = found
+            f = (f[0] + l, f[1] + t, f[2] + l, f[3] + t)
+            _last_frame[0] = f
+            return (g[0] + f[0], g[1] + f[1], g[0] + f[2], g[1] + f[3]), font
+    found = chat_marks.find_marks(ImageGrab.grab(bbox=g, all_screens=True))
     if found is None:
+        _last_frame[0] = None
         return None
     f, font = found
+    _last_frame[0] = f
     return (g[0] + f[0], g[1] + f[1], g[0] + f[2], g[1] + f[3]), font
 
 

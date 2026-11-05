@@ -13,8 +13,8 @@ TOP_RIGHT = (0, 255, 255)
 YELLOW = (255, 255, 0)
 TOLERANCE = 40
 MIN_MARK = 3
-MAX_MARK = 24
-MIN_FONT, MAX_FONT = 10, 32
+MAX_MARK = 48  # 4 UI units: up to ~12 px per unit on very high display scales
+MIN_FONT, MAX_FONT = 10, 96
 
 
 def _mask(img: Image.Image, colour: tuple[int, int, int]) -> Image.Image:
@@ -95,7 +95,7 @@ _FONTS: dict[int, object] = {}
 
 def default_font(size: int = 17):
     """The game's own chat font where it exists (Arial Narrow on German clients), else Pillow's default."""
-    size = max(10, min(32, int(size)))
+    size = max(10, min(96, int(size)))
     if size not in _FONTS:
         for path in (r"C:\Windows\Fonts\ARIALN.TTF", r"C:\Windows\Fonts\arial.ttf"):
             try:

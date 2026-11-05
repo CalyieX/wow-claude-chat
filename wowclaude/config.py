@@ -24,6 +24,21 @@ def load() -> dict:
 def save(cfg: dict) -> None:
     HOME.mkdir(parents=True, exist_ok=True)
     CONFIG.write_text(json.dumps(cfg, indent=2), encoding="utf-8")
+    if cfg.get("api_key"):
+        _private(CONFIG)
+
+
+def _private(path: Path) -> None:
+    """The API key sits in this file: make it readable by this user only (best effort)."""
+    try:
+        if os.name == "nt":
+            import subprocess
+            subprocess.run(["icacls", str(path), "/inheritance:r", "/grant:r", os.environ.get("USERNAME", "") + ":F"],
+                           capture_output=True, timeout=10, creationflags=0x08000000)
+        else:
+            path.chmod(0o600)
+    except (OSError, ValueError, Exception):  # noqa: BLE001 - never fail a save over permissions
+        pass
 
 
 def _is_client(p: Path) -> bool:

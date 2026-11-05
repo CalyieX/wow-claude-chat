@@ -452,7 +452,10 @@ local function poll()
   if not pending then return end
   local age = GetTime() - pending.t0
   if age > 8 and not pending.read then pending.read = true; holdUntil = GetTime() + 2 end
-  if age > 12 then pending = nil end  -- the bridge has read it by now; the answer arrives in the overlay, not here
+  if age > 30 then  -- a busy bridge reads it right after its current answer; after that the text must not linger
+    pending = nil
+    KKMapState.out = ""  -- or it would be answered minutes later, when the strip shows up again
+  end
 end
 
 local function isClaudeBox(eb)
