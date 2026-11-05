@@ -57,9 +57,9 @@ and scales with the game window when you move or resize it, and hides while the 
 terminal: `wowclaude overlay https://www.youtube.com --corner br --size 480x270`. If it does not open, see
 `~/.wowclaude/overlay.log`.
 
-The frame is drawn in code, no game files are shipped. If you want the exact in-game look, put the original textures
-(same file names, e.g. `UI-DialogBox-Border.png`) into `~/.wowclaude/art/` yourself; they take priority. Put
-`FRIZQT__.TTF` into `~/.wowclaude/` for the game font.
+The frame uses a few small World of Warcraft interface textures (in `wowclaude/art/`, (c) Blizzard Entertainment, only
+for the look of this window). If a file is missing the frame is drawn in code instead. Your own textures with the
+same file names in `~/.wowclaude/art/` take priority. Put `FRIZQT__.TTF` into `~/.wowclaude/` for the game font.
 
 ## Choosing the AI (no files to edit)
 

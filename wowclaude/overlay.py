@@ -423,15 +423,22 @@ TOP = max(40, CHROME_BAR + 6)  # top strip with the address bar and buttons; Chr
 _art_cache: dict = {}
 
 
+PACKAGED_ART = Path(__file__).parent / "art"
+
+
 def _art(name: str):
-    """Frame texture: your own copy in ~/.wowclaude/art/ if present, else the artwork drawn in code (frame_art.py)."""
+    """Frame texture: your own copy in ~/.wowclaude/art/, else the WoW textures shipped in wowclaude/art/, else the
+    artwork drawn in code (frame_art.py)."""
     from PIL import Image
     if name not in _art_cache:
-        mine = config.HOME / "art" / name
-        try:
-            _art_cache[name] = Image.open(mine).convert("RGBA") if mine.is_file() else None
-        except OSError:
-            _art_cache[name] = None
+        _art_cache[name] = None
+        for folder in (config.HOME / "art", PACKAGED_ART):
+            try:
+                if (folder / name).is_file():
+                    _art_cache[name] = Image.open(folder / name).convert("RGBA")
+                    break
+            except OSError:
+                continue
         if _art_cache[name] is None:
             from . import frame_art
             _art_cache[name] = frame_art.generate(name)

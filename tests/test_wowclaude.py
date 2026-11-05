@@ -313,17 +313,27 @@ def test_deliver_retries_when_files_are_locked(monkeypatch):
     assert bridge.deliver(Path("."), st, "hello") is True and len(calls) == 2
 
 
+def test_shipped_textures_are_used_and_own_ones_win(tmp_path, monkeypatch):
+    from wowclaude import overlay
+    shipped = Path(overlay.__file__).parent / "art"
+    assert (shipped / "UI-DialogBox-Border.png").is_file()
+    monkeypatch.setattr(overlay.config, "HOME", tmp_path)
+    overlay._art_cache.clear()
+    assert overlay._art("UI-DialogBox-Border.png").size == __import__("PIL.Image", fromlist=["Image"]).open(shipped / "UI-DialogBox-Border.png").size
+    overlay._art_cache.clear()
+
+
 def test_frame_art_is_generated_without_game_files(tmp_path, monkeypatch):
     """No game textures ship with the package: every frame image can be drawn from code."""
     from wowclaude import frame_art, overlay
     monkeypatch.setattr(overlay.config, "HOME", tmp_path)
+    monkeypatch.setattr(overlay, "PACKAGED_ART", tmp_path / "no-art")  # as if the textures were not shipped
     overlay._art_cache.clear()
     for name in frame_art.NAMES:
         im = overlay._art(name)
         assert im.mode == "RGBA" and im.size[0] > 0
     assert overlay.compose(500, 300, overlay.TOP).size == (500, 300)
     assert overlay.slot_sprite("hover").size == (64, 64)
-    assert not (Path(overlay.__file__).parent / "art").exists()
     overlay._art_cache.clear()
 
 
