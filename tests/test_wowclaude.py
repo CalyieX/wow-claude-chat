@@ -1006,3 +1006,33 @@ def test_lua_zero_byte_marker_does_not_deliver_or_burn_slot(tmp_path):
         lua.eval("function() __update(1.0) end")()
     after = decode.decode(h.strip_image(lua))
     assert after.ack_seq != st.message_seq and after.slot_next == 1   # nothing delivered, no slot used up
+
+
+def test_lua_never_thinks_forever_when_marker_plays_but_no_slot_loads():
+    h, lua = _lua_addon()
+    lua.execute("now = 1000; function GetTime() return now end")
+    lua.eval("function() SlashCmdList['KKCHAT']('Hallo') end")()
+    lua.globals().__play = lambda path: True
+    lua.globals().__load = lambda name: False
+    for _ in range(300):
+        lua.execute("now = now + 1")
+        lua.eval("function() __update(1.0) end")()
+    shown = [str(x) for x in lua.eval("DEFAULT_CHAT_FRAME.__log").values()]
+    assert any("Zeitueberschreitung" in x or "timeout" in x for x in shown)
+
+
+def test_lua_reloads_before_asking_when_slots_are_nearly_gone_and_asks_again():
+    h, lua = _lua_addon()
+    lua.execute("reloads = 0; function ReloadUI() reloads = reloads + 1 end; timers = {}; "
+                "C_Timer = { After = function(s, fn) table.insert(timers, fn) end }")
+    lua.globals().__play = lambda path: True
+    lua.execute("""__load = function(name) KKReplyData = { seq = KKMapState.seq, parts = { "ok" } }; return true end""")
+    asked = 0
+    for _ in range(slots.SLOTS):
+        lua.eval("function() SlashCmdList['KKCHAT']('x') end")()
+        if lua.eval("reloads") > 0:
+            break
+        asked += 1
+        lua.eval("function() __update(8.0) end")()
+    assert lua.eval("reloads") == 1 and asked < slots.SLOTS            # reloaded before the slots ran out
+    assert lua.eval("KKMapDB.resend ~= nil")                            # ... and remembered the question

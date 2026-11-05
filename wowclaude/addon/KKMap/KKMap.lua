@@ -234,6 +234,11 @@ end
 local function sendToClaude(msg, shown)
   msg = strtrim(msg or "")
   if msg == "" then say(L("Benutzung: einfach schreiben (im Tab Claude) oder /c Frage", "Usage: just type in the Claude tab, or /c question")); return end
+  if nextSlot >= NSLOTS - 2 and not InCombatLockdown() and ReloadUI then  -- slots nearly used up: reload first (resets them), ask again afterwards
+    KKMapDB.resend = { msg = msg, shown = shown }
+    ReloadUI()
+    return
+  end
   local clean = msg:gsub("[|\n\r]", " ")
   if #clean > 230 then
     clean = utf8cut(clean, 230)
@@ -562,7 +567,8 @@ local function poll(dt)
   local willPlay = PlaySoundFile(SIG .. string.format("%03d", pending.idx) .. ".wav", "Master")
   if willPlay then
     deliver()
-  elseif GetTime() - pending.t0 > 120 then
+  end
+  if pending and GetTime() - pending.t0 > 120 then  -- also when the marker plays but no slot could be loaded: never "think" forever
     say(L("Claude antwortet nicht (Zeitueberschreitung). Laeuft die Bruecke?", "Claude did not answer (timeout). Is the bridge running?"), 1, 0.4, 0.4)
     pending = nil
   end
@@ -740,6 +746,9 @@ ev:SetScript("OnEvent", function()
   for _, h in ipairs(KKMapDB.hist or {}) do cf:AddMessage(h[1], h[2], h[3], h[4]) end
   hookEditBoxes()
   if KKMapDB.off then host:Hide() else render() end
+  local r = KKMapDB.resend
+  KKMapDB.resend = nil
+  if r and C_Timer and C_Timer.After then C_Timer.After(3, function() sendToClaude(r.msg, r.shown) end) end
 end)
 
 -- /vohide: hide the stray AI_VoiceOver window (its transparent frame shows only a scroll bar and a resize corner)
