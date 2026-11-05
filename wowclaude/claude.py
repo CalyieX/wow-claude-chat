@@ -168,7 +168,7 @@ def _exec(cmd: list, prompt: str, timeout: float | None = None) -> tuple:
             proc.communicate(timeout=5)
         except Exception:  # noqa: BLE001 - nothing more to collect
             pass
-        raise AskTimeout(f"Claude did not answer within {TIMEOUT} seconds.") from exc
+        raise AskTimeout(f"Claude did not answer within {round(timeout or TIMEOUT)} seconds.") from exc
     return proc.returncode, out, err
 
 
@@ -208,8 +208,10 @@ class Session:
                 low = str(exc).lower()
                 if "expired" in low or "log in" in low or "login" in low or "authenticate" in low:
                     raise RuntimeError("Claude login expired: run `claude` once in a terminal and log in again.") from exc
-                if not (self.started and ("session" in low or "conversation" in low)):
-                    raise  # only a stale/unknown session is worth a second run
+                stale = ("no conversation found" in low or "already in use" in low or "session not found" in low
+                         or "invalid session" in low or "unknown session" in low)
+                if not (self.started and stale) or t_end - time.time() < 20:
+                    raise  # only a stale session is worth a second run, and only if enough of the budget is left
                 self._new()
                 return self._run(exe, prompt, model, t_end)
         finally:
@@ -227,7 +229,7 @@ class Session:
         cmd += ["--resume" if self.started else "--session-id", self.id]
         if model:
             cmd += ["--model", model]
-        left = max(5.0, t_end - time.time()) if t_end else TIMEOUT
+        left = max(5.0, t_end - time.time()) if t_end else TIMEOUT  # (a retry only starts with >= 20 s left)
         code, out, err = _exec(cmd, prompt, left)
         out = (out or "").strip()
         if code != 0 or not out:

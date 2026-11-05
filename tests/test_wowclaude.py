@@ -579,3 +579,99 @@ def test_failed_retry_never_keeps_a_burnt_session_id(monkeypatch):
     except RuntimeError:
         pass
     assert seen and not s.started and s.id  # fresh id after a failed retry, never the burnt one
+
+
+def test_lua_reply_round_trip_through_slots(tmp_path):
+    """Full loop: question via strip -> Python publishes -> marker plays -> addon loads the slot, shows it, acks."""
+    h, lua = _lua_addon()
+    root = tmp_path
+    addons = root / "Interface" / "AddOns"
+    (addons / "KKMap" / "sig").mkdir(parents=True)
+    (addons / "KKR001").mkdir()
+    lua.eval("function() SlashCmdList['KKCHAT']('Hallo wie gehts?') end")()
+    st = decode.decode(h.strip_image(lua))
+    assert st.message == "Hallo wie gehts?" and st.slot_next == 1
+    marker = addons / "KKMap" / "sig" / f"{st.message_idx:03d}.wav"
+
+    def play(path):  # the real game plays a file only if it contains sound
+        return marker.exists() and marker.stat().st_size > 0 and str(path).endswith(marker.name)
+
+    def load(name):
+        f = addons / name / "Reply.lua"
+        if not f.exists():
+            return False
+        lua.execute(f.read_text(encoding="utf-8"))
+        return True
+    lua.globals().__play, lua.globals().__load = play, load
+
+    lua.eval("function() __update(1.0) end")()           # nothing published yet: addon keeps waiting
+    assert decode.decode(h.strip_image(lua)).ack_seq != st.message_seq
+    (addons / "KKR001" / "Reply.lua").write_text(slots.reply_lua(st.message_seq, ["Claude: Gut, danke!"]), encoding="utf-8")
+    marker.write_bytes(b"RIFF" + b"\0" * 40)
+    lua.eval("function() __update(1.0) end")()
+    shown = [str(x) for x in lua.eval("DEFAULT_CHAT_FRAME.__log").values()]
+    assert "Claude: Gut, danke!" in shown
+    after = decode.decode(h.strip_image(lua))
+    assert after.ack_seq == st.message_seq and after.slot_next == 2
+
+
+def test_lua_long_utf8_message_is_cut_on_a_character_boundary():
+    h, lua = _lua_addon()
+    lua.eval("function() SlashCmdList['KKCHAT']('" + "ä" * 200 + "') end")()
+    st = decode.decode(h.strip_image(lua))
+    assert st.message and len(st.message.encode("utf-8")) <= 230
+    assert set(st.message) == {"ä"}  # no broken half characters
+
+
+def test_check_login_uses_safe_exec(monkeypatch):
+    from wowclaude import backends, claude
+    monkeypatch.setattr(backends, "name", lambda: "claude")
+    monkeypatch.setattr(claude, "claude_path", lambda: "claude")
+    seen = {}
+
+    def fake(cmd, prompt, timeout=None):
+        seen["cmd"] = cmd
+        return 0, "ok", ""
+    monkeypatch.setattr(claude, "_exec", fake)
+    assert claude.check_login()[0] is True
+    assert "--no-session-persistence" in seen["cmd"] and "--strict-mcp-config" in seen["cmd"]
+    monkeypatch.setattr(claude, "_exec", lambda *a, **k: (1, "", "OAuth session expired"))
+    ok, msg = claude.check_login()
+    assert ok is False and "log in once" in msg
+
+
+def test_retry_only_for_stale_sessions_and_session_id_always_renewed(monkeypatch):
+    from wowclaude import backends, claude
+    monkeypatch.setattr(claude, "claude_path", lambda: "claude")
+    monkeypatch.setattr(backends, "name", lambda: "claude")
+    ids = []
+
+    def run(err):
+        def fake(cmd, prompt, timeout=None):
+            ids.append(cmd[cmd.index("--session-id") + 1] if "--session-id" in cmd else cmd[cmd.index("--resume") + 1])
+            if err is None:
+                return 0, "fine", ""
+            return 1, "", err
+        return fake
+    monkeypatch.setattr(claude, "_exec", run(None))
+    s = claude.Session()
+    assert s.ask("one") == "fine" and s.started
+
+    monkeypatch.setattr(claude, "_exec", run("Session limit reached"))   # NOT a stale session: no retry, no data loss
+    n = len(ids)
+    s_id = s.id
+    try:
+        s.ask("two"); assert False
+    except RuntimeError:
+        pass
+    assert len(ids) == n + 1 and s.id == s_id and s.started
+
+    monkeypatch.setattr(claude, "_exec", run("No conversation found with session ID x"))  # stale: one retry
+    n = len(ids)
+    try:
+        s.ask("three"); assert False
+    except RuntimeError:
+        pass
+    assert len(ids) == n + 2
+    burnt = ids[-1]
+    assert not s.started and s.id != burnt  # the id of the failed retry is never reused

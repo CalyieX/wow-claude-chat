@@ -199,10 +199,31 @@ local function say(text, r, g, b, nohist)
   end
 end
 
+-- cut to n bytes without splitting a UTF-8 character
+local function utf8cut(s, n)
+  if #s <= n then return s end
+  local i = n
+  while i > 0 do
+    local b = s:byte(i)
+    if b < 0x80 then break end
+    if b >= 0xC0 then
+      local len = (b >= 0xF0 and 4) or (b >= 0xE0 and 3) or 2
+      if i + len - 1 > n then return s:sub(1, i - 1) end
+      break
+    end
+    i = i - 1
+  end
+  return s:sub(1, n)
+end
+
 local function sendToClaude(msg, shown)
   msg = strtrim(msg or "")
   if msg == "" then say(L("Benutzung: einfach schreiben (im Tab Claude) oder /c Frage", "Usage: just type in the Claude tab, or /c question")); return end
-  local clean = msg:gsub("[|\n\r]", " "):sub(1, 230)
+  local clean = msg:gsub("[|\n\r]", " ")
+  if #clean > 230 then
+    clean = utf8cut(clean, 230)
+    say(L("Hinweis: Nachricht auf 230 Bytes gekuerzt.", "Note: message shortened to 230 bytes."), 1, 0.8, 0.4, true)
+  end
   local seq = time()
   if seq <= (KKMapState.seq or 0) then seq = KKMapState.seq + 1 end
   KKMapDB.n = (KKMapDB.n or 0) + 1

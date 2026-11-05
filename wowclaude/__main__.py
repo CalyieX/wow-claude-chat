@@ -68,7 +68,7 @@ def _scale_info() -> str:
 
 
 def cmd_doctor(args) -> int:
-    from . import claude, screen
+    from . import claude, decode, screen
     root = config.client_root(getattr(args, "root", None))
     print("game folder   :", root or "NOT FOUND (run `wowclaude setup --root \"...\\_forever_\"`)")
     if root:
@@ -93,13 +93,17 @@ def cmd_doctor(args) -> int:
     print("game running  :", running)
     if running:
         from . import bridge
-        st = bridge.read_state()
+        img = screen.grab_strip_area()
+        st = decode.decode(img) if img is not None else None
         if st is None:
             print("strip         : not visible. It only shows while you type in the Claude tab. In the game type "
                   "`/kkmap always`, run this again, and if it is still not visible check that the game is in windowed "
                   "or borderless mode and the addon is enabled.")
         else:
             print("strip         : OK, addon version", st.addon_version, "- next reply slot", st.slot_next)
+            sample = config.HOME / "strip-sample.png"
+            img.save(sample)  # attach this to a bug report: it shows exactly what the program sees
+            print("strip sample  :", sample)
     return 0
 
 

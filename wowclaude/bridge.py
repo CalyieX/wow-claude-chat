@@ -82,6 +82,7 @@ def deliver(root: Path, state: decode.GameState, reply: str) -> bool:
                     slots.reset_marker(root, state.message_idx or 1)  # silent again, so it cannot burn slots later
                     return True
                 if fresh.message_seq > state.message_seq:
+                    slots.reset_marker(root, state.message_idx or 1)  # the addon drops this answer anyway: keep it quiet
                     return True  # the player already wrote the next message: the answer is out, do not block the loop
                 slot_next = fresh.slot_next
     slots.reset_marker(root, state.message_idx or 1)  # never confirmed: keep it from burning slots later

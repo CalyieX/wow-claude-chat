@@ -64,7 +64,7 @@ def _ask_api(system: str, history: list[tuple[str, str]], prompt: str, model: st
         headers["Authorization"] = "Bearer " + key
     req = urllib.request.Request(base + "/chat/completions", data=body, headers=headers)
     try:
-        with urllib.request.urlopen(req, timeout=170) as resp:
+        with urllib.request.urlopen(req, timeout=100) as resp:
             data = json.loads(resp.read().decode("utf-8"))
     except urllib.error.HTTPError as exc:
         raise RuntimeError(f"{exc.code} {exc.read().decode('utf-8', 'replace')[:180]}") from None
@@ -127,19 +127,19 @@ def ask(system: str, history: list[tuple[str, str]], prompt: str, model: str | N
             if model:
                 cmd += ["-m", model]
             config.HOME.mkdir(parents=True, exist_ok=True)
-            done = subprocess.run(cmd + ["-"], input=text, capture_output=True, text=True, encoding="utf-8",
-                                  timeout=180, creationflags=FLAGS)
+            from . import claude
+            code, out, err = claude._exec(cmd + ["-"], text)  # hard limit, whole process tree killed on timeout
             answer = out_file.read_text(encoding="utf-8").strip() if out_file.exists() else ""
-            if done.returncode != 0 or not answer:
-                raise RuntimeError((done.stderr or done.stdout or "codex failed").strip()[-200:])
+            if code != 0 or not answer:
+                raise RuntimeError((err or out or "codex failed").strip()[-200:])
             return answer
     if b == "command":
         cmd = _command()
-        done = subprocess.run(cmd, input=text, capture_output=True, text=True, encoding="utf-8", timeout=180,
-                              creationflags=FLAGS)
-        answer = (done.stdout or "").strip()
-        if done.returncode != 0 or not answer:
-            raise RuntimeError((done.stderr or answer or "command failed").strip()[:200])
+        from . import claude
+        code, out, err = claude._exec(cmd, text)
+        answer = (out or "").strip()
+        if code != 0 or not answer:
+            raise RuntimeError((err or answer or "command failed").strip()[:200])
         return answer
     if b in PRESETS or b == "openai-compatible":
         return _ask_api(system, history, prompt, model)

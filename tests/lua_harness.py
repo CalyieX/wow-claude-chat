@@ -62,7 +62,7 @@ function EnumerateFrames(f) return nil end
 function InCombatLockdown() return false end
 function GetAddOnInfo() return nil end
 function IsAddOnLoaded() return false end
-function LoadAddOn() return true end
+function LoadAddOn(name) return __load(name) end
 function UnitName() return "Tester" end
 function GetRealmName() return "Realm" end
 function UnitLevel() return 10 end
@@ -87,7 +87,7 @@ strtrim = function(s) return (s:gsub("^%s+", ""):gsub("%s+$", "")) end
 tinsert = table.insert
 wipe = function(t) for k in pairs(t) do t[k] = nil end return t end
 function hooksecurefunc() end
-function PlaySoundFile() return false end
+function PlaySoundFile(path) return __play(path) end
 function print() end
 function date() return "00:00" end
 BackdropTemplateMixin = {}
@@ -99,6 +99,13 @@ function __fire(event)
   for _, f in ipairs(AllFrames) do
     local h = f.__scripts and f.__scripts.OnEvent
     if h then h(f, event) end
+  end
+end
+
+function __update(dt)
+  for _, f in ipairs(AllFrames) do
+    local h = f.__scripts and f.__scripts.OnUpdate
+    if h then h(f, dt) end
   end
 end
 
@@ -118,6 +125,8 @@ def run_addon(lua_path: Path):
     """Load KKMap.lua with a fake API and return (lua_runtime, list of (col,row,r,g,b) strip cells)."""
     import lupa
     lua = lupa.LuaRuntime(unpack_returned_tuples=True)
+    lua.globals().__play = lambda path: False   # replaced by tests that exercise the reply channel
+    lua.globals().__load = lambda name: True
     lua.execute(LUA_PRELUDE)
     lua.execute(LUA_READBACK)
     code = lua_path.read_text(encoding="utf-8")
