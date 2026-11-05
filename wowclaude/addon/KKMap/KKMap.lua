@@ -202,8 +202,12 @@ local function sendToClaude(msg, shown)
   local idx = ((KKMapDB.n - 1) % 200) + 1
   KKMapState.seq, KKMapState.out, KKMapState.idx = seq, clean, idx
   pending = { seq = seq, idx = idx, t0 = GetTime() }
-  say(L("Du: ", "You: ") .. (shown or msg), 1, 1, 0.6)
-  say(L("Claude denkt ...", "Claude is thinking ..."), 0.6, 0.6, 0.6)
+  if msg:sub(1, 1) == "!" then
+    say(shown or msg, 0.6, 0.6, 0.6)  -- menu command for the bridge: no AI involved, so no "thinking"
+  else
+    say(L("Du: ", "You: ") .. (shown or msg), 1, 1, 0.6)
+    say(L("KI denkt ...", "AI is thinking ..."), 0.6, 0.6, 0.6)
+  end
   stripOn = true; host:SetAlpha(1)
   render()
 end
