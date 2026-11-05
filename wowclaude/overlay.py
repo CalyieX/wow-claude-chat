@@ -243,7 +243,8 @@ def run(url: str | None = None, corner: str | None = None, size: str | None = No
 # resize grabber), assembled exactly like the in-game overlay window (Backdrop: edgeSize 24, tile 32, insets 6).
 # It is a per-pixel-alpha window, so the translucent dark background shows the game behind it, like the real thing.
 ART = Path(__file__).parent / "art"
-EDGE_SIZE, INSET, MARGIN = 24, 6, 8  # border art size, backdrop inset, visible border thickness (content margin)
+EDGE_SIZE, INSET, MARGIN = 24, 6, 9
+KEY_RGB, KEY = (1, 2, 3), "#010203"  # border art size, backdrop inset, visible border thickness (content margin)
 EDGE = MARGIN  # frame thickness left/right/bottom
 TOP = 30  # top strip with the address bar and the close button; the browser area starts below it
 
@@ -282,19 +283,63 @@ def label_width() -> int:
     return int(_font(13).getlength(LABEL)) + 22
 
 
-def compose(fw: int, fh: int, top: int, hover: str = "", down: str = ""):
+CB = (6, 7, 25, 25)  # the red button inside the 32x32 UIPanelCloseButton texture (19x18)
+BW, BH, BY = CB[2] - CB[0], CB[3] - CB[1], 8
+
+
+def buttons(fw: int) -> dict:
+    """Top-right buttons (x, y, w, h): close, minimize (green), ghost; the address bar ends left of them."""
+    close = fw - 8 - BW
+    mini = close - 4 - BW
+    ghost = mini - 4 - BW
+    return {n: (x, BY, BW, BH) for n, x in (("close", close), ("min", mini), ("ghost", ghost))}
+
+
+def _button_art(kind: str, on: bool = False):
+    """Button faces made from the game's own close-button art: red X (close), green dash (minimize), ghost."""
+    from PIL import Image, ImageDraw, ImageOps
+
+    base = _art("UI-Panel-MinimizeButton-Up.png").crop(CB)
+    if kind == "close":
+        return base
+    px = base.load()
+    for yy in range(base.height):  # wipe the gold X so a new glyph can be drawn
+        for xx in range(base.width):
+            r, g, b, a = px[xx, yy]
+            if a and g > 55 and r > g:
+                px[xx, yy] = (112, 22, 16, a)
+    ImageDraw.Draw(base).rectangle((4, 4, 14, 13), fill=(112, 22, 16, 255))  # flat panel, no X shadow left
+    r, g, b, a = base.split()
+    if kind == "min":
+        face = Image.merge("RGBA", (g, r, b, a))  # red -> green
+        ImageDraw.Draw(face).rectangle((5, 8, 13, 9), fill=(242, 194, 48, 255))
+        return face
+    gray = ImageOps.grayscale(base.convert("RGB")).convert("RGB")  # ghost: dark steel button
+    face = Image.merge("RGBA", (*[c.point(lambda v: int(v * 0.8)) for c in gray.split()], a))
+    d = ImageDraw.Draw(face)
+    fill = (150, 215, 255, 255) if on else (235, 235, 245, 255)
+    d.ellipse((5, 3, 13, 10), fill=fill)
+    d.rectangle((5, 7, 13, 13), fill=fill)
+    for bx in (5, 8, 11):  # wavy hem
+        d.polygon([(bx, 13), (bx + 3, 13), (bx + 1, 15)], fill=fill)
+    d.rectangle((7, 7, 8, 8), fill=(30, 30, 50, 255))
+    d.rectangle((10, 7, 11, 8), fill=(30, 30, 50, 255))
+    return face
+
+
+def compose(fw: int, fh: int, top: int, hover: str = "", down: str = "", ghost: bool = False):
     """Render the whole frame as an RGBA image; the content window area is fully transparent."""
-    from PIL import Image, ImageChops
+    from PIL import Image, ImageChops, ImageDraw
 
     out = Image.new("RGBA", (fw, fh), (0, 0, 0, 0))
+    # background only in the top strip (the page fills everything else, no grey seam beside the border)
     tile = _art("UI-DialogBox-Background.png").resize((32, 32))
     bg = Image.new("RGBA", (fw, fh), (0, 0, 0, 0))
-    for yy in range(INSET, fh - INSET, 32):
+    for yy in range(INSET, top, 32):
         for xx in range(INSET, fw - INSET, 32):
             bg.paste(tile, (xx, yy))
     mask = Image.new("L", (fw, fh), 0)
-    mask.paste(255, (INSET, INSET, fw - INSET, fh - INSET))
-    mask.paste(0, (MARGIN, top, fw - MARGIN, fh - MARGIN))  # cut out the browser area
+    mask.paste(255, (INSET, INSET, fw - INSET, top))
     bg.putalpha(ImageChops.multiply(bg.getchannel("A"), mask))
     out.alpha_composite(bg)
     # border: 8 pieces of 32 px in a 256x32 strip: left, right, top, bottom (stored rotated), TL, TR, BL, BR
@@ -314,20 +359,18 @@ def compose(fw: int, fh: int, top: int, hover: str = "", down: str = ""):
     out.alpha_composite(piece(5), (fw - e, 0))
     out.alpha_composite(piece(6), (0, fh - e))
     out.alpha_composite(piece(7), (fw - e, fh - e))
-    # close button: the red square of UIPanelCloseButton (art bbox 6,7..25,25 of the 32x32 texture), 3 px from the
-    # right and 2 px from the top edge, like in the in-game overlay window
-    cb = (6, 7, 25, 25)
-    bx, by = fw - 3 - (cb[2] - cb[0]), 2
-    out.alpha_composite(_art("UI-Panel-MinimizeButton-Down.png" if down == "close" else "UI-Panel-MinimizeButton-Up.png").crop(cb),
-                        (bx, by))
-    if hover == "close":
-        box = (bx, by, bx + cb[2] - cb[0], by + cb[3] - cb[1])
-        region = out.crop(box)
-        hl = _art("UI-Panel-MinimizeButton-Highlight.png").crop(cb)
-        rgb = ImageChops.add(region.convert("RGB"), hl.convert("RGB"))
-        rgb.putalpha(ImageChops.lighter(region.getchannel("A"), hl.getchannel("A")))
-        out.paste(rgb, box[:2])
-    from PIL import ImageDraw
+    # buttons: ghost | minimize (green) | close (red), all inside the top strip
+    hl = _art("UI-Panel-MinimizeButton-Highlight.png").crop(CB)
+    for name, (bx, by, bw, bh) in buttons(fw).items():
+        face = _button_art("close" if (name == "close" and down == "close") else name, ghost and name == "ghost")
+        if name == "close" and down == "close":
+            face = _art("UI-Panel-MinimizeButton-Down.png").crop(CB)
+        out.alpha_composite(face, (bx, by))
+        if hover == name:
+            region = out.crop((bx, by, bx + bw, by + bh))
+            rgb = ImageChops.add(region.convert("RGB"), hl.convert("RGB"))
+            rgb.putalpha(ImageChops.lighter(region.getchannel("A"), hl.getchannel("A")))
+            out.paste(rgb, (bx, by))
     draw = ImageDraw.Draw(out)
     font = _font(13)
     ty = TOP // 2 + 4
@@ -391,13 +434,19 @@ def update_layered(hwnd: int, img, x: int, y: int) -> None:
 
 
 def frame_loop(hwnd: int, x: int, y: int, w: int, h: int, opacity: int, click_through: bool, port: int = 0) -> None:
-    """Draw the WoW frame above the browser window (per-pixel alpha; the browser area is see-through and clickable)."""
+    """Draw the WoW frame above the browser window (per-pixel alpha; the browser area is see-through and clickable).
+
+    Top strip: label, address bar, ghost (see-through + click-through mode), minimize (becomes a draggable
+    button that remembers its spot), close. Position, size, button spot and ghost mode survive restarts.
+    """
     import tkinter as tk
+    from PIL import ImageTk
 
     GWL_STYLE, WS_CAPTION, WS_THICKFRAME, WS_BORDER = -16, 0xC00000, 0x40000, 0x800000
     st = user32.GetWindowLongW(hwnd, GWL_STYLE) & ~(WS_CAPTION | WS_THICKFRAME | WS_BORDER)
     user32.SetWindowLongW(hwnd, GWL_STYLE, st)
-    S = {"x": x, "y": y, "w": w, "h": h, "hover": "", "down": ""}  # browser window top-left and CONTENT size
+    saved = load_state()
+    S = {"x": x, "y": y, "w": w, "h": h, "hover": "", "down": "", "ghost": bool(saved.get("ghost")), "min": False}
     top = TOP
     root = tk.Tk()
     root.overrideredirect(True)
@@ -414,7 +463,7 @@ def frame_loop(hwnd: int, x: int, y: int, w: int, h: int, opacity: int, click_th
     bar.overrideredirect(True)
     bar.attributes("-topmost", True)
     bar.configure(bg="#2a2417")
-    var = tk.StringVar(value=load_state().get("url", ""))
+    var = tk.StringVar(value=saved.get("url", ""))
     entry = tk.Entry(bar, textvariable=var, bg="#0d0c09", fg="#ffd100", insertbackground="#ffd100", relief="flat",
                      font=("Arial", 9), highlightthickness=1, highlightbackground="#5c5c5c", highlightcolor="#b4b4b4",
                      selectbackground="#5c4a1a", selectforeground="#ffffff")
@@ -422,27 +471,80 @@ def frame_loop(hwnd: int, x: int, y: int, w: int, h: int, opacity: int, click_th
 
     def go(_e=None):
         if port and navigate(port, var.get()):
-            drag_focus_back()
+            root.focus_force()
         return "break"
-
-    def drag_focus_back() -> None:
-        root.focus_force()
 
     entry.bind("<Return>", go)
     entry.bind("<Button-1>", lambda e: (bar.focus_force(), entry.focus_set()))
-    entry.bind("<Escape>", lambda e: drag_focus_back())
+    entry.bind("<Escape>", lambda e: root.focus_force())
+
+    # floating button shown while minimized: the green minimize face, draggable, click restores
+    fl = tk.Toplevel(root)
+    fl.overrideredirect(True)
+    fl.attributes("-topmost", True, "-transparentcolor", KEY)
+    fl.configure(bg=KEY)
+    face = _button_art("min").resize((BW * 2, BH * 2), 1)
+    from PIL import Image as _Im
+    plate = _Im.new("RGBA", face.size, KEY_RGB + (255,))
+    plate.alpha_composite(face)
+    fl_img = ImageTk.PhotoImage(plate)
+    fl_lbl = tk.Label(fl, image=fl_img, bd=0, bg=KEY, cursor="hand2")
+    fl_lbl.pack()
+    fl.withdraw()
+    rect = game_rect() or (0, 0, user32.GetSystemMetrics(0), user32.GetSystemMetrics(1))
+    S["bx"] = int(saved.get("bx", rect[2] - 120))
+    S["by"] = int(saved.get("by", rect[1] + 60))
+    fdrag: dict = {}
+
+    def persist() -> None:
+        save_state(x=S["x"], y=S["y"], w=S["w"], h=S["h"], ghost=S["ghost"], bx=S["bx"], by=S["by"])
+
+    def set_min(on: bool) -> None:
+        S["min"] = on
+        if on:
+            user32.ShowWindow(wintypes.HWND(hwnd), 0)
+            root.withdraw()
+            bar.withdraw()
+            fl.geometry(f"+{S['bx']}+{S['by']}")
+            fl.deiconify()
+        else:
+            fl.withdraw()
+            root.deiconify()
+            bar.deiconify()
+            user32.ShowWindow(wintypes.HWND(hwnd), 4)
+            layout()
+
+    def fl_down(e):
+        fdrag.update(dx=e.x_root - fl.winfo_x(), dy=e.y_root - fl.winfo_y(), sx=e.x_root, sy=e.y_root, moved=False)
+
+    def fl_move(e):
+        if abs(e.x_root - fdrag["sx"]) + abs(e.y_root - fdrag["sy"]) > 4:
+            fdrag["moved"] = True
+        if fdrag["moved"]:
+            S["bx"], S["by"] = e.x_root - fdrag["dx"], e.y_root - fdrag["dy"]
+            fl.geometry(f"+{S['bx']}+{S['by']}")
+
+    def fl_up(_e):
+        persist()
+        if not fdrag.get("moved"):
+            set_min(False)
+
+    fl_lbl.bind("<Button-1>", fl_down)
+    fl_lbl.bind("<B1-Motion>", fl_move)
+    fl_lbl.bind("<ButtonRelease-1>", fl_up)
 
     def place_bar() -> None:
         fw = S["w"] + 2 * EDGE
         lw = label_width()
-        bar.geometry(f"{max(60, fw - lw - 34)}x18+{S['x'] - EDGE + lw}+{S['y'] - TOP + 10}")
+        gx = buttons(fw)["ghost"][0]
+        bar.geometry(f"{max(60, gx - 4 - lw)}x18+{S['x'] - EDGE + lw}+{S['y'] - TOP + 10}")
 
     def dims():
         return S["w"] + 2 * EDGE, S["h"] + TOP + EDGE
 
     def draw() -> None:
         fw, fh = dims()
-        cache["img"] = compose(fw, fh, top, S["hover"], S["down"])
+        cache["img"] = compose(fw, fh, top, S["hover"], S["down"], S["ghost"])
         update_layered(top_hwnd, cache["img"], S["x"] - EDGE, S["y"] - TOP)
 
     def layout() -> None:
@@ -453,8 +555,9 @@ def frame_loop(hwnd: int, x: int, y: int, w: int, h: int, opacity: int, click_th
 
     def zone(e) -> str:
         fw, fh = dims()
-        if fw - 30 <= e.x <= fw - 1 and 0 <= e.y <= 26:
-            return "close"
+        for name, (bx, by, bw, bh) in buttons(fw).items():
+            if bx - 1 <= e.x <= bx + bw + 1 and by - 1 <= e.y <= by + bh + 1:
+                return name
         if e.x >= fw - 24 and e.y >= fh - 24:
             return "grip"
         if e.y < top:
@@ -489,14 +592,22 @@ def frame_loop(hwnd: int, x: int, y: int, w: int, h: int, opacity: int, click_th
             S["down"] = ""
             draw()
             if zone(e) == "close":
-                save_state(x=S["x"], y=S["y"], w=S["w"], h=S["h"])
+                persist()
                 user32.PostMessageW(wintypes.HWND(hwnd), 0x0010, 0, 0)
+        elif was == "min" and zone(e) == "min":
+            persist()
+            set_min(True)
+        elif was == "ghost" and zone(e) == "ghost":
+            S["ghost"] = not S["ghost"]
+            draw()
+            persist()
         elif was:
-            save_state(x=S["x"], y=S["y"], w=S["w"], h=S["h"])
+            persist()
         drag.clear()
 
     def hover(e):
-        want = "close" if zone(e) == "close" else ""
+        z = zone(e)
+        want = z if z in ("close", "min", "ghost") else ""
         if want != S["hover"]:
             S["hover"] = want
             draw()
@@ -510,19 +621,23 @@ def frame_loop(hwnd: int, x: int, y: int, w: int, h: int, opacity: int, click_th
 
     def tick():
         if not user32.IsWindow(wintypes.HWND(hwnd)):
-            save_state(x=S["x"], y=S["y"], w=S["w"], h=S["h"])
+            persist()
             root.destroy()
             return
-        pin(hwnd, S["x"], S["y"], S["w"], S["h"], opacity, click_through)
-        user32.SetWindowPos(ctypes.c_void_p(top_hwnd), wintypes.HWND(HWND_TOPMOST), 0, 0, 0, 0, 0x13)  # NOMOVE|NOSIZE|NOACTIVATE
-        bar.attributes("-topmost", True)
-        bar.lift()
-        n = cache.get("n", 0) + 1
-        cache["n"] = n
-        if port and n % 8 == 0 and root.focus_get() is not entry:  # keep the address bar in sync with the page
-            found = _page_ws(port)
-            if found and found[1] and found[1] != var.get() and not found[1].startswith("chrome-error"):
-                var.set(found[1])
+        if not S["min"]:
+            ghost = S["ghost"]
+            pin(hwnd, S["x"], S["y"], S["w"], S["h"], 35 if ghost else opacity, click_through or ghost)
+            user32.SetWindowPos(ctypes.c_void_p(top_hwnd), wintypes.HWND(HWND_TOPMOST), 0, 0, 0, 0, 0x13)
+            bar.attributes("-topmost", True)
+            bar.lift()
+            n = cache.get("n", 0) + 1
+            cache["n"] = n
+            if port and n % 8 == 0 and root.focus_get() is not entry:  # keep the address bar in sync with the page
+                found = _page_ws(port)
+                if found and found[1] and found[1] != var.get() and not found[1].startswith("chrome-error"):
+                    var.set(found[1])
+        else:
+            fl.attributes("-topmost", True)
         root.after(250, tick)
 
     tick()
