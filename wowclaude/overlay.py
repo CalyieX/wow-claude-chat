@@ -44,11 +44,28 @@ CANDIDATES = [
 ]
 
 
+CREATE_NO_WINDOW = 0x08000000
+
+
 def find_browser() -> str | None:
     for c in CANDIDATES:
         if Path(c).exists():
             return c
     return shutil.which("chrome") or shutil.which("msedge")
+
+
+def _window_pid(hwnd: int) -> int:
+    pid = wintypes.DWORD(0)
+    user32.GetWindowThreadProcessId(wintypes.HWND(hwnd), ctypes.byref(pid))
+    return pid.value
+
+
+def _on_screen(x: int, y: int, w: int, h: int) -> bool:
+    """Is the middle of the window on a connected monitor? (a monitor may have been unplugged since last time)"""
+    vx, vy = user32.GetSystemMetrics(76), user32.GetSystemMetrics(77)  # virtual screen origin
+    vw, vh = user32.GetSystemMetrics(78), user32.GetSystemMetrics(79)
+    cx, cy = x + w // 2, y + h // 2
+    return vx <= cx < vx + vw and vy <= cy < vy + vh
 
 
 def _windows() -> dict[int, str]:
@@ -226,7 +243,7 @@ def _kill_profile_browsers(profile: Path) -> None:
            "$_.Name -match 'chrome|msedge|brave' } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force }")
     try:
         subprocess.run(["powershell", "-NoProfile", "-Command", cmd], capture_output=True, timeout=20,
-                       creationflags=0x08000000)
+                       creationflags=CREATE_NO_WINDOW)
         time.sleep(1.0)
     except (OSError, subprocess.SubprocessError):
         pass
@@ -269,7 +286,7 @@ def navigate(port: int, text: str) -> bool:
         sk = socket.create_connection((h, int(prt or 80)), timeout=3)
         key = base64.b64encode(os.urandom(16)).decode()
         req = (f"GET /{path} HTTP/1.1\r\nHost: {host}\r\nUpgrade: websocket\r\nConnection: Upgrade\r\n"
-               f"Sec-WebSocket-Key: {key}\r\nSec-WebSocket-Version: 13\r\nOrigin: http://{host}\r\n\r\n")
+               f"Sec-WebSocket-Key: {key}\r\nSec-WebSocket-Version: 13\r\n\r\n")
         sk.sendall(req.encode())
         sk.recv(4096)
         payload = json.dumps({"id": 1, "method": "Page.navigate", "params": {"url": url}}).encode()
@@ -338,6 +355,8 @@ def run(url: str | None = None, corner: str | None = None, size: str | None = No
         x, y = from_rel(g0, rel)[:2]
     else:
         x, y = int(saved["x"]), int(saved["y"])  # remembered position (browser window top-left)
+    if not corner and not _on_screen(x, y, w, h):
+        x, y = place(w, h + TOP + EDGE, "br")  # remembered spot is gone (monitor unplugged): back into the game
     save_state(url=url, x=x, y=y, w=w, h=h)
     profile = config.HOME / "overlay-profile"
     profile.mkdir(parents=True, exist_ok=True)
@@ -346,17 +365,20 @@ def run(url: str | None = None, corner: str | None = None, size: str | None = No
         _kill_profile_browsers(profile)
         port = free_port()
         before = set(_windows())
-        subprocess.Popen([exe, f"--app={url}", f"--user-data-dir={profile}", f"--window-size={w},{h + CHROME_BAR}",
-                          f"--window-position={x},{y - CHROME_BAR}", "--autoplay-policy=no-user-gesture-required",
-                          "--no-first-run", "--disable-features=Translate,CalculateNativeWinOcclusion", "--disable-backgrounding-occluded-windows", "--disable-renderer-backgrounding", f"--remote-debugging-port={port}",
-                          "--remote-allow-origins=*"],
-                         creationflags=0x08000000)
+        proc = subprocess.Popen(
+            [exe, f"--app={url}", f"--user-data-dir={profile}", f"--window-size={w},{h + CHROME_BAR}",
+             f"--window-position={x},{y - CHROME_BAR}", "--autoplay-policy=no-user-gesture-required",
+             "--no-first-run", "--disable-features=Translate,CalculateNativeWinOcclusion",
+             "--disable-backgrounding-occluded-windows", "--disable-renderer-backgrounding",
+             f"--remote-debugging-port={port}"],
+            creationflags=CREATE_NO_WINDOW)
         hwnd = 0
         for _ in range(60):
             time.sleep(0.5)
             new = set(_windows()) - before
-            if new:
-                hwnd = sorted(new)[0]
+            mine = [h_ for h_ in new if _window_pid(h_) == proc.pid]  # not another Chrome-based app that opened meanwhile
+            if mine or (new and _ > 20):
+                hwnd = sorted(mine or new)[0]
                 break
         if not hwnd:
             print("Browser window did not appear.")
@@ -374,16 +396,28 @@ def run(url: str | None = None, corner: str | None = None, size: str | None = No
 # The frame is built from the game's own UI textures (DialogFrame/UI-DialogBox-*, UIPanelCloseButton art, chat
 # resize grabber), assembled exactly like the in-game overlay window (Backdrop: edgeSize 24, tile 32, insets 6).
 # It is a per-pixel-alpha window, so the translucent dark background shows the game behind it, like the real thing.
-ART = Path(__file__).parent / "art"
 EDGE_SIZE, INSET, MARGIN = 24, 6, 9
 KEY_RGB, KEY = (1, 2, 3), "#010203"  # border art size, backdrop inset, visible border thickness (content margin)
 EDGE = MARGIN  # frame thickness left/right/bottom
 TOP = 40  # top strip with the address bar and buttons; Chrome draws its first 7 rows over the frame edge, so they must lie under the opaque part (TOP >= CHROME_BAR + 5)
 
 
+_art_cache: dict = {}
+
+
 def _art(name: str):
+    """Frame texture: your own copy in ~/.wowclaude/art/ if present, else the artwork drawn in code (frame_art.py)."""
     from PIL import Image
-    return Image.open(ART / name).convert("RGBA")
+    if name not in _art_cache:
+        mine = config.HOME / "art" / name
+        try:
+            _art_cache[name] = Image.open(mine).convert("RGBA") if mine.is_file() else None
+        except OSError:
+            _art_cache[name] = None
+        if _art_cache[name] is None:
+            from . import frame_art
+            _art_cache[name] = frame_art.generate(name)
+    return _art_cache[name].copy()
 
 
 LABEL = "WoW Browser"
@@ -866,17 +900,25 @@ def frame_loop(hwnd: int, x: int, y: int, w: int, h: int, opacity: int, click_th
     root.mainloop()
 
 
-def play(url: str, size: str | None = None) -> None:
+def play(url: str, size: str | None = None) -> str:
     """Called by the bridge for [[play URL]] / "/browser": start the overlay in the background ("" = last page),
-    or close it for ``off``."""
+    or close it for ``off``. Returns "" when it started, else a short reason (also written to overlay.log)."""
     if url == "off":
         _kill_profile_browsers(config.HOME / "overlay-profile")
-        return
+        return ""
     import sys
     args = [sys.executable, "-m", "wowclaude", "overlay"] + ([url] if url else []) + (["--size", size] if size else [])
     config.HOME.mkdir(parents=True, exist_ok=True)
     log = open(config.HOME / "overlay.log", "a", encoding="utf-8")  # a failing overlay leaves a trace here
-    subprocess.Popen(args, creationflags=0x08000000, stdout=log, stderr=log)
+    proc = subprocess.Popen(args, creationflags=CREATE_NO_WINDOW, stdout=log, stderr=log)
+    time.sleep(4)  # an overlay that cannot start (no Chrome, no game window ...) ends within a moment
+    if proc.poll() is not None:
+        log.flush()
+        try:
+            tail = (config.HOME / "overlay.log").read_text(encoding="utf-8", errors="replace").strip().splitlines()[-1]
+        except (OSError, IndexError):
+            tail = "the browser window did not start"
+        return tail[:160]
+    return ""
 
 
-_ours: set[int] = set()

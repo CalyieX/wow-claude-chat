@@ -16,7 +16,7 @@ Rules:
 
 VIDEO / WEB OVERLAY (you can open a video or web page over the game)
 When the player wants to watch or open something (YouTube, Twitch, Netflix, Twitter/X, a wiki, a guide), put ONE command in the reply:
-[[play https://full-url]]     opens a small WoW-styled window (gold frame, title "K&K WoW AI Chat", X button) bottom right
+[[play https://full-url]]     opens a small WoW-styled window (gold frame, title "WoW Browser", X button) bottom right
 [[play off]]                  closes it
 Rules:
 - https only; one URL per reply. Give the exact page if you know it (youtube.com/watch?v=..., twitch.tv/channel). If you do not know a direct link, use a search URL, e.g. https://www.youtube.com/results?search_query=word+word or https://www.google.com/search?q=word+word. Never invent a video id.

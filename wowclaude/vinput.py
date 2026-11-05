@@ -1,8 +1,12 @@
-"""Optional background input for the AI: qo-virtual-mouse (AutoHotkey UIAccess).
+"""Optional input control for the AI (OFF by default): clicks and keys posted to the game window.
 
-Clicks and keys are posted to the game window WITHOUT taking focus and without moving the player's cursor, so the
-player is not interrupted. Only available when the qo-virtual-mouse skill is installed; otherwise the AI is told
-nothing about it. Reply commands:  [[click X Y]]  [[click X Y R]]  [[keys TEXT]]   (X/Y = game client pixels)
+You must switch it on yourself and point it at a helper script that sends the input, in ~/.wowclaude/config.json:
+    "input_control": true, "input_script": "C:/path/to/helper.ps1", "input_ahk": "C:/path/to/AutoHotkey64_UIA.exe"
+(or the environment variable WOWCLAUDE_VMOUSE for the script). The helper is called as
+    powershell -File <script> -Action click|type -Title "World of Warcraft" -X .. -Y .. [-Button L|R|M] | -Text ..
+Nothing is installed or enabled by this package. Without it the AI is told nothing about input.
+Reply commands:  [[click X Y]]  [[click X Y R]]  [[keys TEXT]]   (X/Y = game client pixels)
+Keys can reach the chat box and slash commands: do not enable this where automation is not allowed.
 """
 from __future__ import annotations
 
@@ -11,7 +15,7 @@ import re
 import subprocess
 from pathlib import Path
 
-AHK = r"C:\Program Files\AutoHotkey\v2\AutoHotkey64_UIA.exe"
+DEFAULT_AHK = r"C:\Program Files\AutoHotkey\v2\AutoHotkey64_UIA.exe"
 TITLE = "World of Warcraft"
 MAX_ACTIONS = 5
 INPUT_RE = re.compile(r"\[\[(click \d{1,5} \d{1,5}(?: [LRM])?|keys [^\]\n]{1,80})\]\]")
@@ -26,11 +30,12 @@ def enabled() -> bool:
 def script() -> Path | None:
     if not enabled():
         return None
-    cands = [os.environ.get("WOWCLAUDE_VMOUSE"),
-             str(Path.home() / ".claude" / "skills" / "qo-virtual-mouse" / "scripts" / "vmouse.ps1")]
-    for c in cands:
-        if c and Path(c).exists() and Path(AHK).exists():
-            return Path(c)
+    from . import config
+    cfg = config.load()
+    cand = os.environ.get("WOWCLAUDE_VMOUSE") or cfg.get("input_script")
+    ahk = cfg.get("input_ahk") or DEFAULT_AHK
+    if cand and Path(cand).exists() and Path(ahk).exists():
+        return Path(cand)
     return None
 
 

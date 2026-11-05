@@ -12,17 +12,31 @@ def read_state() -> decode.GameState | None:
     return decode.decode(img) if img is not None else None
 
 
+def _safe_read_state() -> decode.GameState | None:
+    try:
+        return read_state()
+    except Exception as exc:  # noqa: BLE001 - a failed screenshot must never end the bridge
+        print(f"screen read failed: {exc}", flush=True)
+        return None
+
+
 def handle_command(text: str) -> str | None:
     """In-game slash commands that the addon sends as "!name args" (never forwarded to the AI)."""
     parts = text.strip().split(None, 1)
     cmd, arg = parts[0].lower(), (parts[1].strip() if len(parts) > 1 else "")
     if cmd == "!browser":
         from . import overlay
-        overlay.play("off" if arg in ("off", "close") else arg)
-        return "Browser closed." if arg in ("off", "close") else "Browser opened."
+        closing = arg in ("off", "close")
+        problem = overlay.play("off" if closing else arg)
+        if problem:
+            return "Browser did not open: " + problem
+        return "Browser closed." if closing else "Browser opened."
     if cmd == "!setup":
         from . import overlay, setup_ui
-        overlay.play(setup_ui.start_background(), "640x520")
+        url = setup_ui.start_background()
+        problem = overlay.play(url, "640x520")
+        if problem:
+            return f"Could not open the window ({problem}). Open this address in any browser: {url}"
         return "AI setup opened in the browser window."
     return None
 
@@ -51,13 +65,22 @@ def deliver(root: Path, state: decode.GameState, reply: str) -> bool:
             print(f"images failed: {exc}", flush=True)
     parts = claude.split_reply(reply or "...")
     parts[0] = claude.persona()[0] + ": " + parts[0]
-    slots.publish(root, state.message_seq, state.message_idx or 1, parts, overlay, macros)
-    deadline = time.time() + 15
-    while time.time() < deadline:
-        time.sleep(0.5)
-        fresh = read_state()
-        if fresh is not None and fresh.ack_seq == state.message_seq:
-            return True
+    slot_next = state.slot_next
+    for attempt in range(3):  # no confirmation: the addon may have been reloaded, so look at its slot counter again
+        try:
+            slots.publish(root, state.message_seq, state.message_idx or 1, parts, overlay, macros, slot_next)
+        except OSError as exc:  # game or a scanner holds a file: wait a moment, try again
+            print(f"could not write the reply ({exc}), retrying ...", flush=True)
+            time.sleep(1.0)
+            continue
+        deadline = time.time() + 15
+        while time.time() < deadline:
+            time.sleep(0.5)
+            fresh = _safe_read_state()
+            if fresh is not None:
+                if fresh.ack_seq == state.message_seq:
+                    return True
+                slot_next = fresh.slot_next
     return False
 
 
@@ -71,7 +94,7 @@ def run(root: Path, poll: float = 0.6) -> None:
             last_seq = None  # new game start: never answer an old message
             time.sleep(3)
             continue
-        state = read_state()
+        state = _safe_read_state()
         if state is None:
             time.sleep(poll)
             continue
@@ -93,6 +116,11 @@ def run(root: Path, poll: float = 0.6) -> None:
             except Exception as exc:  # noqa: BLE001 - tell the player, keep running
                 reply = f"No AI answered yet - open /wac and press AI Setup. ({exc})"
             print(f"< {reply}", flush=True)
-            if not deliver(root, state, reply):
+            try:
+                delivered = deliver(root, state, reply)
+            except Exception as exc:  # noqa: BLE001 - report, keep running
+                print(f"delivery failed: {exc}", flush=True)
+                delivered = False
+            if not delivered:
                 print("no confirmation from the game (is the addon loaded? try /reload in the game)", flush=True)
         time.sleep(poll)

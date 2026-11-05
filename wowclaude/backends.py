@@ -15,7 +15,8 @@ from pathlib import Path
 
 from . import config
 
-FLAGS = 0x08000000 if os.name == "nt" else 0
+CREATE_NO_WINDOW = 0x08000000  # Windows: no console window for child processes
+FLAGS = CREATE_NO_WINDOW if os.name == "nt" else 0
 
 
 def name() -> str:

@@ -158,7 +158,7 @@ def test_unknown_backend_reports(monkeypatch, tmp_path):
 
 def test_no_private_details_in_sources():
     import re
-    bad = re.compile(r"(C:\\\\Users|C:\\Users|\.claude[/\\]|@gmail|@proton)", re.I)
+    bad = re.compile(r"(C:\\\\Users|C:\\Users|\.claude[/\\]|qo-virtual|@gmail|@proton)", re.I)
     for f in Path(__file__).parent.parent.rglob("*"):
         if f.suffix in (".py", ".lua", ".toc", ".md", ".bat", ".toml") and f.name != "test_wowclaude.py":
             hit = bad.search(f.read_text(encoding="utf-8", errors="replace"))
@@ -279,3 +279,157 @@ def test_window_geometry_follows_game_window():
     assert (x, y) == (round(0 + rel[0] * 800), round(0 + rel[1] * 450)) and w == 320 and h == 180
     g3 = (0, 0, 300, 200)  # tiny game window: the browser never gets smaller than the minimum
     assert overlay.from_rel(g3, rel)[2:] == (overlay.MIN_W, overlay.MIN_H)
+
+
+def test_publish_writes_only_the_next_slots():
+    assert slots.target_slots(None) == list(range(1, slots.SLOTS + 1))
+    t = slots.target_slots(50)
+    assert {50, 51, 52, 53} <= set(t) and {1, 2, 3} <= set(t) and len(t) < 12
+    assert max(slots.target_slots(slots.SLOTS)) == slots.SLOTS  # never beyond the last slot
+    with tempfile.TemporaryDirectory() as tmp:
+        root = Path(tmp)
+        (root / "Interface" / "AddOns").mkdir(parents=True)
+        slots.install(root)
+        slots.publish(root, 7, 1, ["Claude: x"], slot_next=10)
+        add = root / "Interface" / "AddOns"
+        assert "seq = 7" in (add / "KKR010" / "Reply.lua").read_text(encoding="utf-8")
+        assert "seq = 7" in (add / "KKR001" / "Reply.lua").read_text(encoding="utf-8")
+        assert "seq = 7" not in (add / "KKR100" / "Reply.lua").read_text(encoding="utf-8")
+
+
+def test_deliver_retries_when_files_are_locked(monkeypatch):
+    from wowclaude import bridge, decode
+    calls = []
+
+    def fake_publish(root, seq, idx, parts, overlay=None, macros=None, slot_next=None):
+        calls.append(slot_next)
+        if len(calls) == 1:
+            raise PermissionError("locked")
+
+    st = decode.GameState(message="hi", message_seq=5, message_idx=1, slot_next=9)
+    monkeypatch.setattr(bridge.slots, "publish", fake_publish)
+    monkeypatch.setattr(bridge, "read_state", lambda: decode.GameState(ack_seq=5, slot_next=9))
+    monkeypatch.setattr(bridge.time, "sleep", lambda s: None)
+    assert bridge.deliver(Path("."), st, "hello") is True and len(calls) == 2
+
+
+def test_frame_art_is_generated_without_game_files(tmp_path, monkeypatch):
+    """No game textures ship with the package: every frame image can be drawn from code."""
+    from wowclaude import frame_art, overlay
+    monkeypatch.setattr(overlay.config, "HOME", tmp_path)
+    overlay._art_cache.clear()
+    for name in frame_art.NAMES:
+        im = overlay._art(name)
+        assert im.mode == "RGBA" and im.size[0] > 0
+    assert overlay.compose(500, 300, overlay.TOP).size == (500, 300)
+    assert overlay.slot_sprite("hover").size == (64, 64)
+    assert not (Path(overlay.__file__).parent / "art").exists()
+    overlay._art_cache.clear()
+
+
+def test_own_texture_overrides_generated(tmp_path, monkeypatch):
+    from PIL import Image
+    from wowclaude import overlay
+    monkeypatch.setattr(overlay.config, "HOME", tmp_path)
+    (tmp_path / "art").mkdir()
+    Image.new("RGBA", (64, 64), (1, 2, 3, 255)).save(tmp_path / "art" / "INV_Misc_Map_01.png")
+    overlay._art_cache.clear()
+    assert overlay._art("INV_Misc_Map_01.png").getpixel((5, 5)) == (1, 2, 3, 255)
+    overlay._art_cache.clear()
+
+
+def _lua_addon():
+    pytest = __import__("pytest")
+    pytest.importorskip("lupa")
+    import sys
+    sys.path.insert(0, str(Path(__file__).parent))
+    import lua_harness
+    return lua_harness, lua_harness.run_addon(Path(slots.ADDON_SRC) / "KKMap.lua")
+
+
+def test_lua_addon_strip_is_read_by_python_decoder():
+    """Contract test: the REAL KKMap.lua (run in a fake WoW API) draws a strip that decode.py understands."""
+    h, lua = _lua_addon()
+    st = decode.decode(h.strip_image(lua))
+    assert st is not None and st.addon_version == 25 and st.slot_next == 1
+    assert "Tester" in st.context and "Fehler" not in st.context
+
+
+def test_lua_addon_sends_a_message_through_the_strip():
+    h, lua = _lua_addon()
+    lua.eval("function() SlashCmdList['KKCHAT']('Hello Welt, wie komme ich nach Undercity?') end")()
+    st = decode.decode(h.strip_image(lua))
+    assert st.message == "Hello Welt, wie komme ich nach Undercity?" and st.message_seq > 0 and st.message_idx == 1
+
+
+def test_lua_menu_commands_become_bang_messages():
+    h, lua = _lua_addon()
+    lua.eval("function() SlashCmdList['KKBROWSER']('https://example.org') end")()
+    st = decode.decode(h.strip_image(lua))
+    assert st.message == "!browser https://example.org"
+
+
+def test_client_detection_accepts_classic_exe(tmp_path):
+    from wowclaude import config
+    (tmp_path / "Interface" / "AddOns").mkdir(parents=True)
+    assert not config._is_client(tmp_path)
+    (tmp_path / "WowClassic.exe").write_bytes(b"")
+    assert config._is_client(tmp_path)
+
+
+def test_uninstall_removes_addon_slots_and_entries(tmp_path):
+    root = tmp_path
+    (root / "Interface" / "AddOns").mkdir(parents=True)
+    wtf = root / "WTF" / "Account" / "A" / "R" / "C"
+    wtf.mkdir(parents=True)
+    (wtf / "AddOns.txt").write_text("Blizzard_Foo: enabled\n", encoding="utf-8")
+    slots.install(root)
+    assert "KKR001: enabled" in (wtf / "AddOns.txt").read_text(encoding="utf-8")
+    res = slots.uninstall(root)
+    assert res["folders_removed"] == slots.SLOTS + 1
+    assert not (root / "Interface" / "AddOns" / "KKMap").exists()
+    assert (wtf / "AddOns.txt").read_text(encoding="utf-8").strip() == "Blizzard_Foo: enabled"
+
+
+def test_session_timeout_is_reported_and_session_renewed(tmp_path, monkeypatch):
+    import subprocess
+    from wowclaude import config
+    monkeypatch.setattr(config, "HOME", tmp_path)
+    monkeypatch.setattr(config, "SESSION", tmp_path / "session.txt")
+    monkeypatch.setattr(claude, "claude_path", lambda: "claude")
+    from wowclaude import backends
+    monkeypatch.setattr(backends, "name", lambda: "claude")
+
+    def boom(*a, **k):
+        raise subprocess.TimeoutExpired("claude", 1)
+
+    monkeypatch.setattr(claude.subprocess, "run", boom)
+    s = claude.Session()
+    first = s.id
+    try:
+        s.ask("hi")
+        assert False, "should raise"
+    except RuntimeError as exc:
+        assert "did not answer" in str(exc)
+    assert s.id != first  # the half-created session id is not reused
+
+
+def test_window_on_unplugged_monitor_is_detected(monkeypatch):
+    from wowclaude import overlay
+
+    class U:
+        def GetSystemMetrics(self, i):
+            return {76: 0, 77: 0, 78: 2560, 79: 1440}[i]
+
+    monkeypatch.setattr(overlay, "user32", U())
+    assert overlay._on_screen(100, 100, 640, 520)
+    assert not overlay._on_screen(4000, 100, 640, 520)  # was on a second monitor that is gone
+    assert not overlay._on_screen(-3000, 50, 640, 520)
+
+
+def test_play_reports_why_the_browser_did_not_open(monkeypatch, tmp_path):
+    from wowclaude import bridge, overlay
+    monkeypatch.setattr(overlay, "play", lambda url, size=None: "No Chrome/Edge/Brave found.")
+    assert bridge.handle_command("!browser").startswith("Browser did not open: No Chrome")
+    monkeypatch.setattr(overlay, "play", lambda url, size=None: "")
+    assert bridge.handle_command("!browser") == "Browser opened."

@@ -76,22 +76,27 @@ def install(root: Path) -> dict:
     for name in ("KKMap.lua", "KKMap.toc"):
         shutil.copyfile(ADDON_SRC / name, target / name)
     toc = "## Interface: 11508, 11509, 11510, 20505, 30403, 40402, 40403, 50503, 50504, 16001\n## Title: {name}\n## LoadOnDemand: 1\nReply.lua\n"
-    created = 0
-    for i in range(1, SLOTS + 1):
+    sig = target / "sig"
+    sig.mkdir(exist_ok=True)
+
+    def make_slot(i: int) -> int:
         name = f"KKR{i:03d}"
         folder = addons / name
         folder.mkdir(exist_ok=True)
+        made = 0
         if not (folder / f"{name}.toc").exists():
             (folder / f"{name}.toc").write_text(toc.format(name=name), encoding="utf-8")
-            created += 1
+            made = 1
         if not (folder / "Reply.lua").exists():
             (folder / "Reply.lua").write_text("KKReplyData = nil\n", encoding="utf-8")
-    sig = target / "sig"
-    sig.mkdir(exist_ok=True)
-    for i in range(1, SLOTS + 1):
-        f = sig / f"{i:03d}.wav"
-        if not f.exists():
-            f.write_bytes(b"")
+        marker = sig / f"{i:03d}.wav"
+        if not marker.exists():
+            marker.write_bytes(b"")
+        return made
+
+    from concurrent.futures import ThreadPoolExecutor
+    with ThreadPoolExecutor(max_workers=16) as pool:  # 600 small files: much faster in parallel next to a scanner
+        created = sum(pool.map(make_slot, range(1, SLOTS + 1)))
     install_images(root)
     enabled = 0
     for path in glob.glob(str(root / "WTF" / "Account" / "*" / "*" / "*" / "AddOns.txt")):
@@ -105,9 +110,37 @@ def install(root: Path) -> dict:
     return {"slots_created": created, "characters_enabled": enabled}
 
 
+def target_slots(slot_next: int | None, reserve: int = 4) -> list[int]:
+    """Slots that may be loaded next: the one the addon announces (and a few after it), plus the first few in case
+    the UI was reloaded in between (the addon counts from 1 again). ``None`` = unknown: every slot."""
+    if not slot_next or slot_next < 1:
+        return list(range(1, SLOTS + 1))
+    nxt = [s for s in range(slot_next, slot_next + reserve) if s <= SLOTS]
+    return sorted(set(nxt) | {1, 2, 3})
+
+
+def uninstall(root: Path) -> dict:
+    """Remove the addon, all reply slots and their AddOns.txt entries from a game folder."""
+    addons = _addons(root)
+    removed = 0
+    for folder in [addons / "KKMap"] + [addons / f"KKR{i:03d}" for i in range(1, SLOTS + 1)]:
+        if folder.is_dir():
+            shutil.rmtree(folder, ignore_errors=True)
+            removed += 1
+    cleaned = 0
+    for path in glob.glob(str(root / "WTF" / "Account" / "*" / "*" / "*" / "AddOns.txt")):
+        p = Path(path)
+        lines = p.read_text(encoding="utf-8", errors="replace").splitlines()
+        keep = [ln for ln in lines if not re.match(r"\s*(KKR\d{3}|KKMap)\s*:", ln)]
+        if len(keep) != len(lines):
+            p.write_text("\n".join(keep) + "\n", encoding="utf-8")
+            cleaned += 1
+    return {"folders_removed": removed, "character_files_cleaned": cleaned}
+
+
 def publish(root: Path, seq: int, idx: int, parts: list[str], overlay: dict | None = None,
-            macros: list[dict] | None = None) -> None:
-    """Write the reply into every slot, then flip the silent-sound marker ``idx`` to playable."""
+            macros: list[dict] | None = None, slot_next: int | None = None) -> None:
+    """Write the reply into the slots the addon loads next, then flip the silent-sound marker ``idx`` to playable."""
     addons = _addons(root)
     content = reply_lua(seq, parts, overlay, macros).encode("utf-8")
     def write(i: int) -> None:
@@ -125,7 +158,7 @@ def publish(root: Path, seq: int, idx: int, parts: list[str], overlay: dict | No
 
     from concurrent.futures import ThreadPoolExecutor
     with ThreadPoolExecutor(max_workers=16) as pool:  # 200 small files: one after the other took 20+ s with a scanner
-        list(pool.map(write, range(1, SLOTS + 1)))
+        list(pool.map(write, target_slots(slot_next)))
     marker = addons / "KKMap" / "sig" / f"{((int(idx) - 1) % SLOTS) + 1:03d}.wav"
     tmp = marker.with_suffix(".tmp")
     tmp.write_bytes(_silent_wav())

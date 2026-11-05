@@ -169,7 +169,7 @@ def serve() -> int:
     url = start_background()
     print(f"AI setup page: {url}  (Ctrl+C to stop)", flush=True)
     subprocess.Popen([sys.executable, "-m", "wowclaude", "overlay", url, "--size", "640x520"],
-                     creationflags=0x08000000 if sys.platform == "win32" else 0)
+                     creationflags=0x08000000 if sys.platform == "win32" else 0)  # 0x08000000 = CREATE_NO_WINDOW
     try:
         threading.Event().wait()
     except KeyboardInterrupt:

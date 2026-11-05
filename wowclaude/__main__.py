@@ -35,6 +35,15 @@ def cmd_setup(args) -> int:
     return 0
 
 
+def cmd_uninstall(args) -> int:
+    from . import slots
+    root = _root(args)
+    res = slots.uninstall(root)
+    print(f"Removed {res['folders_removed']} addon folders from {root} ({res['character_files_cleaned']} character files cleaned).")
+    print("Your settings in ~/.wowclaude are kept; delete that folder too if you want everything gone.")
+    return 0
+
+
 def cmd_run(args) -> int:
     from . import bridge, claude
     ok, msg = claude.check_login()
@@ -47,22 +56,47 @@ def cmd_run(args) -> int:
     return 0
 
 
+def _scale_info() -> str:
+    import ctypes
+    if sys.platform != "win32":
+        return "n/a"
+    try:
+        dpi = ctypes.windll.user32.GetDpiForSystem()
+        return f"{round(dpi / 96 * 100)} % ({dpi} dpi)"
+    except (OSError, AttributeError):
+        return "unknown"
+
+
 def cmd_doctor(args) -> int:
     from . import claude, screen
     root = config.client_root(getattr(args, "root", None))
-    print("game folder   :", root or "NOT FOUND")
-    print("addon present :", bool(root and (root / "Interface" / "AddOns" / "KKMap" / "KKMap.lua").exists()))
+    print("game folder   :", root or "NOT FOUND (run `wowclaude setup --root \"...\\_forever_\"`)")
+    if root:
+        flavour = next((f for f in config.FLAVOURS if root.name == f), root.name)
+        print("game flavour  :", flavour)
+        print("addon present :", bool((root / "Interface" / "AddOns" / "KKMap" / "KKMap.lua").exists()))
+    print("display scale :", _scale_info(), "(the program makes itself DPI-aware, so any scale should work)")
+    from . import overlay
+    print("browser       :", overlay.find_browser() or "NOT FOUND (only needed for the browser window and AI setup page)")
+    try:
+        import tkinter  # noqa: F401
+        print("tkinter       : OK")
+    except ImportError:
+        print("tkinter       : MISSING (needed for the browser window; reinstall Python with tcl/tk)")
     print("claude command:", claude.claude_path() or "NOT FOUND")
     ok, msg = claude.check_login()
-    print("claude login  :", "OK" if ok else "PROBLEM - " + msg)
-    print("game running  :", screen.game_running())
-    if screen.game_running():
+    print("AI backend    :", "OK - " + msg if ok else "PROBLEM - " + msg)
+    running = screen.game_running()
+    print("game running  :", running)
+    if running:
         from . import bridge
         st = bridge.read_state()
         if st is None:
-            print("strip         : not visible (normal while idle: it shows when you type in the Claude tab; `/kkmap always` in the game keeps it visible)")
+            print("strip         : not visible. It only shows while you type in the Claude tab. In the game type "
+                  "`/kkmap always`, run this again, and if it is still not visible check that the game is in windowed "
+                  "or borderless mode and the addon is enabled.")
         else:
-            print("strip         : OK, addon version", st.addon_version)
+            print("strip         : OK, addon version", st.addon_version, "- next reply slot", st.slot_next)
     return 0
 
 
@@ -87,7 +121,8 @@ def main(argv=None) -> int:
     sub = ap.add_subparsers(dest="cmd", required=True)
     for name, fn, help_ in (("setup", cmd_setup, "install the addon into the game folder"),
                             ("run", cmd_run, "start the bridge (keep it running while you play)"),
-                            ("doctor", cmd_doctor, "check that everything is in place")):
+                            ("doctor", cmd_doctor, "check that everything is in place"),
+                            ("uninstall", cmd_uninstall, "remove the addon and all reply slots from the game folder")):
         p = sub.add_parser(name, help=help_)
         p.add_argument("--root", help="game folder (the one containing Wow.exe), only if it is not found automatically")
         p.set_defaults(fn=fn)

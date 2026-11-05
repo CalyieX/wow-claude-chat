@@ -1,9 +1,8 @@
--- KKMap: Farbstreifen oben links mit allen sichtbaren Frames (Pixelkoordinaten, Fenster-Client-Ursprung oben links).
--- Format: Zellen 4x4 Pixel, 128 Zellen pro Zeile, 3 Bytes (R,G,B) pro Zelle.
--- Zellen 0..7 = feste Kalibrierfarben, danach: 4 Byte Länge (LE), 4 Byte Prüfsumme, dann UTF-8-Text.
--- Textzeilen: name|typ|text|x|y|b|h   (Pixel). Erste Zeile: #screen|breite|höhe
--- The strip is tiny: 1 pixel per cell, 128 cells per row, only as many rows as the data needs (about 4).
--- The decoder detects the cell size itself, so this can be changed (2 is more robust on odd UI scales).
+-- KKMap (WoW AI Chat): a colour strip in the top-left corner that the wowclaude bridge reads from the screen.
+-- Format: 1 pixel per cell, 128 cells per row, 3 bytes (R,G,B) per cell, only as many rows as the data needs.
+-- Cells 0..7 are fixed calibration colours, then: 4 bytes length (LE), 4 bytes checksum, then UTF-8 text lines:
+--   #ver|n  #screen|w|h  #msg|seq|slot|text  #ack|seq  #edit|0/1  #ctx|...  #img|n  #slot|n  name|type|text|x|y|w|h
+-- The decoder (wowclaude/decode.py) finds the cell size itself. tests/ run this very file inside a fake WoW API.
 local CELL, COLS, ROWS = 1, 128, 40
 -- The button list is sent only with a question (so the AI can click in menus); /kkmap frames keeps it on permanently.
 local MAGIC = {{255,0,255},{0,255,255},{255,255,0},{0,0,0},{255,255,255},{255,0,0},{0,255,0},{0,0,255}}

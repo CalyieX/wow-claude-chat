@@ -10,6 +10,8 @@ from pathlib import Path
 
 from . import config
 
+CREATE_NO_WINDOW = 0x08000000  # Windows: no console window for the child process
+
 DEFAULT_SYSTEM = (
     "You are Claude, chatting with a World of Warcraft player inside the game's chat window. "
     "Reply in the player's language. Keep chat answers to at most 3 short sentences, with no markdown, "
@@ -128,7 +130,7 @@ def check_login() -> tuple[bool, str]:
     try:
         done = subprocess.run([exe, "-p", "--output-format", "text", "--tools", ""], input="Reply with the word ok.",
                               capture_output=True, text=True, encoding="utf-8", timeout=90,
-                              creationflags=0x08000000 if os.name == "nt" else 0)
+                              creationflags=CREATE_NO_WINDOW if os.name == "nt" else 0)
     except (OSError, subprocess.TimeoutExpired) as exc:
         return False, f"Could not run Claude Code: {exc}"
     out = (done.stdout or "").strip()
@@ -168,6 +170,7 @@ class Session:
             return self._run(exe, prompt, model)
         except RuntimeError:
             if not self.started:
+                self._new()  # a half-created session id must not be reused ("already in use")
                 raise
             self._new()  # stale or unknown session: start a fresh one once
             return self._run(exe, prompt, model)
@@ -178,9 +181,12 @@ class Session:
         cmd += ["--resume" if self.started else "--session-id", self.id]
         if model:
             cmd += ["--model", model]
-        done = subprocess.run(cmd, input=prompt, capture_output=True, text=True, encoding="utf-8",
-                              cwd=str(config.HOME), timeout=180,
-                              creationflags=0x08000000 if os.name == "nt" else 0)
+        try:
+            done = subprocess.run(cmd, input=prompt, capture_output=True, text=True, encoding="utf-8",
+                                  cwd=str(config.HOME), timeout=180,
+                                  creationflags=CREATE_NO_WINDOW if os.name == "nt" else 0)
+        except subprocess.TimeoutExpired as exc:
+            raise RuntimeError("Claude did not answer within 3 minutes.") from exc
         out = (done.stdout or "").strip()
         if done.returncode != 0 or not out:
             raise RuntimeError((done.stderr or out or "claude failed").strip()[:200])
