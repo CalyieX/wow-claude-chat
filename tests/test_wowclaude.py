@@ -844,3 +844,15 @@ def test_doctor_saves_a_strip_sample(monkeypatch, tmp_path, capsys):
     cli.cmd_doctor(A())
     assert (config.HOME / "strip-sample.png").stat().st_size > 0
     assert "strip sample" in capsys.readouterr().out
+
+
+def test_run_returns_immediately_when_another_bridge_holds_the_lock(monkeypatch, tmp_path, capsys):
+    from wowclaude import bridge
+    monkeypatch.setattr(bridge, "LOCK_PORT", 47998)
+    held = bridge.acquire_lock()
+    try:
+        monkeypatch.setattr(bridge.claude, "Session", lambda: (_ for _ in ()).throw(AssertionError("second bridge started")))
+        bridge.run(tmp_path)
+    finally:
+        held.close()
+    assert "already running" in capsys.readouterr().out
