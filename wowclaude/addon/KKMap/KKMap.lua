@@ -366,6 +366,26 @@ SlashCmdList["KKOVERLAY"] = function()
   if f:IsShown() then f:Hide() elseif KKMapDB.lastOverlay then KKShowOverlay(KKMapDB.lastOverlay) else print(L("Kein Overlay vorhanden.", "No overlay yet.")) end
 end
 
+-- Create or update a macro (name <= 16 chars, body <= 255 chars) and put it on the cursor.
+local function createMacro(name, body, perChar)
+  name = strtrim(tostring(name or "")):sub(1, 16)
+  body = tostring(body or ""):gsub("\\n", "\n")
+  if name == "" or body == "" then return false end
+  if #body > 255 then say("KKMap: macro '" .. name .. "' too long (" .. #body .. "/255)", 1, 0.4, 0.4) return false end
+  local idx = GetMacroIndexByName(name)
+  if idx and idx > 0 then
+    local ok, err = pcall(EditMacro, idx, name, nil, body)
+    if not ok then say("KKMap: macro error: " .. tostring(err), 1, 0.4, 0.4) return false end
+  else
+    local ok, err = pcall(CreateMacro, name, "INV_MISC_QUESTIONMARK", body, perChar and true or false)
+    if not ok then say("KKMap: macro error: " .. tostring(err), 1, 0.4, 0.4) return false end
+  end
+  local mi = GetMacroIndexByName(name)
+  if mi and mi > 0 then pcall(PickupMacro, mi) end
+  say("KKMap: macro '" .. name .. "' ready (" .. #body .. "/255). It is on your cursor: click an action bar slot, or find it in /macro.", 0.6, 1, 0.6)
+  return true
+end
+
 local function deliver()
   local name = string.format("KKR%03d", nextSlot)
   nextSlot = nextSlot + 1
@@ -376,6 +396,7 @@ local function deliver()
   if d and pending and d.seq == pending.seq then
     for _, part in ipairs(d.parts or {}) do say(part) end
     if d.overlay then KKShowOverlay(d.overlay) end
+    for _, m in ipairs(d.macros or {}) do createMacro(m.name, m.body, m.char) end
     KKMapState.ack = d.seq
     pending = nil
     holdUntil = GetTime() + 4
@@ -548,18 +569,7 @@ SLASH_KKMACRO1 = "/kkm"
 SlashCmdList["KKMACRO"] = function(msg)
   local name, body, scope = strsplit("~", msg or "", 3)
   if not name or name == "" or not body or body == "" then say("KKMap: /kkm Name~Text (\\n = newline)") return end
-  body = body:gsub("\\n", "\n")
-  if #body > 255 then say("KKMap: macro too long (" .. #body .. "/255)") return end
-  local perChar = scope == "char"
-  local idx = GetMacroIndexByName(name)
-  if idx and idx > 0 then EditMacro(idx, name, nil, body)
-  else
-    local ok, err = pcall(CreateMacro, name, "INV_MISC_QUESTIONMARK", body, perChar)
-    if not ok then say("KKMap: macro error: " .. tostring(err)) return end
-  end
-  local mi = GetMacroIndexByName(name)
-  if mi and mi > 0 then pcall(PickupMacro, mi) end
-  say("KKMap: macro '" .. name .. "' created (" .. #body .. "/255), it is on your cursor: click an action bar slot.")
+  createMacro(name, body, scope == "char")
 end
 
 SlashCmdList["KKMAP"] = function(msg)

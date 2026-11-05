@@ -6,6 +6,7 @@ import re
 import shutil
 import subprocess
 import uuid
+from pathlib import Path
 
 from . import config
 
@@ -26,13 +27,27 @@ MAX_CHUNKS = 6
 
 def persona() -> tuple[str, str]:
     """(reply prefix, system prompt). persona.txt: first line = prefix, the rest is added to the prompt."""
+    base = DEFAULT_SYSTEM
+    try:
+        base += "\n\n" + (Path(__file__).parent / "macro_skill.md").read_text(encoding="utf-8")
+    except OSError:
+        pass
     try:
         lines = config.PERSONA.read_text(encoding="utf-8").splitlines()
         if lines and lines[0].strip():
-            return lines[0].strip(), DEFAULT_SYSTEM + "\n\n" + "\n".join(lines[1:]).strip()
+            return lines[0].strip(), base + "\n\n" + "\n".join(lines[1:]).strip()
     except OSError:
         pass
-    return "Claude", DEFAULT_SYSTEM
+    return "Claude", base
+
+
+MACRO_RE = re.compile(r"\[\[macro ([^\]\n]{1,40})\]\]\s*(.*?)\s*\[\[/macro\]\]", re.S)
+
+
+def extract_macros(text: str) -> tuple[str, list[dict]]:
+    """Pull all [[macro Name]]...[[/macro]] blocks out of a reply."""
+    macros = [{"name": m.group(1).strip()[:16], "body": m.group(2).strip()} for m in MACRO_RE.finditer(text)]
+    return MACRO_RE.sub("", text).strip(), macros[:6]
 
 
 def extract_overlay(text: str) -> tuple[str, dict | None]:
@@ -75,6 +90,9 @@ def claude_path() -> str | None:
 
 def check_login() -> tuple[bool, str]:
     """Run one tiny question to see whether Claude Code is installed AND logged in."""
+    from . import backends
+    if backends.name() != "claude":
+        return backends.check()
     exe = claude_path()
     if not exe:
         return False, ("The 'claude' command was not found. Install Claude Code "
@@ -96,6 +114,7 @@ class Session:
     """One conversation that survives bridge restarts (session id kept in ~/.wowclaude/session.txt)."""
 
     def __init__(self) -> None:
+        self.history: list = []
         try:
             self.id, self.started = config.SESSION.read_text(encoding="utf-8").strip(), True
         except OSError:
@@ -109,6 +128,11 @@ class Session:
         config.SESSION.write_text(self.id, encoding="utf-8")
 
     def ask(self, prompt: str, model: str | None = None) -> str:
+        from . import backends
+        if backends.name() != "claude":
+            answer = backends.ask(persona()[1], self.history, prompt, model)
+            self.history.append((prompt, answer))
+            return answer
         exe = claude_path()
         if not exe:
             raise RuntimeError("the 'claude' command was not found (install Claude Code and log in)")

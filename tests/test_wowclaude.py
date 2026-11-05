@@ -72,6 +72,36 @@ def test_install_and_publish():
         assert (root / "Interface" / "AddOns" / "KKMap" / "sig" / "004.wav").stat().st_size == 0
 
 
+def test_macro_blocks_end_up_in_lua():
+    text, macros = claude.extract_macros("Here you go.\n[[macro Pull]]\n#showtooltip Shadow Bolt\n/cast Shadow Bolt\n[[/macro]]")
+    assert text == "Here you go." and macros == [{"name": "Pull", "body": "#showtooltip Shadow Bolt\n/cast Shadow Bolt"}]
+    lua = slots.reply_lua(1, ["x"], None, macros)
+    assert 'name = "Pull"' in lua and "#showtooltip Shadow Bolt\\\\n/cast Shadow Bolt" in lua
+    assert "MACROS" in claude.persona()[1]
+
+
+def test_command_backend(monkeypatch, tmp_path):
+    import sys
+    from wowclaude import backends, config
+    monkeypatch.setattr(config, "HOME", tmp_path)
+    monkeypatch.setattr(config, "CONFIG", tmp_path / "config.json")
+    script = tmp_path / "echo.py"
+    script.write_text("import sys; t = sys.stdin.read(); print('GOT:' + t.strip().splitlines()[-2])", encoding="utf-8")
+    config.save({"backend": "command", "command": [sys.executable, str(script)]})
+    assert backends.check()[0]
+    session = claude.Session()
+    answer = session.ask("hello there")
+    assert answer.startswith("GOT:") and "hello there" in answer
+    assert session.history == [("hello there", answer)]
+
+
+def test_unknown_backend_reports(monkeypatch, tmp_path):
+    from wowclaude import backends, config
+    monkeypatch.setattr(config, "CONFIG", tmp_path / "config.json")
+    config.save({"backend": "nope"})
+    assert not backends.check()[0]
+
+
 def test_no_private_details_in_sources():
     import re
     bad = re.compile(r"(C:\\\\Users|C:\\Users|\.claude[/\\]|@gmail|@proton)", re.I)

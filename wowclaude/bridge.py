@@ -13,6 +13,7 @@ def read_state() -> decode.GameState | None:
 
 
 def deliver(root: Path, state: decode.GameState, reply: str) -> bool:
+    reply, macros = claude.extract_macros(reply)
     reply, overlay = claude.extract_overlay(reply)
     if overlay:
         try:
@@ -21,7 +22,7 @@ def deliver(root: Path, state: decode.GameState, reply: str) -> bool:
             print(f"images failed: {exc}", flush=True)
     parts = claude.split_reply(reply or "...")
     parts[0] = claude.persona()[0] + ": " + parts[0]
-    slots.publish(root, state.message_seq, state.message_idx or 1, parts, overlay)
+    slots.publish(root, state.message_seq, state.message_idx or 1, parts, overlay, macros)
     deadline = time.time() + 15
     while time.time() < deadline:
         time.sleep(0.5)

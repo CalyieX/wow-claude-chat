@@ -18,4 +18,4 @@ wowclaude = "wowclaude.__main__:main"
 packages = ["wowclaude"]
 
 [tool.setuptools.package-data]
-wowclaude = ["addon/KKMap/*"]
+wowclaude = ["addon/KKMap/*", "macro_skill.md"]

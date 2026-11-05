@@ -51,12 +51,16 @@ def lua_string(text: str) -> str:
     return '"' + "".join(out) + '"'
 
 
-def reply_lua(seq: int, parts: list[str], overlay: dict | None = None) -> str:
+def reply_lua(seq: int, parts: list[str], overlay: dict | None = None, macros: list[dict] | None = None) -> str:
     body = ", ".join(lua_string(p) for p in parts)
     extra = ""
+    if macros:
+        items = ", ".join("{ name = %s, body = %s }" % (lua_string(m["name"]), lua_string(m["body"].replace("\n", "\\n")))
+                          for m in macros)
+        extra += f", macros = {{ {items} }}"
     if overlay:
         lines = ", ".join(lua_string(str(x)) for x in overlay.get("lines", []))
-        extra = (f", overlay = {{ title = {lua_string(str(overlay.get('title', 'Claude')))}, "
+        extra += (f", overlay = {{ title = {lua_string(str(overlay.get('title', 'Claude')))}, "
                  f"lines = {{ {lines} }}, secs = {int(overlay.get('secs', 45))} }}")
     return f"KKReplyData = {{ seq = {int(seq)}, parts = {{ {body} }}{extra} }}\n"
 
@@ -100,10 +104,11 @@ def install(root: Path) -> dict:
     return {"slots_created": created, "characters_enabled": enabled}
 
 
-def publish(root: Path, seq: int, idx: int, parts: list[str], overlay: dict | None = None) -> None:
+def publish(root: Path, seq: int, idx: int, parts: list[str], overlay: dict | None = None,
+            macros: list[dict] | None = None) -> None:
     """Write the reply into every slot, then flip the silent-sound marker ``idx`` to playable."""
     addons = _addons(root)
-    content = reply_lua(seq, parts, overlay).encode("utf-8")
+    content = reply_lua(seq, parts, overlay, macros).encode("utf-8")
     for i in range(1, SLOTS + 1):
         target = addons / f"KKR{i:03d}" / "Reply.lua"
         tmp = target.with_suffix(".tmp")
