@@ -16,6 +16,21 @@ u = ctypes.windll.user32
 u.SetWindowPos.argtypes = [wintypes.HWND, wintypes.HWND, ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_int, wintypes.UINT]
 
 
+def overlay_chrome_pids():
+    """Process ids of the browser that belongs to the overlay (its own profile folder), so a foreign Chrome window cannot pass the check."""
+    import subprocess
+    cmd = ("Get-CimInstance Win32_Process -Filter \"name='chrome.exe'\" | Where-Object { $_.CommandLine -like '*overlay-profile*' } "
+           "| ForEach-Object { $_.ProcessId }")
+    out = subprocess.run(["powershell", "-NoProfile", "-Command", cmd], capture_output=True, text=True, creationflags=0x08000000).stdout
+    return {int(x) for x in out.split() if x.isdigit()}
+
+
+def window_pid(h):
+    pid = wintypes.DWORD()
+    u.GetWindowThreadProcessId(wintypes.HWND(h), ctypes.byref(pid))
+    return pid.value
+
+
 def windows():
     out = []
 
@@ -51,7 +66,8 @@ def check(label):
     game = overlay._game_hwnd()
     wins = windows()
     near = lambda r, ex, ey, ew, eh, tol=40: abs(r[0] - ex) < tol and abs(r[1] - ey) < tol and abs(r[2] - r[0] - ew) < tol and abs(r[3] - r[1] - eh) < tol  # noqa: E731
-    page = [hw for hw, cls, r in wins if cls == "Chrome_WidgetWin_1" and near(r, x, y - overlay.CHROME_BAR, w, h + overlay.CHROME_BAR, 60)]
+    mine = overlay_chrome_pids()
+    page = [hw for hw, cls, r in wins if cls == "Chrome_WidgetWin_1" and window_pid(hw) in mine and near(r, x, y - overlay.CHROME_BAR, w, h + overlay.CHROME_BAR, 60)]
     frame = [hw for hw, cls, r in wins if cls.startswith("Tk") and near(r, x - overlay.EDGE, y - overlay.TOP, w + 2 * overlay.EDGE, h + overlay.TOP + overlay.EDGE)]
     bar = [hw for hw, cls, r in wins if cls.startswith("Tk") and r[3] - r[1] <= 24 and x - overlay.EDGE <= r[0] and r[2] <= x + w + overlay.EDGE and y - overlay.TOP <= r[1] <= y]
     problems = []
@@ -71,6 +87,9 @@ def check(label):
 
 def main() -> int:
     ok = True
+    if not overlay._game_hwnd():
+        print("No game window found: nothing was checked (start WoW in windowed mode).")
+        return 2
     print("start:", repr(overlay.play("")))
     time.sleep(6)
     ok &= check("after start")

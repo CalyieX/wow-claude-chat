@@ -1039,6 +1039,37 @@ def test_lua_reloads_before_asking_when_slots_are_nearly_gone_and_asks_again():
 
 
 def test_overlay_always_starts_solid_not_in_ghost_mode():
-    """A saved ghost mode made a freshly opened browser look like it did not open at all (35 % opacity, click-through)."""
-    src = (Path(__file__).parent.parent / "wowclaude" / "overlay.py").read_text(encoding="utf-8")
-    assert '"ghost": False' in src and 'bool(saved.get("ghost"))' not in src
+    """A saved ghost mode made a freshly opened browser look like it did not open at all (see-through, click-through)."""
+    from wowclaude import overlay
+    st = overlay.initial_state(10, 20, 300, 200, {"ghost": True, "x": 1})
+    assert st["ghost"] is False and (st["x"], st["y"], st["w"], st["h"]) == (10, 20, 300, 200)
+
+
+def test_page_is_put_above_the_game_when_it_hides_behind_it(monkeypatch):
+    """z-order guard: walking up from the page we meet the game -> the game is pushed directly beneath the page."""
+    from wowclaude import overlay
+    PAGE, GAME, OTHER = 100, 200, 300
+    calls = []
+
+    class U:
+        def __init__(self, above):
+            self.above = above   # windows above the page, nearest first
+        def GetWindow(self, h, cmd):
+            h = int(getattr(h, "value", h))
+            chain = [PAGE] + self.above
+            i = chain.index(h)
+            return chain[i + 1] if i + 1 < len(chain) else 0
+        class _Set:
+            argtypes = None
+            def __call__(self, *a):
+                calls.append(tuple(int(getattr(x, "value", x)) for x in a[:2]))
+                return 1
+        SetWindowPos = _Set()
+    monkeypatch.setattr(overlay, "_game_hwnd", lambda: GAME)
+    monkeypatch.setattr(overlay, "user32", U([OTHER, GAME]))          # game above the page: must be pushed down
+    overlay.keep_page_above_game(PAGE)
+    assert calls == [(GAME, PAGE)]
+    calls.clear()
+    monkeypatch.setattr(overlay, "user32", U([OTHER]))                # page already above the game: leave everything alone
+    overlay.keep_page_above_game(PAGE)
+    assert calls == []

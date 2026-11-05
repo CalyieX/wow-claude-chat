@@ -669,6 +669,12 @@ def update_layered(hwnd: int, img, x: int, y: int) -> None:
     u.ReleaseDC(None, screen)
 
 
+def initial_state(x: int, y: int, w: int, h: int, saved: dict) -> dict:
+    """Start state of the frame. Ghost mode is never restored: a freshly opened browser that is see-through and
+    click-through looks as if it did not open at all."""
+    return {"x": x, "y": y, "w": w, "h": h, "hover": "", "down": "", "ghost": False, "min": False}
+
+
 def frame_loop(hwnd: int, x: int, y: int, w: int, h: int, opacity: int, click_through: bool, port: int = 0) -> None:
     """Draw the WoW frame above the browser window (per-pixel alpha; the browser area is see-through and clickable).
 
@@ -682,7 +688,7 @@ def frame_loop(hwnd: int, x: int, y: int, w: int, h: int, opacity: int, click_th
     st = user32.GetWindowLongW(hwnd, GWL_STYLE) & ~(WS_CAPTION | WS_THICKFRAME | WS_BORDER)
     user32.SetWindowLongW(hwnd, GWL_STYLE, st)
     saved = load_state()
-    S = {"x": x, "y": y, "w": w, "h": h, "hover": "", "down": "", "ghost": False, "min": False}
+    S = initial_state(x, y, w, h, saved)
     top = TOP
     root = tk.Tk()
     root.overrideredirect(True)

@@ -38,6 +38,7 @@ M = [
  ("M32 misses never counted", "wowclaude/addon/KKMap/KKMap.lua", "    misses = misses + 1\n    return", "    return"),
  ("M33 restricted frames unguarded", "wowclaude/addon/KKMap/KKMap.lua", "usable = okm and vis and left and true or false", "usable = f:IsVisible() and f:GetLeft() and true or false"),
  ("M34 no neutral cwd", "wowclaude/claude.py", "cwd=neutral_cwd()", "cwd=str(config.HOME)"),
+ ("M36 page not put above game", "wowclaude/overlay.py", "            user32.SetWindowPos(wintypes.HWND(game), wintypes.HWND(page), 0, 0, 0, 0, 0x13)", "            pass"),
  ("M35 no setting-sources", "wowclaude/claude.py", 'ISOLATION = ["--setting-sources", ""]', 'ISOLATION = []'),
 ]
 only = sys.argv[1:]
