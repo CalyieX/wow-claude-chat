@@ -26,11 +26,11 @@ def make_strip(text: str, cell: int = 4) -> Image.Image:
 
 
 def test_decode_message_and_state():
-    text = "#ver|25\n#msg|123|7|Hello | pipe\n#ack|120\n#edit|1\n#ctx|Name|Level 5\n#img|3\n#slot|42"
+    text = "#ver|25\n#msg|123|7|Hello | pipe\n#edit|1\n#ctx|Name|Level 5"
     st = decode.decode(make_strip(text))
     assert st.addon_version == 25
-    assert (st.message_seq, st.message_idx, st.message) == (123, 7, "Hello | pipe")
-    assert st.ack_seq == 120 and st.edit_active and st.image_next == 3 and st.slot_next == 42
+    assert (st.message_seq, st.message) == (123, "Hello | pipe")
+    assert st.edit_active
     assert "Level 5" in st.context
 
 
@@ -40,7 +40,7 @@ def test_decode_every_cell_size():
     for cell in (1, 2, 3, 4):
         st = decode.decode(make_strip(text, cell))
         assert st is not None, cell
-        assert (st.message_seq, st.message_idx, st.message, st.ack_seq) == (55, 2, "tiny strip | works", 50)
+        assert (st.message_seq, st.message) == (55, "tiny strip | works")
 
 
 def test_decode_rejects_bad_checksum():
@@ -306,7 +306,7 @@ def test_lua_addon_strip_is_read_by_python_decoder():
     """Contract test: the REAL KKMap.lua (run in a fake WoW API) draws a strip that decode.py understands."""
     h, lua = _lua_addon()
     st = decode.decode(h.strip_image(lua))
-    assert st is not None and st.addon_version == 25 and st.slot_next == 1
+    assert st is not None and st.addon_version == 25
     assert "Tester" in st.context and "Fehler" not in st.context
 
 
@@ -314,7 +314,7 @@ def test_lua_addon_sends_a_message_through_the_strip():
     h, lua = _lua_addon()
     lua.eval("function() SlashCmdList['KKCHAT']('Hello Welt, wie komme ich nach Undercity?') end")()
     st = decode.decode(h.strip_image(lua))
-    assert st.message == "Hello Welt, wie komme ich nach Undercity?" and st.message_seq > 0 and st.message_idx == 1
+    assert st.message == "Hello Welt, wie komme ich nach Undercity?" and st.message_seq > 0
 
 
 def test_lua_menu_commands_become_bang_messages():
@@ -583,7 +583,7 @@ def _deliver_env(monkeypatch, tmp_path, fresh_state):
 
     class St:
         def __init__(self, seq, ack):
-            self.message_seq, self.ack_seq, self.message_idx, self.slot_next = seq, ack, 4, 5
+            self.message_seq = seq
     return bridge, St, silenced
 
 

@@ -35,18 +35,15 @@ If `wowclaude` is not found, use `py -3 -m wowclaude ...`.
 
 ## In the game
 
-- `/wac` opens a small menu: **AI Setup**, **Open Browser**, **Bridge: always visible / only when needed**, **Show
-  Overlay Window**, **Help**. `/ol` shows the overlay window, `/strip always|auto|off` controls the colour strip. Other commands: `/browser [url]`, `/c question`, `/wm Name~line one\nline two`
-  (creates a macro and puts it on your cursor).
-- Run the game in **windowed or borderless** mode and do not cover the top-left corner of the game window; exclusive
-  fullscreen does not work. The strip is only visible while you type in the Claude tab and while the AI is thinking
-  (a small label next to it says so). `/strip always` keeps it visible, `/strip auto` is the default, `/strip off`
-  switches the addon off.
-- The conversation in the Claude tab survives `/reload` and restarts (last 100 lines). Windows you moved (menu, answer
-  window) stay where you put them.
-- Every answer uses one of 300 reply slots (the addons `KKR001`..`KKR300`, collapsed into one `KKMap` group in the addon
-  list). Only when all 300 of one game session are used does the addon reload the interface by itself, once. Don't
-  `/reload` while the AI is still thinking, the pending question is lost.
+- `/wac` opens a small menu: **KI verbinden** (AI setup), **Browser**, **Hilfe**. Other commands: `/browser [url]`,
+  `/c question`, `/wm Name~line one\nline two` (creates a macro and puts it on your cursor), `/strip always|auto|off`.
+- Run the game in **windowed or borderless** mode (exclusive fullscreen does not work) and keep the top-left corner and
+  the AI tab uncovered: the program reads them from the screen. The colour strip is only visible while you type in the
+  AI tab and while the AI is thinking.
+- The tab is always called **WoW AI**. The name the AI writes with (default "Claude") is set on the AI setup page and
+  applies after `/reload`.
+- Privacy: the question plus a short game state line (character, zone, level) goes to the AI backend you chose, also if
+  that is a cloud API.
 
 ## Browser window
 

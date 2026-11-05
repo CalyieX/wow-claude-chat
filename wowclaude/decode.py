@@ -2,7 +2,7 @@
 
 Layout: square cells (1 to 4 pixels, detected automatically), 128 cells per row, 3 bytes (R, G, B) per cell.
 The first 8 cells are fixed calibration colours; then 4 bytes length (LE), 4 bytes checksum, then UTF-8 text
-lines such as ``#msg|seq|slot|text`` or ``#ack|seq``.
+lines such as ``#msg|seq|1|text`` or ``#edit|1``.
 """
 from __future__ import annotations
 
@@ -17,14 +17,10 @@ MAGIC = ((255, 0, 255), (0, 255, 255), (255, 255, 0), (0, 0, 0),
 @dataclass(frozen=True)
 class GameState:
     message_seq: int = 0
-    message_idx: int = 0
     message: str = ""
-    ack_seq: int = 0
     edit_active: bool = False
     addon_version: int = 0
     context: str = ""
-    image_next: int = 1
-    slot_next: int = 1
     frames: tuple = ()  # (name, kind, text, centre_x, centre_y) of visible clickable frames
 
 
@@ -87,28 +83,21 @@ def decode(image) -> GameState | None:
         s = (s * 31 + b) % 16777216
     if s != checksum:
         return None
-    st = {"message_seq": 0, "message_idx": 0, "message": "", "ack_seq": 0, "edit_active": False,
-          "addon_version": 0, "context": "", "image_next": 1, "slot_next": 1, "frames": []}
+    st = {"message_seq": 0, "message": "", "edit_active": False,
+          "addon_version": 0, "context": "", "frames": []}
     for line in body.decode("utf-8", "replace").split("\n"):
         p = line.split("|")
         key = p[0]
         if key == "#msg" and len(p) >= 2:
             st["message_seq"] = int(p[1]) if p[1].isdigit() else 0
-            if len(p) >= 4 and p[2].isdigit():
-                st["message_idx"] = int(p[2])
+            if len(p) >= 4 and p[2].isdigit():  # #msg|seq|1|text (the middle field is a leftover of older versions)
                 st["message"] = "|".join(p[3:])
             else:
                 st["message"] = "|".join(p[2:])
-        elif key == "#ack" and len(p) == 2 and p[1].isdigit():
-            st["ack_seq"] = int(p[1])
         elif key == "#edit" and len(p) == 2:
             st["edit_active"] = p[1] == "1"
         elif key == "#ver" and len(p) == 2 and p[1].isdigit():
             st["addon_version"] = int(p[1])
-        elif key == "#img" and len(p) == 2 and p[1].isdigit():
-            st["image_next"] = int(p[1])
-        elif key == "#slot" and len(p) == 2 and p[1].isdigit():
-            st["slot_next"] = int(p[1])
         elif key == "#ctx" and len(p) >= 2:
             st["context"] = " | ".join(p[1:])
         elif len(p) == 7 and not key.startswith("#") and all(v.lstrip("-").isdigit() for v in p[3:]):

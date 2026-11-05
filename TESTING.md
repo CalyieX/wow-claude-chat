@@ -25,10 +25,9 @@ Please report display scale, monitor setup, Windows version, Python version and 
 Before the fix (`--setting-sources ""`, drive-root working directory, "never mention account/e-mail/user/paths" in the
 system prompt) the same questions revealed the account e-mail and the Windows user name.
 
-**Not covered by the automated tests** (only a live game can show it): whether the real `PlaySoundFile` accepts the silent
-marker .wav, and whether the overlay finds the tab in a real game window. Live check: type `/c hello`, the answer must appear over the AI tab.
+**Not covered by the automated tests** (only a live game can show it): whether the overlay finds the tab in a real game window. Live check: type `/c hello`, the answer must appear over the AI tab.
 
-**Mutation testing** (`py -3 tools/mutation.py M30 M31 M32 M33 M34 M35 M36`, about a minute per mutant): one small bug is
+**Mutation testing** (`py -3 tools/mutation.py M33 M34 M35 M36`, about a minute per mutant): one small bug is
 put into a copy of the repo, the whole test suite must fail. Result of the run on 2026-11-05:
 
 | Mutant | Bug put in | Result |

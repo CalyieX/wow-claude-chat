@@ -73,8 +73,6 @@ local function labelOf(f)
   return ""
 end
 
-KKSlotNext = KKSlotNext or 1
-
 local function ctxLine()
   local function c(v) return (tostring(v or "")):gsub("[|\n\r]", " ") end
   local xp, xpm = UnitXP("player") or 0, UnitXPMax("player") or 0
