@@ -11,7 +11,7 @@ import socket
 import subprocess
 import sys
 import threading
-from http.server import BaseHTTPRequestHandler, HTTPServer
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, urlparse
 
 from . import backends, claude, config
@@ -55,11 +55,13 @@ function show(){const b=$("backend").value,isApi=!["claude","codex","command"].i
  for(const b of s.backends){const o=document.createElement("option");o.value=o.textContent=b;sel.appendChild(o)}
  sel.value=s.backend;$("model").value=s.model||"";$("base_url").value=s.base_url||"";$("command").value=s.command||"";
  $("persona").value=s.persona||"";$("keystate").textContent=s.has_key?"(saved)":"";show();sel.onchange=show;
- $("msg").textContent=s.status;$("msg").className=s.ok?"ok":"bad"})();
+ recheck()})();
+async function recheck(){$("msg").textContent="Checking the AI ...";$("msg").className="";
+ try{const r=await api("/check");$("msg").textContent=r.status;$("msg").className=r.ok?"ok":"bad"}catch(e){$("msg").textContent="Check failed: "+e;$("msg").className="bad"}}
 $("save").onclick=async()=>{$("msg").textContent="Saving ...";$("msg").className="";
  const r=await api("/save",{backend:$("backend").value,model:$("model").value,base_url:$("base_url").value,
   api_key:$("api_key").value,command:$("command").value,persona:$("persona").value});
- $("msg").textContent=r.status;$("msg").className=r.ok?"ok":"bad";if(r.has_key)$("keystate").textContent="(saved)";$("api_key").value=""};
+ $("msg").textContent=r.status;$("msg").className=r.ok?"ok":"bad";if(r.has_key)$("keystate").textContent="(saved)";$("api_key").value="";await recheck()};
 </script></body></html>"""
 
 
@@ -71,11 +73,16 @@ def _state() -> dict:
         prefix, rest = (lines[0] if lines else ""), "\n".join(lines[1:])
     except OSError:
         pass
-    ok, status = claude.check_login() if backends.name() == "claude" else backends.check()
     return {"backends": ["claude", "codex", "command", "openai-compatible", *backends.PRESETS],
             "backend": backends.name(), "model": cfg.get("model", ""), "base_url": cfg.get("base_url", ""),
             "command": cfg.get("command", ""), "has_key": bool(cfg.get("api_key")),
-            "persona": (prefix + "\n" + rest).strip("\n") if prefix else rest, "ok": ok, "status": status}
+            "persona": (prefix + "\n" + rest).strip("\n") if prefix else rest}
+
+
+def _check() -> dict:
+    """Slow (Claude Code answers a real question): the page asks separately, after it has loaded."""
+    ok, status = claude.check_login() if backends.name() == "claude" else backends.check()
+    return {"ok": ok, "status": status}
 
 
 def apply(data: dict) -> dict:
@@ -101,9 +108,7 @@ def apply(data: dict) -> dict:
         config.PERSONA.write_text(persona + "\n", encoding="utf-8")
     elif config.PERSONA.exists():
         config.PERSONA.unlink()
-    ok, status = claude.check_login() if backend == "claude" else backends.check()
-    return {"ok": ok, "status": ("Saved. " if ok else "Saved, but: ") + status + " Restart `wowclaude run` to apply.",
-            "has_key": bool(cfg.get("api_key"))}
+    return {"ok": True, "status": "Saved. Checking ...", "has_key": bool(cfg.get("api_key"))}
 
 
 _running: dict = {}
@@ -137,6 +142,8 @@ def start_background() -> str:
         def do_GET(self):
             if not self._ok():
                 return self._send(403, b"forbidden", "text/plain")
+            if urlparse(self.path).path == "/check":
+                return self._send(200, json.dumps(_check()).encode(), "application/json")
             if urlparse(self.path).path == "/state":
                 return self._send(200, json.dumps(_state()).encode(), "application/json")
             self._send(200, PAGE.encode("utf-8"), "text/html; charset=utf-8")
@@ -151,7 +158,7 @@ def start_background() -> str:
                 out = {"ok": False, "status": f"Could not save: {exc}"}
             self._send(200, json.dumps(out).encode(), "application/json")
 
-    srv = HTTPServer(("127.0.0.1", port), Handler)
+    srv = ThreadingHTTPServer(("127.0.0.1", port), Handler)
     threading.Thread(target=srv.serve_forever, daemon=True).start()
     _running["url"] = f"http://127.0.0.1:{port}/?t={token}"
     return _running["url"]

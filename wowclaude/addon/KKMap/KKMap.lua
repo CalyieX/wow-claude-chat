@@ -190,7 +190,15 @@ local function claudeFrame()
   if chatFrame ~= DEFAULT_CHAT_FRAME and FCF_SetChatWindowFontSize then pcall(FCF_SetChatWindowFontSize, nil, chatFrame, 16) end
   return chatFrame
 end
-local function say(text, r, g, b) claudeFrame():AddMessage(text, r or 0.6, g or 0.85, b or 1) end
+local function say(text, r, g, b, nohist)
+  r, g, b = r or 0.6, g or 0.85, b or 1
+  claudeFrame():AddMessage(text, r, g, b)
+  if not nohist then  -- keep the conversation across /reload and restarts (last 100 lines)
+    KKMapDB.hist = KKMapDB.hist or {}
+    table.insert(KKMapDB.hist, { text, r, g, b })
+    while #KKMapDB.hist > 100 do table.remove(KKMapDB.hist, 1) end
+  end
+end
 
 local function sendToClaude(msg, shown)
   msg = strtrim(msg or "")
@@ -206,7 +214,7 @@ local function sendToClaude(msg, shown)
     say(shown or msg, 0.6, 0.6, 0.6)  -- menu command for the bridge: no AI involved, so no "thinking"
   else
     say(L("Du: ", "You: ") .. (shown or msg), 1, 1, 0.6)
-    say(L("KI denkt ...", "AI is thinking ..."), 0.6, 0.6, 0.6)
+    say(L("KI denkt ...", "AI is thinking ..."), 0.6, 0.6, 0.6, true)
   end
   stripOn = true; host:SetAlpha(1)
   render()
@@ -261,7 +269,7 @@ local function buildMenu()
   button("AI Setup", function() sendToClaude("!setup", "Opening AI setup ...") end)
   button("Open Browser", function() sendToClaude("!browser", "Opening browser ...") end)
   local strip
-  local function stripText() return KKMapDB.always and "Strip: always visible" or "Strip: only when needed" end
+  local function stripText() return KKMapDB.always and "Bridge: always visible" or "Bridge: only when needed" end
   strip = button(stripText(), function()
     KKMapDB.always = not KKMapDB.always
     strip:SetText(stripText())
@@ -659,7 +667,8 @@ local ev = CreateFrame("Frame")
 ev:RegisterEvent("PLAYER_LOGIN")
 ev:SetScript("OnEvent", function()
   KKMapDB.dbg = false
-  claudeFrame()
+  local cf = claudeFrame()
+  for _, h in ipairs(KKMapDB.hist or {}) do cf:AddMessage(h[1], h[2], h[3], h[4]) end
   hookEditBoxes()
   if KKMapDB.off then host:Hide() else render() end
 end)

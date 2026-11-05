@@ -90,10 +90,14 @@ def place(w: int, h: int, corner: str, margin: int = 24) -> tuple[int, int]:
 
 def pin(hwnd: int, x: int, y: int, w: int, h: int, opacity: int, click_through: bool) -> None:
     """Place the browser window: its top-left is (x, y), size w x (h + CHROME_BAR). The WoW frame covers the bar."""
-    ex = user32.GetWindowLongW(hwnd, GWL_EXSTYLE) | WS_EX_LAYERED | WS_EX_TOOLWINDOW
+    ex = user32.GetWindowLongW(hwnd, GWL_EXSTYLE) | WS_EX_TOOLWINDOW
     ex = ex | WS_EX_TRANSPARENT if click_through else ex & ~WS_EX_TRANSPARENT
+    # Chrome draws through DirectComposition: a layered style makes the page invisible, so only use it for see-through
+    see_through = opacity < 100
+    ex = ex | WS_EX_LAYERED if see_through else ex & ~WS_EX_LAYERED
     user32.SetWindowLongW(hwnd, GWL_EXSTYLE, ex)
-    user32.SetLayeredWindowAttributes(hwnd, 0, int(255 * max(10, min(100, opacity)) / 100), LWA_ALPHA)
+    if see_through:
+        user32.SetLayeredWindowAttributes(hwnd, 0, int(255 * max(10, min(100, opacity)) / 100), LWA_ALPHA)
     user32.SetWindowPos.argtypes = [wintypes.HWND, wintypes.HWND, ctypes.c_int, ctypes.c_int, ctypes.c_int,
                                     ctypes.c_int, wintypes.UINT]
     user32.SetWindowPos(wintypes.HWND(hwnd), wintypes.HWND(HWND_TOPMOST), x, y - CHROME_BAR, w, h + CHROME_BAR,
