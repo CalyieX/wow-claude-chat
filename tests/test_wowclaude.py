@@ -935,7 +935,7 @@ def test_lua_reloads_when_slots_are_used_up_and_idle():
     lua.execute("reloads = 0; function ReloadUI() reloads = reloads + 1 end")
     lua.globals().__play = lambda path: True
     lua.execute("""__load = function(name) KKReplyData = { seq = KKMapState.seq, parts = { "ok" } }; return true end""")
-    for _ in range(200):
+    for _ in range(slots.SLOTS + 10):
         lua.eval("function() SlashCmdList['KKCHAT']('x') end")()
         lua.eval("function() __update(8.0) end")()                 # delivers the answer
         if lua.eval("reloads") > 0:
@@ -953,11 +953,11 @@ def test_slot_count_matches_addon_and_install_cleans_old_slots(tmp_path):
     lua_src = (Path(__file__).parent.parent / "wowclaude" / "addon" / "KKMap" / "KKMap.lua").read_text(encoding="utf-8")
     assert int(_re.search(r"local NSLOTS = (\d+)", lua_src).group(1)) == slots.SLOTS
     addons = tmp_path / "Interface" / "AddOns"
-    for i in (1, 41, 150, 200):
+    for i in (1, slots.SLOTS + 1, 450, 1000):
         (addons / f"KKR{i:03d}").mkdir(parents=True)
     slots.install(tmp_path)
     left = sorted(p.name for p in addons.glob("KKR*"))
-    assert len(left) == slots.SLOTS and "KKR041" not in left and "KKR200" not in left and "KKR001" in left
+    assert len(left) == slots.SLOTS and f"KKR{slots.SLOTS + 1:03d}" not in left and "KKR450" not in left and "KKR001" in left
 
 
 def test_every_helper_process_is_started_hidden():

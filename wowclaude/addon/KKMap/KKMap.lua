@@ -165,7 +165,7 @@ KKMapState = KKMapState or { seq = 0, out = "", idx = 0, ack = 0 }
 KKMapDB.n = KKMapDB.n or 0
 local SIG = "Interface\\AddOns\\KKMap\\sig\\"
 local chatFrame
-local NSLOTS = 40  -- reply slots KKR001..KKR040 (keep in sync with SLOTS in slots.py)
+local NSLOTS = 300  -- reply slots KKR001..KKR300 (keep in sync with SLOTS in slots.py)
 local nextSlot = 1
 
 -- Streifen nur bei Bedarf sichtbar (Antwort offen, Chatbox offen, kurz nach Zustellung) + dezente Leiste darunter.

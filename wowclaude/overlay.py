@@ -307,15 +307,8 @@ def _page_ws(port: int) -> tuple[str, str] | None:
     return None
 
 
-def navigate(port: int, text: str) -> bool:
-    """Send the browser to ``text``: a URL, a domain, or search words (Google). Uses the DevTools protocol (stdlib only)."""
-    text = text.strip()
-    if not text:
-        return False
-    if " " in text or ("." not in text and not text.startswith(("http://", "https://", "localhost"))):
-        url = "https://www.google.com/search?q=" + urllib.parse.quote_plus(text)
-    else:
-        url = text if text.startswith(("http://", "https://")) else "https://" + text
+def _cdp(port: int, method: str, params: dict) -> bool:
+    """Send one DevTools protocol command to the browser's page (stdlib websocket client)."""
     found = _page_ws(port)
     if not found:
         return False
@@ -329,7 +322,7 @@ def navigate(port: int, text: str) -> bool:
                f"Sec-WebSocket-Key: {key}\r\nSec-WebSocket-Version: 13\r\n\r\n")
         sk.sendall(req.encode())
         sk.recv(4096)
-        payload = json.dumps({"id": 1, "method": "Page.navigate", "params": {"url": url}}).encode()
+        payload = json.dumps({"id": 1, "method": method, "params": params}).encode()
         mask = os.urandom(4)
         n = len(payload)
         head = bytes([0x81, 0x80 | (n if n < 126 else 126)]) + (n.to_bytes(2, "big") if n >= 126 else b"")
@@ -341,6 +334,25 @@ def navigate(port: int, text: str) -> bool:
             pass
         sk.close()
     except OSError:
+        return False
+    return True
+
+
+def history_step(port: int, step: int) -> bool:
+    """Back (-1) or forward (+1) in the page's history."""
+    return _cdp(port, "Runtime.evaluate", {"expression": "history.go(%d)" % (-1 if step < 0 else 1)})
+
+
+def navigate(port: int, text: str) -> bool:
+    """Send the browser to ``text``: a URL, a domain, or search words (Google). Uses the DevTools protocol (stdlib only)."""
+    text = text.strip()
+    if not text:
+        return False
+    if " " in text or ("." not in text and not text.startswith(("http://", "https://", "localhost"))):
+        url = "https://www.google.com/search?q=" + urllib.parse.quote_plus(text)
+    else:
+        url = text if text.startswith(("http://", "https://")) else "https://" + text
+    if not _cdp(port, "Page.navigate", {"url": url}):
         return False
     save_state(url=url)
     return True
@@ -709,6 +721,11 @@ def frame_loop(hwnd: int, x: int, y: int, w: int, h: int, opacity: int, click_th
     bar.attributes("-topmost", True)
     bar.configure(bg="#2a2417")
     var = tk.StringVar(value=saved.get("url", ""))
+    for glyph, step in (("◀", -1), ("▶", 1)):  # back / forward in the page history
+        btn = tk.Button(bar, text=glyph, command=lambda st=step: port and history_step(port, st), width=2, relief="flat",
+                        bg="#2a2417", fg="#ffd100", activebackground="#5c4a1a", activeforeground="#ffffff",
+                        font=("Arial", 7), bd=0, highlightthickness=0, takefocus=0)
+        btn.pack(side="left", fill="y")
     entry = tk.Entry(bar, textvariable=var, bg="#0d0c09", fg="#ffd100", insertbackground="#ffd100", relief="flat",
                      font=("Arial", 9), highlightthickness=1, highlightbackground="#5c5c5c", highlightcolor="#b4b4b4",
                      selectbackground="#5c4a1a", selectforeground="#ffffff")

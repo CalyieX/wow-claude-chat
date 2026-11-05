@@ -16,8 +16,8 @@ import time
 import wave
 from pathlib import Path
 
-SLOTS = 40   # reply slots; the addon reloads the UI by itself when they are used up (keep in sync with NSLOTS in KKMap.lua)
-OLD_MAX = 200  # earlier versions made this many; the extra ones are removed on install
+SLOTS = 300  # reply slots (one per answer); the addon reloads the UI by itself only when ALL are used up (keep in sync with NSLOTS in KKMap.lua)
+OLD_MAX = 1000  # earlier versions made other amounts; the extra ones are removed on install
 IMAGE_SLOTS = 24
 IMAGE_SIZE = 512
 ADDON_SRC = Path(__file__).parent / "addon" / "KKMap"

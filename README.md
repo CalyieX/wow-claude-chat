@@ -44,7 +44,8 @@ If `wowclaude` is not found, use `py -3 -m wowclaude ...`.
   switches the addon off.
 - The conversation in the Claude tab survives `/reload` and restarts (last 100 lines). Windows you moved (menu, answer
   window) stay where you put them.
-- After about 35 answers the addon reloads the interface by itself (a short hiccup) to reset its answer slots. Don't
+- Every answer uses one of 300 reply slots (the addons `KKR001`..`KKR300`, collapsed into one `KKMap` group in the addon
+  list). Only when all 300 of one game session are used does the addon reload the interface by itself, once. Don't
   `/reload` while the AI is still thinking, the pending question is lost.
 
 ## Browser window
