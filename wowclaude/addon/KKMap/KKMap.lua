@@ -241,7 +241,7 @@ local function buildMenu()
   })
   local title = f:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
   title:SetPoint("TOPLEFT", 18, -16)
-  title:SetText("Claude Chat")
+  title:SetText("WoW AI Chat")
   local close = CreateFrame("Button", nil, f, "UIPanelCloseButton")
   close:SetPoint("TOPRIGHT", -4, -4)
   local y = -48
