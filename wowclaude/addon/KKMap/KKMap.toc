@@ -3,4 +3,5 @@
 ## Notes: Chat with Claude inside WoW. Draws a colour strip (top-left) that the wowclaude bridge reads. /strip always|auto|off
 ## Version: 1.0
 ## SavedVariables: KKMapDB
+Name.lua
 KKMap.lua

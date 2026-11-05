@@ -3,7 +3,7 @@ from pathlib import Path
 
 from PIL import Image
 
-from wowclaude import claude, decode, slots
+from wowclaude import claude, decode, installer
 
 
 def make_strip(text: str, cell: int = 4) -> Image.Image:
@@ -60,35 +60,6 @@ def test_split_and_overlay():
     assert text == "Short." and ov["title"] == "Plan" and ov["secs"] == 30 and len(ov["lines"]) == 2
     parts = claude.split_reply("word " * 400)
     assert len(parts) <= claude.MAX_CHUNKS and all(len(p) <= claude.CHUNK for p in parts)
-
-
-def test_reply_lua_escapes():
-    lua = slots.reply_lua(5, ['say "hi" \\ done'])
-    assert 'seq = 5' in lua and '\\"hi\\"' in lua and "\\\\" in lua
-
-
-def test_install_and_publish():
-    with tempfile.TemporaryDirectory() as tmp:
-        root = Path(tmp)
-        (root / "Interface" / "AddOns").mkdir(parents=True)
-        res = slots.install(root)
-        assert res["slots_created"] == slots.SLOTS
-        assert (root / "Interface" / "AddOns" / "KKMap" / "KKMap.lua").exists()
-        slots.publish(root, 99, 3, ["Claude: hi"])
-        reply = (root / "Interface" / "AddOns" / f"KKR{slots.SLOTS:03d}" / "Reply.lua").read_text(encoding="utf-8")
-        assert "seq = 99" in reply
-        assert (root / "Interface" / "AddOns" / "KKMap" / "sig" / "003.wav").stat().st_size > 0
-        assert (root / "Interface" / "AddOns" / "KKMap" / "sig" / "004.wav").stat().st_size == 0
-        slots.reset_marker(root, 3)
-        assert (root / "Interface" / "AddOns" / "KKMap" / "sig" / "003.wav").stat().st_size == 0
-
-
-def test_macro_blocks_end_up_in_lua():
-    text, macros = claude.extract_macros("Here you go.\n[[macro Pull]]\n#showtooltip Shadow Bolt\n/cast Shadow Bolt\n[[/macro]]")
-    assert text == "Here you go." and macros == [{"name": "Pull", "body": "#showtooltip Shadow Bolt\n/cast Shadow Bolt"}]
-    lua = slots.reply_lua(1, ["x"], None, macros)
-    assert 'name = "Pull"' in lua and "#showtooltip Shadow Bolt\\\\n/cast Shadow Bolt" in lua
-    assert "MACROS" in claude.persona()[1]
 
 
 def test_command_backend(monkeypatch, tmp_path):
@@ -287,38 +258,6 @@ def test_window_geometry_follows_game_window():
     assert overlay.from_rel(g3, rel)[2:] == (overlay.MIN_W, overlay.MIN_H)
 
 
-def test_publish_writes_only_the_next_slots():
-    assert slots.target_slots(None) == list(range(1, slots.SLOTS + 1))
-    t = slots.target_slots(20)
-    assert {20, 21, 22, 23} <= set(t) and {1, 2, 3} <= set(t) and len(t) < 12
-    assert max(slots.target_slots(slots.SLOTS)) == slots.SLOTS  # never beyond the last slot
-    with tempfile.TemporaryDirectory() as tmp:
-        root = Path(tmp)
-        (root / "Interface" / "AddOns").mkdir(parents=True)
-        slots.install(root)
-        slots.publish(root, 7, 1, ["Claude: x"], slot_next=10)
-        add = root / "Interface" / "AddOns"
-        assert "seq = 7" in (add / "KKR010" / "Reply.lua").read_text(encoding="utf-8")
-        assert "seq = 7" in (add / "KKR001" / "Reply.lua").read_text(encoding="utf-8")
-        assert "seq = 7" not in (add / "KKR030" / "Reply.lua").read_text(encoding="utf-8")
-
-
-def test_deliver_retries_when_files_are_locked(monkeypatch):
-    from wowclaude import bridge, decode
-    calls = []
-
-    def fake_publish(root, seq, idx, parts, overlay=None, macros=None, slot_next=None, name=""):
-        calls.append(slot_next)
-        if len(calls) == 1:
-            raise PermissionError("locked")
-
-    st = decode.GameState(message="hi", message_seq=5, message_idx=1, slot_next=9)
-    monkeypatch.setattr(bridge.slots, "publish", fake_publish)
-    monkeypatch.setattr(bridge, "read_state", lambda: decode.GameState(ack_seq=5, slot_next=9))
-    monkeypatch.setattr(bridge.time, "sleep", lambda s: None)
-    assert bridge.deliver(Path("."), st, "hello") is True and len(calls) == 2
-
-
 def test_shipped_textures_are_used_and_own_ones_win(tmp_path, monkeypatch):
     from wowclaude import overlay
     shipped = Path(overlay.__file__).parent / "art"
@@ -360,7 +299,7 @@ def _lua_addon():
     import sys
     sys.path.insert(0, str(Path(__file__).parent))
     import lua_harness
-    return lua_harness, lua_harness.run_addon(Path(slots.ADDON_SRC) / "KKMap.lua")
+    return lua_harness, lua_harness.run_addon(Path(installer.ADDON_SRC) / "KKMap.lua")
 
 
 def test_lua_addon_strip_is_read_by_python_decoder():
@@ -391,21 +330,6 @@ def test_client_detection_accepts_classic_exe(tmp_path):
     assert not config._is_client(tmp_path)
     (tmp_path / "WowClassic.exe").write_bytes(b"")
     assert config._is_client(tmp_path)
-
-
-def test_uninstall_removes_addon_slots_and_entries(tmp_path, monkeypatch):
-    monkeypatch.setattr(slots, "SLOTS", 10)  # same logic, 20x faster
-    root = tmp_path
-    (root / "Interface" / "AddOns").mkdir(parents=True)
-    wtf = root / "WTF" / "Account" / "A" / "R" / "C"
-    wtf.mkdir(parents=True)
-    (wtf / "AddOns.txt").write_text("Blizzard_Foo: enabled\n", encoding="utf-8")
-    slots.install(root)
-    assert "KKR001: enabled" in (wtf / "AddOns.txt").read_text(encoding="utf-8")
-    res = slots.uninstall(root)
-    assert res["folders_removed"] == slots.SLOTS + 1
-    assert not (root / "Interface" / "AddOns" / "KKMap").exists()
-    assert (wtf / "AddOns.txt").read_text(encoding="utf-8").strip() == "Blizzard_Foo: enabled"
 
 
 def test_session_timeout_is_reported_and_session_renewed(tmp_path, monkeypatch):
@@ -520,28 +444,6 @@ def test_native_claude_exe_preferred(monkeypatch, tmp_path):
     assert claude.claude_path() == str(exe)
 
 
-def test_lua_string_with_newline_is_valid_lua():
-    lupa = __import__("pytest").importorskip("lupa")
-    lua = lupa.LuaRuntime()
-    text = 'line one' + chr(10) + 'line "two" ' + chr(92) + ' end'
-    assert lua.execute("return " + slots.lua_string(text)) == text
-
-
-def test_deliver_stops_waiting_when_next_message_arrived(monkeypatch, tmp_path):
-    from wowclaude import bridge, decode
-    monkeypatch.setattr(bridge.time, "sleep", lambda s: None)
-    monkeypatch.setattr(bridge.slots, "publish", lambda *a, **k: None)
-
-    class St:
-        def __init__(self, seq, ack):
-            self.message_seq, self.ack_seq, self.message_idx, self.slot_next = seq, ack, 1, 5
-    monkeypatch.setattr(bridge, "_safe_read_state", lambda: St(8, 6))  # player already wrote message 8
-    assert bridge.deliver(tmp_path, St(7, 6), "hi") is True
-    monkeypatch.setattr(bridge, "_safe_read_state", lambda: St(0, 0))  # /reload resets the counter: NOT delivered
-    monkeypatch.setattr(bridge.time, "time", iter(range(0, 10000, 20)).__next__)
-    assert bridge.deliver(tmp_path, St(7, 6), "hi") is False
-
-
 def test_exec_kills_on_timeout(monkeypatch):
     import sys
     from wowclaude import claude
@@ -554,21 +456,6 @@ def test_exec_kills_on_timeout(monkeypatch):
     except claude.AskTimeout:
         pass
     assert time.time() - t0 < 10
-
-
-def test_marker_silenced_after_ack(monkeypatch, tmp_path):
-    from wowclaude import bridge
-    monkeypatch.setattr(bridge.time, "sleep", lambda s: None)
-    monkeypatch.setattr(bridge.slots, "publish", lambda *a, **k: None)
-    silenced = []
-    monkeypatch.setattr(bridge.slots, "reset_marker", lambda root, idx: silenced.append(idx))
-
-    class St:
-        def __init__(self, seq, ack):
-            self.message_seq, self.ack_seq, self.message_idx, self.slot_next = seq, ack, 3, 5
-    monkeypatch.setattr(bridge, "_safe_read_state", lambda: St(7, 7))
-    assert bridge.deliver(tmp_path, St(7, 6), "hi") is True
-    assert silenced == [3]
 
 
 def test_failed_retry_never_keeps_a_burnt_session_id(monkeypatch):
@@ -595,42 +482,6 @@ def test_failed_retry_never_keeps_a_burnt_session_id(monkeypatch):
     except RuntimeError:
         pass
     assert seen and not s.started and s.id  # fresh id after a failed retry, never the burnt one
-
-
-def test_lua_reply_round_trip_through_slots(tmp_path):
-    """Full loop: question via strip -> Python publishes -> marker plays -> addon loads the slot, shows it, acks."""
-    h, lua = _lua_addon()
-    root = tmp_path
-    addons = root / "Interface" / "AddOns"
-    (addons / "KKMap" / "sig").mkdir(parents=True)
-    for i in range(1, 8):
-        (addons / f"KKR{i:03d}").mkdir()
-    lua.eval("function() SlashCmdList['KKCHAT']('Hallo wie gehts?') end")()
-    st = decode.decode(h.strip_image(lua))
-    assert st.message == "Hallo wie gehts?" and st.slot_next == 1
-    marker = addons / "KKMap" / "sig" / f"{st.message_idx:03d}.wav"
-
-    def play(path):  # the real game plays a file only if it contains sound
-        return marker.exists() and marker.stat().st_size > 0 and str(path).endswith(marker.name)
-
-    def load(name):
-        f = addons / name / "Reply.lua"
-        if not f.exists():
-            return False
-        lua.execute(f.read_text(encoding="utf-8"))
-        return True
-    lua.globals().__play, lua.globals().__load = play, load
-
-    lua.eval("function() __update(1.0) end")()           # nothing published yet: addon keeps waiting
-    assert decode.decode(h.strip_image(lua)).ack_seq != st.message_seq
-    slots.reset_marker(root, st.message_idx)             # what the bridge does before it asks the AI
-    assert not play(marker.name)
-    slots.publish(root, st.message_seq, st.message_idx, ["Claude: Gut, danke!"], None, None, 1)  # the real publisher
-    lua.eval("function() __update(1.0) end")()
-    shown = [str(x) for x in lua.eval("DEFAULT_CHAT_FRAME.__log").values()]
-    assert "Claude: Gut, danke!" in shown
-    after = decode.decode(h.strip_image(lua))
-    assert after.ack_seq == st.message_seq and after.slot_next == 2
 
 
 def test_lua_long_utf8_message_is_cut_on_a_character_boundary():
@@ -716,7 +567,7 @@ def test_lua_cut_uses_whole_characters_for_3_and_4_byte_text():
         st = decode.decode(h.strip_image(lua))
         assert st.message and len(st.message.encode("utf-8")) <= 230
         assert set(st.message) == {ch}, f"half character left for {ch!r}"
-        shown = " ".join(str(x) for x in lua.eval("DEFAULT_CHAT_FRAME.__log").values())
+        shown = " ".join(str(x) for x in lua.eval("rawget(DEFAULT_CHAT_FRAME, '__log') or {}").values())
         assert "shortened" in shown or "gekuerzt" in shown  # the player is told
 
 
@@ -734,20 +585,6 @@ def _deliver_env(monkeypatch, tmp_path, fresh_state):
         def __init__(self, seq, ack):
             self.message_seq, self.ack_seq, self.message_idx, self.slot_next = seq, ack, 4, 5
     return bridge, St, silenced
-
-
-def test_marker_silenced_when_next_message_arrives(monkeypatch, tmp_path):
-    bridge, St, silenced = _deliver_env(monkeypatch, tmp_path, None)
-    monkeypatch.setattr(bridge, "_safe_read_state", lambda: St(9, 6))
-    assert bridge.deliver(tmp_path, St(7, 6), "hi") is True
-    assert silenced == [4]
-
-
-def test_marker_silenced_when_never_confirmed(monkeypatch, tmp_path):
-    bridge, St, silenced = _deliver_env(monkeypatch, tmp_path, None)
-    monkeypatch.setattr(bridge, "_safe_read_state", lambda: St(7, 6))
-    assert bridge.deliver(tmp_path, St(7, 6), "hi") is False
-    assert silenced == [4]
 
 
 def test_backends_use_hard_limit_exec_and_short_api_timeout(monkeypatch, tmp_path):
@@ -883,20 +720,6 @@ def test_claude_runs_without_the_players_claude_md(monkeypatch):
     assert out.strip() == "1 1"
 
 
-def test_lua_marker_without_slot_does_not_burn_slots(tmp_path):
-    """The marker plays but the slot file is not there (yet): many polls must not eat slot numbers."""
-    h, lua = _lua_addon()
-    lua.eval("function() SlashCmdList['KKCHAT']('Hallo') end")()
-    st = decode.decode(h.strip_image(lua))
-    loads = []
-    lua.globals().__play = lambda path: True       # marker says "ready"
-    lua.globals().__load = lambda name: loads.append(str(name)) or False  # ... but nothing to load
-    for _ in range(40):
-        lua.eval("function() __update(1.0) end")()
-    assert decode.decode(h.strip_image(lua)).slot_next == st.slot_next  # no slot number used up
-    assert len(loads) <= 12 and set(loads) == {"KKR001"}                # backed off, always the same slot
-
-
 def test_claude_runs_isolated(monkeypatch):
     """No user settings, and not inside the user's profile folder (that would leak the Windows user name)."""
     seen = {}
@@ -926,38 +749,8 @@ def test_lua_restricted_frame_does_not_break_the_scan():
     lua.eval("function() SlashCmdList['KKCHAT']('was ist?') end")()   # a pending question turns the frame scan on
     st = decode.decode(h.strip_image(lua))
     assert st is not None and st.message == "was ist?"
-    shown = [str(x) for x in lua.eval("DEFAULT_CHAT_FRAME.__log").values()]
+    shown = [str(x) for x in lua.eval("rawget(DEFAULT_CHAT_FRAME, '__log') or {}").values()]
     assert not any("Fehler" in x or "restricted" in x for x in shown)
-
-
-def test_lua_reloads_when_slots_are_used_up_and_idle():
-    h, lua = _lua_addon()
-    lua.execute("reloads = 0; function ReloadUI() reloads = reloads + 1 end")
-    lua.globals().__play = lambda path: True
-    lua.execute("""__load = function(name) KKReplyData = { seq = KKMapState.seq, parts = { "ok" } }; return true end""")
-    for _ in range(slots.SLOTS + 10):
-        lua.eval("function() SlashCmdList['KKCHAT']('x') end")()
-        lua.eval("function() __update(8.0) end")()                 # delivers the answer
-        if lua.eval("reloads") > 0:
-            break
-        lua.eval("function() __update(8.0) end")()                 # idle tick
-        if lua.eval("reloads") > 0:
-            break
-    assert lua.eval("reloads") >= 1
-    assert decode.decode(h.strip_image(lua)).slot_next >= slots.SLOTS - 5  # reloaded before the counter ran out
-    assert decode.decode(h.strip_image(lua)).slot_next <= slots.SLOTS + 1
-
-
-def test_slot_count_matches_addon_and_install_cleans_old_slots(tmp_path):
-    import re as _re
-    lua_src = (Path(__file__).parent.parent / "wowclaude" / "addon" / "KKMap" / "KKMap.lua").read_text(encoding="utf-8")
-    assert int(_re.search(r"local NSLOTS = (\d+)", lua_src).group(1)) == slots.SLOTS
-    addons = tmp_path / "Interface" / "AddOns"
-    for i in (1, slots.SLOTS + 1, 450, 1000):
-        (addons / f"KKR{i:03d}").mkdir(parents=True)
-    slots.install(tmp_path)
-    left = sorted(p.name for p in addons.glob("KKR*"))
-    assert len(left) == slots.SLOTS and f"KKR{slots.SLOTS + 1:03d}" not in left and "KKR450" not in left and "KKR001" in left
 
 
 def test_every_helper_process_is_started_hidden():
@@ -984,59 +777,8 @@ def test_lua_secret_text_does_not_raise():
     lua.eval("function() SlashCmdList['KKCHAT']('hi') end")()
     st = decode.decode(h.strip_image(lua))
     assert st is not None and st.message == "hi"
-    shown = [str(x) for x in lua.eval("DEFAULT_CHAT_FRAME.__log").values()]
+    shown = [str(x) for x in lua.eval("rawget(DEFAULT_CHAT_FRAME, '__log') or {}").values()]
     assert not any("Fehler" in x for x in shown)
-
-
-def test_lua_zero_byte_marker_does_not_deliver_or_burn_slot(tmp_path):
-    """Control for the real-file round trip: a marker that exists but is empty (still being written) must not count as ready."""
-    h, lua = _lua_addon()
-    addons = tmp_path / "Interface" / "AddOns"
-    (addons / "KKMap" / "sig").mkdir(parents=True)
-    for i in range(1, 8):
-        (addons / f"KKR{i:03d}").mkdir()
-    lua.eval("function() SlashCmdList['KKCHAT']('Hallo') end")()
-    st = decode.decode(h.strip_image(lua))
-    marker = addons / "KKMap" / "sig" / f"{st.message_idx:03d}.wav"
-    marker.write_bytes(b"")
-    slots.publish(tmp_path, st.message_seq, st.message_idx, ["Claude: x"], None, None, 1)
-    marker.write_bytes(b"")                                   # publish finished the marker; force "still empty"
-    lua.globals().__play = lambda path: marker.stat().st_size > 0
-    lua.globals().__load = lambda name: False
-    for _ in range(10):
-        lua.eval("function() __update(1.0) end")()
-    after = decode.decode(h.strip_image(lua))
-    assert after.ack_seq != st.message_seq and after.slot_next == 1   # nothing delivered, no slot used up
-
-
-def test_lua_never_thinks_forever_when_marker_plays_but_no_slot_loads():
-    h, lua = _lua_addon()
-    lua.execute("now = 1000; function GetTime() return now end")
-    lua.eval("function() SlashCmdList['KKCHAT']('Hallo') end")()
-    lua.globals().__play = lambda path: True
-    lua.globals().__load = lambda name: False
-    for _ in range(300):
-        lua.execute("now = now + 1")
-        lua.eval("function() __update(1.0) end")()
-    shown = [str(x) for x in lua.eval("DEFAULT_CHAT_FRAME.__log").values()]
-    assert any("Zeitueberschreitung" in x or "timeout" in x for x in shown)
-
-
-def test_lua_reloads_before_asking_when_slots_are_nearly_gone_and_asks_again():
-    h, lua = _lua_addon()
-    lua.execute("reloads = 0; function ReloadUI() reloads = reloads + 1 end; timers = {}; "
-                "C_Timer = { After = function(s, fn) table.insert(timers, fn) end }")
-    lua.globals().__play = lambda path: True
-    lua.execute("""__load = function(name) KKReplyData = { seq = KKMapState.seq, parts = { "ok" } }; return true end""")
-    asked = 0
-    for _ in range(slots.SLOTS):
-        lua.eval("function() SlashCmdList['KKCHAT']('x') end")()
-        if lua.eval("reloads") > 0:
-            break
-        asked += 1
-        lua.eval("function() __update(8.0) end")()
-    assert lua.eval("reloads") == 1 and asked < slots.SLOTS            # reloaded before the slots ran out
-    assert lua.eval("KKMapDB.resend ~= nil")                            # ... and remembered the question
 
 
 def test_overlay_always_starts_solid_not_in_ghost_mode():
@@ -1074,3 +816,47 @@ def test_page_is_put_above_the_game_when_it_hides_behind_it(monkeypatch):
     monkeypatch.setattr(overlay, "user32", U([OTHER]))                # page already above the game: leave everything alone
     overlay.keep_page_above_game(PAGE)
     assert calls == []
+
+
+def test_installer_copies_addon_removes_old_slots_and_keeps_the_name(tmp_path):
+    root = tmp_path / "wow"
+    addons = root / "Interface" / "AddOns"
+    for i in (1, 2, 300):  # leftovers of the old reply-slot layout
+        (addons / f"KKR{i:03d}").mkdir(parents=True)
+    (addons / "KKMap" / "sig").mkdir(parents=True)
+    lst = root / "WTF" / "Account" / "A" / "R" / "C" / "AddOns.txt"
+    lst.parent.mkdir(parents=True)
+    lst.write_text("KKMap: enabled\nKKR001: enabled\nKKR300: enabled\nOther: enabled\n", encoding="utf-8")
+    res = installer.install(root, "WoW AI")
+    assert res["old_slots_removed"] == 3
+    assert not list(addons.glob("KKR*")) and not (addons / "KKMap" / "sig").exists()
+    assert lst.read_text(encoding="utf-8").splitlines() == ["KKMap: enabled", "Other: enabled"]
+    assert 'KKAiName = "WoW AI"' in (addons / "KKMap" / "Name.lua").read_text(encoding="utf-8")
+    installer.install(root)  # again, without a name: the chosen name stays
+    assert 'KKAiName = "WoW AI"' in (addons / "KKMap" / "Name.lua").read_text(encoding="utf-8")
+    assert (addons / "KKMap" / "KKMap.lua").exists() and "Name.lua" in (addons / "KKMap" / "KKMap.toc").read_text(encoding="utf-8")
+
+
+def test_uninstall_removes_the_addon_and_its_entries(tmp_path):
+    root = tmp_path / "wow"
+    installer.install(root) if False else None
+    (root / "Interface" / "AddOns").mkdir(parents=True)
+    installer.install(root)
+    lst = root / "WTF" / "Account" / "A" / "R" / "C" / "AddOns.txt"
+    lst.parent.mkdir(parents=True)
+    lst.write_text("KKMap: enabled\nOther: enabled\n", encoding="utf-8")
+    res = installer.uninstall(root)
+    assert res["folders_removed"] >= 1 and not (root / "Interface" / "AddOns" / "KKMap").exists()
+    assert lst.read_text(encoding="utf-8").splitlines() == ["Other: enabled"]
+
+
+def test_deliver_posts_the_answer_with_macro_hint_and_overlay_lines(monkeypatch):
+    from wowclaude import bridge
+    posted = []
+    monkeypatch.setattr(bridge, "_post", lambda kind, text: posted.append((kind, text)))
+    monkeypatch.setattr(claude, "persona", lambda: ("WoW AI", ""))
+    reply = "Hallo\n[[macro Test]]/cast Foo[[/macro]]\n[[overlay Titel]]\n|cff00ff00Zeile|r\n[[/overlay]]"
+    bridge.deliver(decode.GameState() if hasattr(decode, "GameState") else None, reply)
+    kind, text = posted[-1]
+    assert kind == "ai" and text.startswith("WoW AI: Hallo")
+    assert "/kkm Test~/cast Foo" in text and "Zeile" in text and "|c" not in text

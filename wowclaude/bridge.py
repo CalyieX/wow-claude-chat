@@ -1,10 +1,11 @@
-"""Main loop: read the player's message from the strip, ask Claude, deliver the reply through the slots."""
+"""Main loop: read the player's message from the strip, ask Claude, show the answer in the chat overlay."""
 from __future__ import annotations
 
+import re
 import time
 from pathlib import Path
 
-from . import claude, config, decode, screen, slots
+from . import claude, config, decode, screen
 
 
 def read_state() -> decode.GameState | None:
@@ -18,6 +19,14 @@ def _safe_read_state() -> decode.GameState | None:
     except Exception as exc:  # noqa: BLE001 - a failed screenshot must never end the bridge
         print(f"screen read failed: {exc}", flush=True)
         return None
+
+
+def _start_overlay() -> None:
+    try:
+        from . import chat_fake
+        chat_fake.start()
+    except Exception:  # noqa: BLE001 - the overlay is optional
+        pass
 
 
 def _post(kind: str, text: str) -> None:
@@ -39,9 +48,6 @@ def handle_command(text: str) -> str | None:
         if problem:
             return "Browser did not open: " + problem
         return "Browser closed." if closing else "Browser opened."
-    if cmd == "!chat":
-        from . import chat_overlay
-        return chat_overlay.start()
     if cmd == "!setup":
         from . import overlay, setup_ui
         url = setup_ui.start_background()
@@ -52,7 +58,12 @@ def handle_command(text: str) -> str | None:
     return None
 
 
-def deliver(root: Path, state: decode.GameState, reply: str) -> bool:
+_CODES = re.compile(r"\|c[0-9a-fA-F]{8}|\|r")
+
+
+def deliver(state: decode.GameState, reply: str) -> None:
+    """Show the answer in the chat overlay. Macros are typed into the game when input control is on, otherwise the
+    command to type is shown with the answer."""
     reply, macros = claude.extract_macros(reply)
     reply, overlay = claude.extract_overlay(reply)
     reply, play = claude.extract_play(reply)
@@ -69,40 +80,17 @@ def deliver(root: Path, state: decode.GameState, reply: str) -> bool:
             ov.play(play)
         except Exception as exc:  # noqa: BLE001 - the text answer must still arrive
             print(f"overlay failed: {exc}", flush=True)
-    if overlay:
-        try:
-            overlay["lines"] = slots.resolve_images(root, overlay["lines"], state.image_next)
-        except Exception as exc:  # noqa: BLE001 - never lose the text because of a picture
-            print(f"images failed: {exc}", flush=True)
-    if not macros and not overlay:  # plain answer: the overlay already shows it, no reply slot is used up
-        from . import chat_fake
-        if chat_fake.alive():
-            return True
-    parts = claude.split_reply(reply or "...")
-    ai_name = claude.persona()[0]
-    parts[0] = ai_name + ": " + parts[0]
-    slot_next = state.slot_next
-    for attempt in range(3):  # no confirmation: the addon may have been reloaded, so look at its slot counter again
-        try:
-            slots.publish(root, state.message_seq, state.message_idx or 1, parts, overlay, macros, slot_next, ai_name)
-        except OSError as exc:  # game or a scanner holds a file: wait a moment, try again
-            print(f"could not write the reply ({exc}), retrying ...", flush=True)
-            time.sleep(1.0)
-            continue
-        deadline = time.time() + 15
-        while time.time() < deadline:
-            time.sleep(0.5)
-            fresh = _safe_read_state()
-            if fresh is not None:
-                if fresh.ack_seq == state.message_seq:
-                    slots.reset_marker(root, state.message_idx or 1)  # silent again, so it cannot burn slots later
-                    return True
-                if fresh.message_seq > state.message_seq:
-                    slots.reset_marker(root, state.message_idx or 1)  # the addon drops this answer anyway: keep it quiet
-                    return True  # the player already wrote the next message: the answer is out, do not block the loop
-                slot_next = fresh.slot_next
-    slots.reset_marker(root, state.message_idx or 1)  # never confirmed: keep it from burning slots later
-    return False
+    text = reply or "..."
+    if overlay:  # the old pop-up window is gone: its lines are part of the answer now
+        lines = [_CODES.sub("", str(x)) for x in overlay.get("lines", []) if not str(x).startswith("[img")]
+        text += "\n" + _CODES.sub("", str(overlay.get("title", ""))) + "\n" + "\n".join(lines)
+    for m in macros:
+        cmd = f"/kkm {m['name']}~{m['body']}" + ("~char" if m.get("char") else "")
+        if vinput.available() and vinput.run("keys {Enter}" + cmd + "{Enter}"):
+            text += f"\n(macro '{m['name']}' created - find it in /macro)"
+        else:
+            text += f"\nMacro '{m['name']}': type  {cmd}"
+    _post("ai", claude.persona()[0] + ": " + text.strip())
 
 
 LOCK_PORT = 47831
@@ -135,11 +123,7 @@ def run(root: Path, poll: float = 0.6) -> None:
     if acquire_lock() is None:
         print("wowclaude is already running on this PC (close the other window first).", flush=True)
         return
-    try:
-        from . import chat_fake
-        chat_fake.start()
-    except Exception:  # noqa: BLE001 - the overlay is optional
-        pass
+    overlay_check = 0.0
     session = claude.Session()
     last_seq: int | None = None
     print(f"wowclaude is running (game folder: {root}). Press Ctrl+C to stop.", flush=True)
@@ -148,6 +132,9 @@ def run(root: Path, poll: float = 0.6) -> None:
             last_seq = None  # new game start: never answer an old message
             time.sleep(3)
             continue
+        if time.time() - overlay_check > 10:  # the chat overlay lives and dies with the bridge
+            overlay_check = time.time()
+            _start_overlay()
         state = _safe_read_state()
         if state is None:
             time.sleep(poll)
@@ -167,19 +154,14 @@ def run(root: Path, poll: float = 0.6) -> None:
             print(f"> {state.message.strip()}", flush=True)
             _post("user", "Du: " + state.message.strip())
             _post("think", "denkt ...")
-            slots.reset_marker(root, state.message_idx or 1)
             try:
                 cmd_reply = handle_command(state.message) if state.message.lstrip().startswith("!") else None
                 reply = cmd_reply if cmd_reply is not None else session.ask(question, config.load().get("model"))
             except Exception as exc:  # noqa: BLE001 - tell the player, keep running
                 reply = f"No answer from the AI: {exc}. No AI set up yet? Type /wac and press AI Setup."
             print(f"< {reply}", flush=True)
-            _post("ai", claude.persona()[0] + ": " + claude.extract_play(claude.extract_overlay(claude.extract_macros(reply)[0])[0])[0])
             try:
-                delivered = deliver(root, state, reply)
+                deliver(state, reply)
             except Exception as exc:  # noqa: BLE001 - report, keep running
                 print(f"delivery failed: {exc}", flush=True)
-                delivered = False
-            if not delivered:
-                print("no confirmation from the game (is the addon loaded? try /reload in the game)", flush=True)
         time.sleep(poll)

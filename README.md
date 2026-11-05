@@ -24,13 +24,13 @@ once, or any of the [other AIs](#other-ais) below.
 
 1. Download this repository (green **Code** button, *Download ZIP*) and unpack it.
 2. Double-click **`install.bat`**. It installs the program and puts the addon into your game folder (found
-   automatically; if not, it tells you what to do). Creating the reply slots takes a few seconds.
+   automatically; if not, it tells you what to do). The addon is just three small files.
 3. **Close the game completely and start it again** (new addons need a full restart, `/reload` is not enough).
 4. Double-click **`start.bat`** and keep that window open while you play.
 5. In the game click the **Claude** tab and write. No AI set up yet? Type `/wac` and press **AI Setup**.
 
 `py -3 -m wowclaude doctor` checks everything and says what is missing (game folder, display scale, browser, AI login,
-whether the strip is visible). `py -3 -m wowclaude uninstall` removes the addon and all reply slots again.
+whether the strip is visible). `py -3 -m wowclaude uninstall` removes the addon (and any old reply-slot addons) again.
 If `wowclaude` is not found, use `py -3 -m wowclaude ...`.
 
 ## In the game
@@ -132,3 +132,4 @@ MIT licensed.
 the AI directly. Click into it or press `Ctrl+Shift+Space` to write, `Enter` sends and gives the keyboard back to the
 game, `Esc` too. Drag the title to move it, the corner to resize it; it follows the game window and is hidden while the
 game is minimized. Answers can still open pages (`[[play URL]]`) and show window/macro blocks as text lines.
+

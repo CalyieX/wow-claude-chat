@@ -1,7 +1,7 @@
 -- KKMap (WoW AI Chat): a colour strip in the top-left corner that the wowclaude bridge reads from the screen.
 -- Format: 1 pixel per cell, 128 cells per row, 3 bytes (R,G,B) per cell, only as many rows as the data needs.
 -- Cells 0..7 are fixed calibration colours, then: 4 bytes length (LE), 4 bytes checksum, then UTF-8 text lines:
---   #ver|n  #screen|w|h  #msg|seq|slot|text  #ack|seq  #edit|0/1  #ctx|...  #img|n  #slot|n  name|type|text|x|y|w|h
+--   #ver|n  #screen|w|h  #msg|seq|1|text  #edit|0/1  #ctx|...  name|type|text|x|y|w|h
 -- The decoder (wowclaude/decode.py) finds the cell size itself. tests/ run this very file inside a fake WoW API.
 local CELL, COLS, ROWS = 1, 128, 40
 -- The button list is sent only with a question (so the AI can click in menus); /strip frames keeps it on permanently.
@@ -73,7 +73,6 @@ local function labelOf(f)
   return ""
 end
 
-KKImgNext = KKImgNext or 1
 KKSlotNext = KKSlotNext or 1
 
 local function ctxLine()
@@ -134,7 +133,7 @@ local function collect()
     f = EnumerateFrames(f)
   end
   table.sort(entries, function(a, b) return a.sort > b.sort end)
-  local lines = { "#ver|25", "#screen|" .. pw .. "|" .. ph, "#msg|" .. (KKMapState.seq or 0) .. "|" .. (KKMapState.idx or 0) .. "|" .. (KKMapState.out or ""), "#ack|" .. (KKMapState.ack or 0), "#edit|" .. ((ChatEdit_GetActiveWindow and ChatEdit_GetActiveWindow()) and 1 or 0), safeCtx(), "#img|" .. KKImgNext, "#slot|" .. KKSlotNext }
+  local lines = { "#ver|25", "#screen|" .. pw .. "|" .. ph, "#msg|" .. (KKMapState.seq or 0) .. "|" .. (KKMapState.idx or 0) .. "|" .. (KKMapState.out or ""), "#edit|" .. ((ChatEdit_GetActiveWindow and ChatEdit_GetActiveWindow()) and 1 or 0), safeCtx() }
   for i = 1, math.min(#entries, 300) do lines[#lines + 1] = entries[i].line end
   return table.concat(lines, "\n")
 end
@@ -161,12 +160,9 @@ local function render()
   for i = ci, total - 1 do if cells[i] then cells[i]:Hide() end end
 end
 
-KKMapState = KKMapState or { seq = 0, out = "", idx = 0, ack = 0 }
+KKMapState = KKMapState or { seq = 0, out = "", idx = 1 }
 KKMapDB.n = KKMapDB.n or 0
-local SIG = "Interface\\AddOns\\KKMap\\sig\\"
 local chatFrame
-local NSLOTS = 300  -- reply slots KKR001..KKR300 (keep in sync with SLOTS in slots.py)
-local nextSlot = 1
 
 -- Streifen nur bei Bedarf sichtbar (Antwort offen, Chatbox offen, kurz nach Zustellung) + dezente Leiste darunter.
 -- Die Leiste liegt NUR unter dem Streifen: Ursprung (0,0) und Zellen bleiben unberuehrt.
@@ -193,9 +189,9 @@ local function applyVisible()
   elseif not want and stripOn then stripOn = false; host:SetAlpha(0) end
 end
 
--- The name of the AI (set on the AI setup page) arrives with every answer and is the name of the chat tab.
+-- The name of the AI (set on the AI setup page, stored in Name.lua) is the name of the chat tab.
 local function aiName()
-  local n = KKMapDB and KKMapDB.aiName
+  local n = KKAiName  -- Name.lua, written by the AI setup page (applies after /reload)
   if type(n) == "string" and n ~= "" then return n end
   return "Claude"
 end
@@ -298,14 +294,8 @@ local function claudeFrame()
   lockAiTab(f)
   return f
 end
-local function say(text, r, g, b, nohist)
-  r, g, b = r or 0.6, g or 0.85, b or 1
-  if not (KKMapDB and KKMapDB.fakeChat) then claudeFrame():AddMessage(text, r, g, b) end  -- fake chat: the overlay paints it
-  if not nohist then  -- keep the conversation across /reload and restarts (last 100 lines)
-    KKMapDB.hist = KKMapDB.hist or {}
-    table.insert(KKMapDB.hist, { text, r, g, b })
-    while #KKMapDB.hist > 100 do table.remove(KKMapDB.hist, 1) end
-  end
+local function say(text, r, g, b)  -- notices only: the AI tab itself is painted by the overlay program
+  DEFAULT_CHAT_FRAME:AddMessage(text, r or 0.6, g or 0.85, b or 1)
 end
 
 -- cut to n bytes without splitting a UTF-8 character
@@ -325,34 +315,18 @@ local function utf8cut(s, n)
   return s:sub(1, n)
 end
 
-local function sendToClaude(msg, shown)
+local function sendToClaude(msg)
   msg = strtrim(msg or "")
-  if msg == "" then say(L("Benutzung: einfach schreiben (im Tab Claude) oder /c Frage", "Usage: just type in the Claude tab, or /c question")); return end
-  -- slots nearly used up: reload first (resets them), ask again afterwards. A menu command ("!browser") still finds
-  -- one of the last two slots for its short answer, so it never interrupts the player with a reload before they are gone
-  local limit = (msg:sub(1, 1) == "!") and (NSLOTS + 1) or (NSLOTS - 2)
-  if nextSlot >= limit and not InCombatLockdown() and ReloadUI then
-    KKMapDB.resend = { msg = msg, shown = shown }
-    ReloadUI()
-    return
-  end
+  if msg == "" then say(L("Benutzung: einfach schreiben (im KI-Tab) oder /c Frage", "Usage: just type in the AI tab, or /c question")); return end
   local clean = msg:gsub("[|\n\r]", " ")
   if #clean > 230 then
     clean = utf8cut(clean, 230)
-    say(L("Hinweis: Nachricht auf 230 Bytes gekuerzt.", "Note: message shortened to 230 bytes."), 1, 0.8, 0.4, true)
+    say(L("Hinweis: Nachricht auf 230 Bytes gekuerzt.", "Note: message shortened to 230 bytes."), 1, 0.8, 0.4)
   end
   local seq = time()
   if seq <= (KKMapState.seq or 0) then seq = KKMapState.seq + 1 end
-  KKMapDB.n = (KKMapDB.n or 0) + 1
-  local idx = ((KKMapDB.n - 1) % NSLOTS) + 1
-  KKMapState.seq, KKMapState.out, KKMapState.idx = seq, clean, idx
-  pending = { seq = seq, idx = idx, t0 = GetTime() }
-  if msg:sub(1, 1) == "!" then
-    say(shown or msg, 0.6, 0.6, 0.6)  -- menu command for the bridge: no AI involved, so no "thinking"
-  else
-    say(L("Du: ", "You: ") .. (shown or msg), 1, 1, 0.6)
-    say(L("KI denkt ...", "AI is thinking ..."), 0.6, 0.6, 0.6, true)
-  end
+  KKMapState.seq, KKMapState.out, KKMapState.idx = seq, clean, 1
+  pending = { seq = seq, t0 = GetTime() }
   stripOn = true; host:SetAlpha(1)
   render()
 end
@@ -362,11 +336,6 @@ SLASH_KKCHAT2 = "/claude"
 SlashCmdList["KKCHAT"] = function(m) sendToClaude(m) end
 
 -- Commands for the bridge ("!browser ..." is handled by wowclaude, not sent to the AI)
-SLASH_KKFAKE1 = "/fakechat"
-SlashCmdList["KKFAKE"] = function(msg)
-  KKMapDB.fakeChat = (msg or ""):lower():match("^%s*on") ~= nil
-  print("KKMap: fake chat " .. (KKMapDB.fakeChat and "ON (answers are painted by the overlay program)" or "OFF (answers appear in the tab)"))
-end
 SLASH_KKTAB1 = "/claudetab"
 SlashCmdList["KKTAB"] = function()  -- bring the AI tab to the front (used by tools that cannot click)
   local f = claudeFrame()
@@ -377,22 +346,12 @@ SlashCmdList["KKTAB"] = function()  -- bring the AI tab to the front (used by to
     if tab and FCF_Tab_OnClick then pcall(FCF_Tab_OnClick, tab, "LeftButton") end
   end
 end
-SLASH_KKCFG1 = "/kkcfg"  -- opens the chat settings for the AI tab (used to check the greyed-out look)
-SlashCmdList["KKCFG"] = function()
-  SlashCmdList["KKTAB"]()
-  C_Timer.After(0.4, function()
-    if ChatConfigFrame and ChatConfigFrame:IsShown() then HideUIPanel(ChatConfigFrame) end
-    if ShowUIPanel and ChatConfigFrame then ShowUIPanel(ChatConfigFrame) end
-  end)
-end
-SLASH_KKCHATWIN1 = "/chat"
-SlashCmdList["KKCHATWIN"] = function() sendToClaude("!chat", "Opening chat window ...") end
 SLASH_KKBROWSER1 = "/browser"
 SLASH_KKBROWSER2 = "/wb"
 SlashCmdList["KKBROWSER"] = function(msg)
   msg = strtrim(msg or "")
-  if msg == "off" or msg == "close" then sendToClaude("!browser off", "Closing browser ...")
-  else sendToClaude(("!browser " .. msg):gsub("%s+$", ""), "Opening browser ...") end
+  if msg == "off" or msg == "close" then sendToClaude("!browser off")
+  else sendToClaude((("!browser " .. msg):gsub("%s+$", ""))) end
 end
 
 -- Remember where a window was put (UIParent-relative, so it keeps its spot when the game window is resized)
@@ -411,7 +370,7 @@ local menu
 local function buildMenu()
   if menu then return menu end
   local f = CreateFrame("Frame", "KKMenuFrame", UIParent, "BackdropTemplate")
-  f:SetSize(220, 230)
+  f:SetSize(220, 170)
   f:SetPoint("CENTER", UIParent, "CENTER", -260, 60)
   f:SetFrameStrata("DIALOG")
   f:SetMovable(true); f:EnableMouse(true); f:RegisterForDrag("LeftButton")
@@ -440,8 +399,8 @@ local function buildMenu()
     y = y - 32
     return bt
   end
-  button("AI Setup", function() sendToClaude("!setup", "Opening AI setup ...") end)
-  button("Open Browser", function() sendToClaude("!browser", "Opening browser ...") end)
+  button("AI Setup", function() sendToClaude("!setup") end)
+  button("Open Browser", function() sendToClaude("!browser") end)
   local strip
   local function stripText() return KKMapDB.always and "Bridge: always visible" or "Bridge: only when needed" end
   strip = button(stripText(), function()
@@ -449,12 +408,9 @@ local function buildMenu()
     strip:SetText(stripText())
     if applyVisible then applyVisible() end
   end)
-  button("Show Overlay Window", function() if SlashCmdList["KKOVERLAY"] then SlashCmdList["KKOVERLAY"]("") end end)
   button("Help", function()
-    say("Type in the Claude tab to chat. /wac opens this menu, /browser [url] opens the browser, /browser off closes it. AI Setup picks the AI.")
-    say("Ask for macros, lists, or pages (the AI can create macros and open videos for you).")
-    say("/c text = ask  |  /wac = menu  |  /browser [url] or /wb = browser, /browser off = close  |  /ol = show overlay window")
-    say("/wm = macro  |  /strip always|auto|off = colour strip  |  /img, /hdr, /rc, /wacdbg = tools")
+    say("Type in the AI tab to chat. /wac opens this menu, /browser [url] opens the browser, /browser off closes it. AI Setup picks the AI.")
+    say("/c text = ask  |  /wm Name~Text = macro  |  /strip always|auto|off = colour strip")
   end)
   f:Hide()
   menu = f
@@ -465,166 +421,6 @@ SLASH_KKMENU2 = "/kkmenu"
 SlashCmdList["KKMENU"] = function()
   local f = buildMenu()
   if f:IsShown() then f:Hide() else f:Show() end
-end
-
--- Rueckweg ohne Tasten: stiller Sound-Marker meldet "Antwort liegt bereit", dann naechsten Slot laden
-local function loadAddon(name)
-  if C_AddOns and C_AddOns.LoadAddOn then return C_AddOns.LoadAddOn(name) end
-  return LoadAddOn(name)
-end
-
--- Overlay-Fenster: Claude kann dir hier etwas zeigen (Titel + Textzeilen, WoW-Farbcodes erlaubt)
-local overlay
-local function buildOverlay()
-  if overlay then return overlay end
-  local f = CreateFrame("Frame", "KKOverlayFrame", UIParent, "BackdropTemplate")
-  f:SetSize(460, 200)
-  f:SetPoint("CENTER", UIParent, "CENTER", 260, 60)
-  f:SetFrameStrata("DIALOG")
-  f:SetMovable(true); f:EnableMouse(true); f:RegisterForDrag("LeftButton")
-  f:SetScript("OnDragStart", f.StartMoving)
-  f:SetScript("OnDragStop", function(self) self:StopMovingOrSizing(); savePos(self, "overlay") end)
-  f:SetClampedToScreen(true)
-  restorePos(f, "overlay")
-  f:SetBackdrop({
-    bgFile = "Interface\\DialogFrame\\UI-DialogBox-Background",
-    edgeFile = "Interface\\DialogFrame\\UI-DialogBox-Border",
-    tile = true, tileSize = 32, edgeSize = 24,
-    insets = { left = 6, right = 6, top = 6, bottom = 6 },
-  })
-  f.title = f:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
-  f.title:SetPoint("TOPLEFT", 18, -16)
-  f.title:SetPoint("RIGHT", f, "RIGHT", -40, 0)
-  f.title:SetJustifyH("LEFT")
-  f.body = CreateFrame("Frame", nil, f)
-  f.body:SetPoint("TOPLEFT", f.title, "BOTTOMLEFT", 0, -10)
-  f.body:SetSize(424, 10)
-  f.rows = {}
-  local close = CreateFrame("Button", nil, f, "UIPanelCloseButton")
-  close:SetPoint("TOPRIGHT", -4, -4)
-  -- Groesse aendern: Griff unten rechts ziehen (klein bis gross)
-  f:SetResizable(true)
-  if f.SetResizeBounds then f:SetResizeBounds(180, 80, 900, 800)
-  elseif f.SetMinResize then f:SetMinResize(180, 80); if f.SetMaxResize then f:SetMaxResize(900, 800) end end
-  f:SetClipsChildren(true)
-  local grip = CreateFrame("Button", nil, f)
-  grip:SetSize(18, 18)
-  grip:SetPoint("BOTTOMRIGHT", -4, 4)
-  grip:SetNormalTexture("Interface\\ChatFrame\\UI-ChatIM-SizeGrabber-Up")
-  grip:SetHighlightTexture("Interface\\ChatFrame\\UI-ChatIM-SizeGrabber-Highlight")
-  grip:SetPushedTexture("Interface\\ChatFrame\\UI-ChatIM-SizeGrabber-Down")
-  grip:SetScript("OnMouseDown", function() f:StartSizing("BOTTOMRIGHT") end)
-  grip:SetScript("OnMouseUp", function() f:StopMovingOrSizing(); KKMapDB.overlaySize = { f:GetWidth(), f:GetHeight() }; savePos(f, "overlay") end)
-  f:SetScript("OnSizeChanged", function(self, w)
-    self.body:SetWidth(math.max(60, w - 36))
-    if self.data and self.renderRows then self.renderRows(self, self.data.lines or {}) end
-  end)
-  -- Doppelklick auf den Titel: einklappen / ausklappen
-  f:SetScript("OnMouseDown", function(self, button)
-    if button == "RightButton" then
-      self.collapsed = not self.collapsed
-      self.body:SetShown(not self.collapsed)
-      if self.collapsed then self.fullH = self:GetHeight(); self:SetHeight(48) else self:SetHeight(self.fullH or 200) end
-    end
-  end)
-  f:Hide()
-  overlay = f
-  return f
-end
-
--- Zeilen zeichnen: Text oder Balken  "[bar 0.75 00ff00] Beschriftung"  (0..1, Farbe RRGGBB)
-local function renderRows(f, lines)
-  local w = f.body:GetWidth()
-  local y = 0
-  for _, r in ipairs(f.rows) do r.fs:Hide(); r.bar:Hide(); if r.tex then r.tex:Hide() end end
-  for i, line in ipairs(lines) do
-    local r = f.rows[i]
-    if not r then
-      r = {}
-      r.fs = f.body:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-      local font, _, flags = r.fs:GetFont()
-      r.fs:SetFont(font, 15, flags)
-      r.fs:SetJustifyH("LEFT"); r.fs:SetJustifyV("TOP")
-      r.bar = CreateFrame("Frame", nil, f.body)
-      r.bar.bg = r.bar:CreateTexture(nil, "BACKGROUND")
-      r.bar.bg:SetAllPoints(); r.bar.bg:SetColorTexture(0.08, 0.08, 0.08, 0.9)
-      r.bar.fill = r.bar:CreateTexture(nil, "ARTWORK")
-      r.bar.fill:SetPoint("TOPLEFT"); r.bar.fill:SetPoint("BOTTOMLEFT")
-      r.bar.lbl = r.bar:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-      r.bar.lbl:SetPoint("LEFT", 6, 0)
-      f.rows[i] = r
-    end
-    local imgn = line:match("^%[img%s+(%d+)%]%s*$")
-    if imgn then
-      if not r.tex then r.tex = f.body:CreateTexture(nil, "ARTWORK") end
-      local side = math.min(w, 420)
-      r.tex:ClearAllPoints()
-      r.tex:SetPoint("TOPLEFT", f.body, "TOPLEFT", 0, -y)
-      r.tex:SetSize(side, side)
-      r.tex:SetTexture("Interface" .. string.char(92) .. "AddOns" .. string.char(92) .. "KKMap" .. string.char(92) .. "img" .. string.char(92) .. string.format("%03d", tonumber(imgn)) .. ".tga")
-      r.tex:Show()
-      if tonumber(imgn) >= KKImgNext then KKImgNext = tonumber(imgn) + 1 end
-      y = y + side + 4
-    end
-    local frac, hex, label = nil, nil, nil
-    if not imgn then frac, hex, label = line:match("^%[bar%s+([%d%.]+)%s+(%x%x%x%x%x%x)%]%s*(.*)$") end
-    if imgn then
-      -- Bildzeile ist schon gezeichnet
-    elseif frac then
-      local fr = math.min(1, math.max(0, tonumber(frac) or 0))
-      r.bar:ClearAllPoints()
-      r.bar:SetPoint("TOPLEFT", f.body, "TOPLEFT", 0, -y)
-      r.bar:SetSize(w, 18)
-      r.bar.fill:SetColorTexture(tonumber(hex:sub(1, 2), 16) / 255, tonumber(hex:sub(3, 4), 16) / 255, tonumber(hex:sub(5, 6), 16) / 255, 0.85)
-      r.bar.fill:SetWidth(math.max(1, w * fr))
-      r.bar.lbl:SetText(label)
-      r.bar:Show()
-      y = y + 22
-    else
-      r.fs:ClearAllPoints()
-      r.fs:SetPoint("TOPLEFT", f.body, "TOPLEFT", 0, -y)
-      r.fs:SetWidth(w)
-      r.fs:SetText(line)
-      r.fs:Show()
-      y = y + math.max(r.fs:GetStringHeight(), 16) + 2
-    end
-  end
-  f.body:SetHeight(math.max(y, 1))
-  f.contentH = y
-end
-
-function KKShowOverlay(data)
-  if not data then return end
-  local f = buildOverlay()
-  KKMapDB.lastOverlay = data
-  f.title:SetText(data.title or "Claude")
-  f.data = data
-  f.renderRows = renderRows
-  renderRows(f, data.lines or {})
-  f.collapsed = false
-  f.body:Show()
-  local size = KKMapDB.overlaySize
-  if size then
-    f:SetSize(size[1], size[2])
-  else
-    f:SetHeight(math.min(700, 60 + f.title:GetStringHeight() + (f.contentH or 40) + 20))
-  end
-  f:Show()
-  -- nicht dauerhaft: schliesst nach data.secs (Standard 45 s) von selbst; /kko oeffnet es wieder
-  f.token = (f.token or 0) + 1
-  local token = f.token
-  local function autoClose()
-    if f.token ~= token then return end
-    if MouseIsOver(f) then C_Timer.After(10, autoClose) else f:Hide() end
-  end
-  C_Timer.After(data.secs or 45, autoClose)
-end
-
-SLASH_KKOVERLAY1 = "/ol"
-SLASH_KKOVERLAY2 = "/kko"
-SlashCmdList["KKOVERLAY"] = function()
-  local f = buildOverlay()
-  if f:IsShown() then f:Hide() elseif KKMapDB.lastOverlay then KKShowOverlay(KKMapDB.lastOverlay) else print(L("Kein Overlay vorhanden.", "No overlay yet.")) end
 end
 
 -- Create or update a macro (name <= 16 chars, body <= 255 chars) and put it on the cursor.
@@ -647,61 +443,14 @@ local function createMacro(name, body, perChar)
   return true
 end
 
-local misses = 0   -- loads of the marker's slot that produced nothing (slot not written yet): back off instead of burning slots
-local function deliver()
-  local name = string.format("KKR%03d", nextSlot)
-  KKReplyData = nil
-  loadAddon(name)
-  local d = KKReplyData
-  if d == nil then  -- nothing in that slot: keep the number, try again later (0.5 s, 1 s, 2 s, ... max 4 s)
-    misses = misses + 1
-    return
-  end
-  misses = 0
-  nextSlot = nextSlot + 1
-  KKSlotNext = nextSlot
-  if d and pending and d.seq == pending.seq then
-    if type(d.name) == "string" and d.name ~= "" and d.name ~= aiName() then  -- renamed on the setup page
-      local old = aiName()
-      KKMapDB.aiName = d.name
-      local cf = claudeFrame()
-      if cf and GetChatWindowInfo then
-        for i = 1, NUM_CHAT_WINDOWS do
-          if _G["ChatFrame" .. i] == cf and GetChatWindowInfo(i) == old then renameTab(cf, d.name) end
-        end
-      end
-    end
-    for _, part in ipairs(d.parts or {}) do say(part) end
-    if d.overlay then KKShowOverlay(d.overlay) end
-    for _, m in ipairs(d.macros or {}) do createMacro(m.name, m.body, m.char) end
-    KKMapState.ack = d.seq
-    pending = nil
-    holdUntil = GetTime() + 4
-    if nextSlot >= NSLOTS - 3 and not InCombatLockdown() and C_Timer and C_Timer.After then
-      C_Timer.After(4, function() if not pending and ReloadUI then ReloadUI() end end)
-    end
-    if nextSlot > NSLOTS - 10 then
-      say("KKMap: " .. math.max(0, NSLOTS + 1 - nextSlot) .. L(" Antworten frei, dann automatischer Reload.", " replies left, then an automatic reload."), 1, 0.8, 0.4)
-    end
-  end
-end
-
-local pollAcc = 0
-local function poll(dt)
-  if not pending then
-    -- reply slots are used up: reload while idle (out of combat), otherwise the next answer could not be delivered
-    if nextSlot >= NSLOTS - 5 and not InCombatLockdown() and ReloadUI then ReloadUI() end
-    return
-  end
-  pollAcc = pollAcc + dt
-  if pollAcc < math.min(4, 0.5 * 2 ^ math.min(misses, 3)) then return end
-  pollAcc = 0
-  local willPlay = PlaySoundFile(SIG .. string.format("%03d", pending.idx) .. ".wav", "Master")
-  if willPlay then
-    deliver()
-  end
-  if pending and GetTime() - pending.t0 > 120 then  -- also when the marker plays but no slot could be loaded: never "think" forever
-    say(L(aiName() .. " antwortet nicht (Zeitueberschreitung). Laeuft die Bruecke?", aiName() .. " did not answer (timeout). Is the bridge running?"), 1, 0.4, 0.4)
+-- The answer comes back through the overlay program, not through the game: the question only has to stay in the strip
+-- long enough for the bridge to read it, and a silent bridge is reported after a while.
+local function poll()
+  if not pending then return end
+  local age = GetTime() - pending.t0
+  if age > 8 and not pending.read then pending.read = true; holdUntil = GetTime() + 2 end
+  if age > 40 then
+    DEFAULT_CHAT_FRAME:AddMessage(L(aiName() .. " antwortet nicht. Laeuft die Bruecke?", aiName() .. " did not answer. Is the bridge running?"), 1, 0.4, 0.4)
     pending = nil
   end
 end
@@ -739,7 +488,6 @@ local function hookEditBoxes()
       local orig = eb:GetScript("OnEnterPressed")
       eb:SetScript("OnEnterPressed", function(self, ...)
         local text = self:GetText() or ""
-        if KKMapDB.dbg then say("KKDBG hook " .. tostring(self:GetName()) .. " cf=" .. tostring(self.chatFrame and self.chatFrame:GetName()) .. " claude=" .. tostring(claudeFrame():GetName()) .. " text=" .. text) end
         if isClaudeBox(self) and text ~= "" and text:sub(1, 1) ~= "/" then
           local ok, err = pcall(sendToClaude, text)
           if not ok then say("KKMap Fehler: " .. tostring(err), 1, 0.4, 0.4) end
@@ -804,56 +552,16 @@ if C_Timer and C_Timer.NewTicker then
   end)
 end
 
-SLASH_KKIMG1 = "/img"
-SLASH_KKIMG2 = "/kkimg"
-SlashCmdList["KKIMG"] = function(msg)
-  local n = tonumber(msg) or 1
-  if not KKImgFrame then
-    local f = CreateFrame("Frame", "KKImgFrame", UIParent, "BackdropTemplate")
-    f:SetSize(280, 280); f:SetPoint("CENTER"); f:SetFrameStrata("DIALOG")
-    f:SetMovable(true); f:EnableMouse(true); f:RegisterForDrag("LeftButton")
-    f:SetScript("OnDragStart", f.StartMoving); f:SetScript("OnDragStop", f.StopMovingOrSizing)
-    f.tex = f:CreateTexture(nil, "ARTWORK"); f.tex:SetPoint("CENTER"); f.tex:SetSize(256, 256)
-    local c = CreateFrame("Button", nil, f, "UIPanelCloseButton"); c:SetPoint("TOPRIGHT", 0, 0)
-  end
-  KKImgFrame.tex:SetTexture("Interface" .. string.char(92) .. "AddOns" .. string.char(92) .. "KKMap" .. string.char(92) .. "img" .. string.char(92) .. string.format("%03d", n) .. ".tga")
-  KKImgFrame:Show()
-  say("KKMap: image " .. n)
-end
-
-SLASH_KKHDR1 = "/hdr"
-SLASH_KKHDR2 = "/kkhdr"
-SlashCmdList["KKHDR"] = function()
-  local eb = _G["ChatFrame4EditBox"]
-  if not eb then say("kein ChatFrame4EditBox") return end
-  say("hdr global=" .. tostring(_G["ChatFrame4EditBoxHeader"] ~= nil) .. " .header=" .. tostring(eb.header ~= nil) .. " .prompt=" .. tostring(eb.prompt ~= nil))
-  for i, r in ipairs({ eb:GetRegions() }) do
-    say(i .. " " .. tostring(r:GetObjectType()) .. " " .. tostring(r.GetName and r:GetName()) .. " '" .. tostring(r.GetText and r:GetText()) .. "'")
-  end
-  say("UpdateHeader=" .. tostring(ChatEdit_UpdateHeader ~= nil) .. " Activate=" .. tostring(ChatEdit_ActivateChat ~= nil) .. " mixin=" .. tostring(ChatFrameEditBoxMixin ~= nil))
-end
-
--- Notweg: Antwort per /kkc (getippt von der Bruecke) wirkt wie eine zugestellte Antwort
-SLASH_KKREPLY1 = "/rc"
-SLASH_KKREPLY2 = "/kkc"
-SlashCmdList["KKREPLY"] = function(msg)
-  say(msg)
-  if pending then KKMapState.ack = pending.seq; pending = nil end
-end
-
 local acc = 0
 host:SetScript("OnUpdate", function(_, dt)
   acc = acc + dt
-  poll(dt)
+  poll()
   if acc >= 0.4 then acc = 0; if not KKMapDB.off then pcall(applyVisible); if stripOn then render() end end end
 end)
 
 SLASH_KKMAP1 = "/strip"
 SLASH_KKMAP2 = "/kkmap"
 -- /kkm Name~Text mit \n als Zeilenumbruch  (optional  Name~Text~char  = nur dieser Charakter)
-SLASH_KKDBG1 = "/wacdbg"
-SLASH_KKDBG2 = "/kkdbg"
-SlashCmdList["KKDBG"] = function() KKMapDB.dbg = not KKMapDB.dbg; say("KKMap dbg " .. tostring(KKMapDB.dbg)) end
 SLASH_KKMACRO1 = "/wm"
 SLASH_KKMACRO2 = "/kkm"
 SlashCmdList["KKMACRO"] = function(msg)
@@ -862,6 +570,8 @@ SlashCmdList["KKMACRO"] = function(msg)
   createMacro(name, body, scope == "char")
 end
 
+SLASH_KKMAP1 = "/strip"
+SLASH_KKMAP2 = "/kkmap"
 SlashCmdList["KKMAP"] = function(msg)
   if msg == "frames" then KKMapDB.frames = not KKMapDB.frames; print("KKMap: button list " .. (KKMapDB.frames and "on" or "off")) return end
   if msg == "always" then KKMapDB.always = true; KKMapDB.off = false; host:Show(); host:SetAlpha(1); stripOn = true; render(); print("KKMap: strip always visible") return end
@@ -873,20 +583,7 @@ end
 local ev = CreateFrame("Frame")
 ev:RegisterEvent("PLAYER_LOGIN")
 ev:SetScript("OnEvent", function()
-  KKMapDB.dbg = false
-  local cf = claudeFrame()
-  for _, h in ipairs(KKMapDB.fakeChat and {} or KKMapDB.hist or {}) do cf:AddMessage(h[1], h[2], h[3], h[4]) end
+  claudeFrame()  -- creates / finds the AI tab and puts the corner marks on it
   hookEditBoxes()
   if KKMapDB.off then host:Hide() else render() end
-  local r = KKMapDB.resend
-  KKMapDB.resend = nil
-  if r and C_Timer and C_Timer.After then C_Timer.After(3, function() sendToClaude(r.msg, r.shown) end) end
 end)
-
--- /vohide: hide the stray AI_VoiceOver window (its transparent frame shows only a scroll bar and a resize corner)
-SLASH_KKVOHIDE1 = "/vohide"
-SlashCmdList["KKVOHIDE"] = function()
-  if Addon and Addon.db and Addon.db.profile and Addon.db.profile.SoundQueueUI then Addon.db.profile.SoundQueueUI.HideFrame = true end
-  if VoiceOverFrame then VoiceOverFrame:Hide() end
-  say("VoiceOver window hidden (voices still play).")
-end

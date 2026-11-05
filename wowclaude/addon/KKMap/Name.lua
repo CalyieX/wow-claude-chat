@@ -1,0 +1,1 @@
+KKAiName = "Claude"

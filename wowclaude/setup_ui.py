@@ -34,7 +34,7 @@ small{color:#8c7b4d;display:block;margin-top:2px}
 <h1>AI setup</h1>
 <div id="found"></div>
 <label>Name of the AI (shown as the chat tab and before every answer)</label><input id="ainame" maxlength="20" placeholder="Claude">
-<small>The tab is renamed with the next answer (or after /reload).</small>
+<small>The tab is renamed after /reload (or the next game start).</small>
 <details id="adv"><summary>Choose by hand / more options</summary>
 <label>Backend</label><select id="backend"></select>
 <small id="hint"></small>
@@ -121,6 +121,13 @@ def apply(data: dict) -> dict:
     if key:
         cfg["api_key"] = key
     config.save(cfg)
+    try:  # the tab name lives in the addon's Name.lua (applies after /reload)
+        from . import installer
+        root = config.client_root()
+        if root:
+            installer.write_name(root, name)
+    except OSError:
+        pass
     persona = str(data.get("persona", "")).strip("\n")
     config.HOME.mkdir(parents=True, exist_ok=True)
     if persona and not name:  # no name set: persona() reads the first line as the name, so keep "Claude" there

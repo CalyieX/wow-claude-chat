@@ -41,9 +41,12 @@ def test_tiny_frame_rejected():
 def test_render_size_wrap_and_speed():
     entries = [("user", "Du: hallo"), ("ai", "WoW AI: " + "wort " * 80)]
     cm.default_font()
-    t = time.perf_counter()
-    img = cm.render(entries, (400, 220))
-    assert (time.perf_counter() - t) < 0.02
+    best = 1.0
+    for _ in range(5):  # best of five: a busy machine must not make the test flaky
+        t = time.perf_counter()
+        img = cm.render(entries, (400, 220))
+        best = min(best, time.perf_counter() - t)
+    assert best < 0.02
     assert img.size == (400, 220)
     assert img.getbbox() and img.getpixel((0, 0)) == (12, 12, 16, 255)
 

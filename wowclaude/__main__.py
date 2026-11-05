@@ -16,14 +16,14 @@ def _root(args):
 
 
 def cmd_setup(args) -> int:
-    from . import claude, slots
+    from . import claude, installer
     root = _root(args)
     print(f"Game folder: {root}")
-    res = slots.install(root)
+    res = installer.install(root, config.load().get("name", ""))
     cfg = config.load()
     cfg["wow_root"] = str(root)
     config.save(cfg)
-    print(f"Addon installed ({res['slots_created']} reply slots created).")
+    print("Addon installed." + (f" Removed {res['old_slots_removed']} old reply-slot addons." if res["old_slots_removed"] else ""))
     ok, msg = claude.check_login()
     print(("OK: " if ok else "WARNING: ") + msg)
     print("\nNext steps:\n"
@@ -36,9 +36,9 @@ def cmd_setup(args) -> int:
 
 
 def cmd_uninstall(args) -> int:
-    from . import slots
+    from . import installer
     root = _root(args)
-    res = slots.uninstall(root)
+    res = installer.uninstall(root)
     print(f"Removed {res['folders_removed']} addon folders from {root} ({res['character_files_cleaned']} character files cleaned).")
     print("Your settings in ~/.wowclaude are kept; delete that folder too if you want everything gone.")
     return 0
@@ -100,7 +100,7 @@ def cmd_doctor(args) -> int:
                   "`/strip always`, run this again, and if it is still not visible check that the game is in windowed "
                   "or borderless mode and the addon is enabled.")
         else:
-            print("strip         : OK, addon version", st.addon_version, "- next reply slot", st.slot_next)
+            print("strip         : OK, addon version", st.addon_version)
             sample = config.HOME / "strip-sample.png"
             img.save(sample)  # attach this to a bug report: it shows exactly what the program sees
             print("strip sample  :", sample)
@@ -129,7 +129,7 @@ def main(argv=None) -> int:
     for name, fn, help_ in (("setup", cmd_setup, "install the addon into the game folder"),
                             ("run", cmd_run, "start the bridge (keep it running while you play)"),
                             ("doctor", cmd_doctor, "check that everything is in place"),
-                            ("uninstall", cmd_uninstall, "remove the addon and all reply slots from the game folder")):
+                            ("uninstall", cmd_uninstall, "remove the addon from the game folder")):
         p = sub.add_parser(name, help=help_)
         p.add_argument("--root", help="game folder (the one containing Wow.exe), only if it is not found automatically")
         if name == "doctor":
@@ -145,8 +145,6 @@ def main(argv=None) -> int:
     po.add_argument("--click-through", action="store_true", help="mouse clicks go to the game")
     po.set_defaults(fn=lambda a: __import__("wowclaude.overlay", fromlist=["run"]).run(
         a.url, a.corner, a.size, a.opacity, a.click_through))
-    pch = sub.add_parser("chat", help="open the chat window over the game (talks to the AI directly, no reload needed)")
-    pch.set_defaults(fn=lambda a: __import__("wowclaude.chat_overlay", fromlist=["run"]).run())
     pfk = sub.add_parser("fake", help="paint the conversation over the empty chat tab (needs the corner marks from the addon)")
     pfk.set_defaults(fn=lambda a: __import__("wowclaude.chat_fake", fromlist=["run"]).run())
     args = ap.parse_args(argv)

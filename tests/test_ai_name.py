@@ -1,7 +1,7 @@
 """The AI can be given a name on the setup page: it is the chat tab, the prefix of every answer and part of the prompt."""
 from pathlib import Path
 
-from wowclaude import claude, config, decode, setup_ui, slots
+from wowclaude import claude, config, decode, setup_ui
 
 
 def _isolated(tmp_path, monkeypatch):
@@ -18,8 +18,6 @@ def test_ai_name_is_used_in_prompt_prefix_and_reply_file(tmp_path, monkeypatch):
     name, system = claude.persona()
     assert name.startswith("Gorel") and "|" not in name and len(name) <= 20 and name == claude.clean_name(name)
     assert f"Your name is {name}" in system and "Be brief." in system
-    assert f'name = "{name}"' in slots.reply_lua(1, ["x"], None, None, name)
-    assert "name =" not in slots.reply_lua(1, ["x"])  # no name: nothing to rename
     setup_ui.apply({"backend": "claude", "name": "", "persona": ""})
     assert claude.persona()[0] == "Claude" and "name" not in config.load()
 
@@ -30,59 +28,6 @@ def test_old_persona_file_first_line_still_works_as_the_name(tmp_path, monkeypat
     assert claude.persona()[0] == "Gorel"
     st = setup_ui._state()
     assert st["name"] == "Gorel" and st["persona"] == "Be brief."
-
-
-def test_lua_addon_takes_over_the_ai_name_from_the_reply(tmp_path):
-    import sys
-    import pytest
-    pytest.importorskip("lupa")
-    sys.path.insert(0, str(Path(__file__).parent))
-    import lua_harness as h
-    lua = h.run_addon(Path(slots.ADDON_SRC) / "KKMap.lua")
-    addons = tmp_path / "Interface" / "AddOns"
-    (addons / "KKMap" / "sig").mkdir(parents=True)
-    for i in range(1, 8):
-        (addons / f"KKR{i:03d}").mkdir()
-    lua.eval("function() SlashCmdList['KKCHAT']('Hallo') end")()
-    st = decode.decode(h.strip_image(lua))
-    marker = addons / "KKMap" / "sig" / f"{st.message_idx:03d}.wav"
-
-    def play(path):
-        return marker.exists() and marker.stat().st_size > 0 and str(path).endswith(marker.name)
-
-    def load(name):
-        f = addons / name / "Reply.lua"
-        if not f.exists():
-            return False
-        lua.execute(f.read_text(encoding="utf-8"))
-        return True
-    lua.globals().__play, lua.globals().__load = play, load
-    assert lua.eval("function() return KKMapDB.aiName end")() is None  # not renamed yet
-    slots.reset_marker(tmp_path, st.message_idx)
-    slots.publish(tmp_path, st.message_seq, st.message_idx, ["Gorel: Hi!"], None, None, 1, "Gorel")
-    lua.eval("function() __update(1.0) end")()
-    assert lua.eval("function() return KKMapDB.aiName end")() == "Gorel"
-
-
-def test_lua_menu_command_does_not_reload_while_a_slot_is_left():
-    import sys
-    import pytest
-    pytest.importorskip("lupa")
-    sys.path.insert(0, str(Path(__file__).parent))
-    import lua_harness as h
-    lua = h.run_addon(Path(slots.ADDON_SRC) / "KKMap.lua")
-    lua.execute("reloads = 0; function ReloadUI() reloads = reloads + 1 end; timers = {}; "
-                "C_Timer = { After = function(s, fn) table.insert(timers, fn) end }")
-    lua.globals().__play = lambda path: True
-    lua.execute("""__load = function(name) KKReplyData = { seq = KKMapState.seq, parts = { "ok" } }; return true end""")
-    asked = 0
-    for _ in range(slots.SLOTS + 2):
-        lua.eval("function() SlashCmdList['KKBROWSER']('') end")()
-        if lua.eval("reloads") > 0:
-            break
-        asked += 1
-        lua.eval("function() __update(8.0) end")()
-    assert asked == slots.SLOTS  # a normal question reloads two slots earlier; a menu command uses every slot first
 
 
 def test_first_message_after_a_game_start_is_not_swallowed():
