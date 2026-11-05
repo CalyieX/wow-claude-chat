@@ -927,3 +927,33 @@ def test_lua_restricted_frame_does_not_break_the_scan():
     assert st is not None and st.message == "was ist?"
     shown = [str(x) for x in lua.eval("DEFAULT_CHAT_FRAME.__log").values()]
     assert not any("Fehler" in x or "restricted" in x for x in shown)
+
+
+def test_lua_reloads_when_slots_are_used_up_and_idle():
+    h, lua = _lua_addon()
+    lua.execute("reloads = 0; function ReloadUI() reloads = reloads + 1 end")
+    lua.globals().__play = lambda path: True
+    lua.execute("""__load = function(name) KKReplyData = { seq = KKMapState.seq, parts = { "ok" } }; return true end""")
+    for _ in range(200):
+        lua.eval("function() SlashCmdList['KKCHAT']('x') end")()
+        lua.eval("function() __update(8.0) end")()                 # delivers the answer
+        if lua.eval("reloads") > 0:
+            break
+        lua.eval("function() __update(8.0) end")()                 # idle tick
+        if lua.eval("reloads") > 0:
+            break
+    assert lua.eval("reloads") >= 1
+    assert decode.decode(h.strip_image(lua)).slot_next >= slots.SLOTS - 5  # reloaded before the counter ran out
+    assert decode.decode(h.strip_image(lua)).slot_next <= slots.SLOTS + 1
+
+
+def test_slot_count_matches_addon_and_install_cleans_old_slots(tmp_path):
+    import re as _re
+    lua_src = (Path(__file__).parent.parent / "wowclaude" / "addon" / "KKMap" / "KKMap.lua").read_text(encoding="utf-8")
+    assert int(_re.search(r"local NSLOTS = (\d+)", lua_src).group(1)) == slots.SLOTS
+    addons = tmp_path / "Interface" / "AddOns"
+    for i in (1, 41, 150, 200):
+        (addons / f"KKR{i:03d}").mkdir(parents=True)
+    slots.install(tmp_path)
+    left = sorted(p.name for p in addons.glob("KKR*"))
+    assert len(left) == slots.SLOTS and "KKR041" not in left and "KKR200" not in left and "KKR001" in left

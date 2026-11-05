@@ -157,6 +157,7 @@ KKMapState = KKMapState or { seq = 0, out = "", idx = 0, ack = 0 }
 KKMapDB.n = KKMapDB.n or 0
 local SIG = "Interface\\AddOns\\KKMap\\sig\\"
 local chatFrame
+local NSLOTS = 40  -- reply slots KKR001..KKR040 (keep in sync with SLOTS in slots.py)
 local nextSlot = 1
 
 -- Streifen nur bei Bedarf sichtbar (Antwort offen, Chatbox offen, kurz nach Zustellung) + dezente Leiste darunter.
@@ -233,7 +234,7 @@ local function sendToClaude(msg, shown)
   local seq = time()
   if seq <= (KKMapState.seq or 0) then seq = KKMapState.seq + 1 end
   KKMapDB.n = (KKMapDB.n or 0) + 1
-  local idx = ((KKMapDB.n - 1) % 200) + 1
+  local idx = ((KKMapDB.n - 1) % NSLOTS) + 1
   KKMapState.seq, KKMapState.out, KKMapState.idx = seq, clean, idx
   pending = { seq = seq, idx = idx, t0 = GetTime() }
   if msg:sub(1, 1) == "!" then
@@ -531,18 +532,22 @@ local function deliver()
     KKMapState.ack = d.seq
     pending = nil
     holdUntil = GetTime() + 4
-    if nextSlot >= 197 and not InCombatLockdown() and C_Timer and C_Timer.After then
+    if nextSlot >= NSLOTS - 3 and not InCombatLockdown() and C_Timer and C_Timer.After then
       C_Timer.After(4, function() if not pending and ReloadUI then ReloadUI() end end)
     end
-    if nextSlot > 190 then
-      say("KKMap: " .. math.max(0, 201 - nextSlot) .. L(" Antworten frei, dann automatischer Reload.", " replies left, then an automatic reload."), 1, 0.8, 0.4)
+    if nextSlot > NSLOTS - 10 then
+      say("KKMap: " .. math.max(0, NSLOTS + 1 - nextSlot) .. L(" Antworten frei, dann automatischer Reload.", " replies left, then an automatic reload."), 1, 0.8, 0.4)
     end
   end
 end
 
 local pollAcc = 0
 local function poll(dt)
-  if not pending then return end
+  if not pending then
+    -- reply slots are used up: reload while idle (out of combat), otherwise the next answer could not be delivered
+    if nextSlot >= NSLOTS - 5 and not InCombatLockdown() and ReloadUI then ReloadUI() end
+    return
+  end
   pollAcc = pollAcc + dt
   if pollAcc < math.min(4, 0.5 * 2 ^ math.min(misses, 3)) then return end
   pollAcc = 0
@@ -728,3 +733,11 @@ ev:SetScript("OnEvent", function()
   hookEditBoxes()
   if KKMapDB.off then host:Hide() else render() end
 end)
+
+-- /vohide: hide the stray AI_VoiceOver window (its transparent frame shows only a scroll bar and a resize corner)
+SLASH_KKVOHIDE1 = "/vohide"
+SlashCmdList["KKVOHIDE"] = function()
+  if Addon and Addon.db and Addon.db.profile and Addon.db.profile.SoundQueueUI then Addon.db.profile.SoundQueueUI.HideFrame = true end
+  if VoiceOverFrame then VoiceOverFrame:Hide() end
+  say("VoiceOver window hidden (voices still play).")
+end

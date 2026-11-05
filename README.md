@@ -24,7 +24,7 @@ once, or any of the [other AIs](#other-ais) below.
 
 1. Download this repository (green **Code** button, *Download ZIP*) and unpack it.
 2. Double-click **`install.bat`**. It installs the program and puts the addon into your game folder (found
-   automatically; if not, it tells you what to do). Creating the 200 reply slots can take up to a minute.
+   automatically; if not, it tells you what to do). Creating the reply slots takes a few seconds.
 3. **Close the game completely and start it again** (new addons need a full restart, `/reload` is not enough).
 4. Double-click **`start.bat`** and keep that window open while you play.
 5. In the game click the **Claude** tab and write. No AI set up yet? Type `/wac` and press **AI Setup**.
@@ -44,7 +44,7 @@ If `wowclaude` is not found, use `py -3 -m wowclaude ...`.
   switches the addon off.
 - The conversation in the Claude tab survives `/reload` and restarts (last 100 lines). Windows you moved (menu, answer
   window) stay where you put them.
-- After about 200 answers the addon reloads the interface by itself (a short hiccup) to reset its answer slots. Don't
+- After about 35 answers the addon reloads the interface by itself (a short hiccup) to reset its answer slots. Don't
   `/reload` while the AI is still thinking, the pending question is lost.
 
 ## Browser window

@@ -355,10 +355,7 @@ def run(url: str | None = None, corner: str | None = None, size: str | None = No
         print("No Chrome/Edge/Brave found.")
         return 2
     saved = load_state()
-    last = saved.get("url") or ""
-    if last.startswith(("http://127.0.0.1", "http://localhost")):  # the AI setup page only lives while the bridge runs
-        last = ""
-    url = url or last or "https://www.google.com"
+    url = url or "https://www.google.com"  # no address given (/browser, button): always start at the search engine
     g0 = game_rect()
     rel = saved.get("rel")
     if size:
@@ -945,11 +942,18 @@ def frame_loop(hwnd: int, x: int, y: int, w: int, h: int, opacity: int, click_th
             ghost = S["ghost"]
             pin(hwnd, S["x"], S["y"], S["w"], S["h"], 35 if ghost else opacity, click_through or ghost)
             user32.SetWindowPos(ctypes.c_void_p(top_hwnd), wintypes.HWND(HWND_TOPMOST), 0, 0, 0, 0, 0x13)
+            if ghost:  # ghost mode is click-through: a lone address bar floating over the game would only be a stray dark box
+                if bar.state() != "withdrawn":
+                    bar.withdraw()
+            else:
+                if bar.state() == "withdrawn":
+                    bar.deiconify()
+                    place_bar()
             bar.attributes("-topmost", True)
             bar.lift()
             if not frame_ok():  # frame lost its place (or its picture): redo the whole layout
                 layout()
-            if not bar_ok():  # the bar drifted away from the frame: put it back
+            if not ghost and not bar_ok():  # the bar drifted away from the frame: put it back
                 place_bar()
             n = cache.get("n", 0) + 1
             cache["n"] = n
@@ -966,7 +970,7 @@ def frame_loop(hwnd: int, x: int, y: int, w: int, h: int, opacity: int, click_th
 
 
 def play(url: str, size: str | None = None) -> str:
-    """Called by the bridge for [[play URL]] / "/browser": start the overlay in the background ("" = last page),
+    """Called by the bridge for [[play URL]] / "/browser": start the overlay in the background ("" = search engine),
     or close it for ``off``. Returns "" when it started, else a short reason (also written to overlay.log)."""
     if url == "off":
         _kill_profile_browsers(config.HOME / "overlay-profile")

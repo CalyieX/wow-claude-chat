@@ -16,7 +16,8 @@ import time
 import wave
 from pathlib import Path
 
-SLOTS = 200
+SLOTS = 40   # reply slots; the addon reloads the UI by itself when they are used up (keep in sync with NSLOTS in KKMap.lua)
+OLD_MAX = 200  # earlier versions made this many; the extra ones are removed on install
 IMAGE_SLOTS = 24
 IMAGE_SIZE = 512
 ADDON_SRC = Path(__file__).parent / "addon" / "KKMap"
@@ -94,6 +95,12 @@ def install(root: Path) -> dict:
             marker.write_bytes(b"")
         return made
 
+    for i in range(SLOTS + 1, OLD_MAX + 1):  # leftovers of the old 200-slot layout clutter the game's addon list
+        shutil.rmtree(addons / f"KKR{i:03d}", ignore_errors=True)
+        try:
+            (sig / f"{i:03d}.wav").unlink()
+        except OSError:
+            pass
     from concurrent.futures import ThreadPoolExecutor
     with ThreadPoolExecutor(max_workers=16) as pool:  # 600 small files: much faster in parallel next to a scanner
         created = sum(pool.map(make_slot, range(1, SLOTS + 1)))
@@ -104,8 +111,9 @@ def install(root: Path) -> dict:
         lines = p.read_text(encoding="utf-8", errors="replace").splitlines()
         have = {ln.split(":")[0].strip() for ln in lines}
         add = [f"KKR{i:03d}: enabled" for i in range(1, SLOTS + 1) if f"KKR{i:03d}" not in have]
-        if add:
-            p.write_text("\n".join(lines + add) + "\n", encoding="utf-8")
+        keep = [ln for ln in lines if not (re.match(r"\s*KKR\d{3}\s*:", ln) and int(re.search(r"\d{3}", ln).group()) > SLOTS)]
+        if add or len(keep) != len(lines):
+            p.write_text("\n".join(keep + add) + "\n", encoding="utf-8")
             enabled += 1
     return {"slots_created": created, "characters_enabled": enabled}
 
@@ -123,7 +131,7 @@ def uninstall(root: Path) -> dict:
     """Remove the addon, all reply slots and their AddOns.txt entries from a game folder."""
     addons = _addons(root)
     removed = 0
-    for folder in [addons / "KKMap"] + [addons / f"KKR{i:03d}" for i in range(1, SLOTS + 1)]:
+    for folder in [addons / "KKMap"] + [addons / f"KKR{i:03d}" for i in range(1, OLD_MAX + 1)]:
         if folder.is_dir():
             shutil.rmtree(folder, ignore_errors=True)
             removed += 1

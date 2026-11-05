@@ -138,7 +138,7 @@ def main(argv=None) -> int:
     pc = sub.add_parser("config", help="open the AI setup page (backend, model, key, persona) in the WoW browser window")
     pc.set_defaults(fn=lambda a: __import__("wowclaude.setup_ui", fromlist=["serve"]).serve())
     po = sub.add_parser("overlay", help="show a web page (YouTube, Netflix, ...) in an always-on-top window over the game")
-    po.add_argument("url", nargs="?", default=None, help="page to open (default: the last one, else Google)")
+    po.add_argument("url", nargs="?", default=None, help="page to open (default: Google)")
     po.add_argument("--corner", choices=["tl", "tr", "bl", "br"], default=None, help="start corner (default: remembered position)")
     po.add_argument("--size", default=None, help="WIDTHxHEIGHT (default: remembered size)")
     po.add_argument("--opacity", type=int, default=100, help="10-100")
