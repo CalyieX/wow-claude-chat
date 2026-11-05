@@ -377,7 +377,8 @@ def test_client_detection_accepts_classic_exe(tmp_path):
     assert config._is_client(tmp_path)
 
 
-def test_uninstall_removes_addon_slots_and_entries(tmp_path):
+def test_uninstall_removes_addon_slots_and_entries(tmp_path, monkeypatch):
+    monkeypatch.setattr(slots, "SLOTS", 10)  # same logic, 20x faster
     root = tmp_path
     (root / "Interface" / "AddOns").mkdir(parents=True)
     wtf = root / "WTF" / "Account" / "A" / "R" / "C"
@@ -411,7 +412,7 @@ def test_session_timeout_is_reported_and_session_renewed(tmp_path, monkeypatch):
         assert False, "should raise"
     except RuntimeError as exc:
         assert "did not answer" in str(exc)
-    assert s.id != first  # the half-created session id is not reused
+    assert s.id == first  # a timeout is not a session problem: no retry, session kept
 
 
 def test_window_on_unplugged_monitor_is_detected(monkeypatch):
@@ -455,10 +456,75 @@ def test_claude_gets_system_prompt_as_file(monkeypatch, tmp_path):
     assert (tmp_path / "system_prompt.txt").read_text(encoding="utf-8").count("\n") > 3
 
 
-def test_overlay_chrome_bar_follows_display_scale():
+def test_timeout_is_not_retried(monkeypatch, tmp_path):
+    import subprocess
+    from wowclaude import backends, claude, config
+    monkeypatch.setattr(config, "HOME", tmp_path)
+    monkeypatch.setattr(config, "SESSION", tmp_path / "session.txt")
+    monkeypatch.setattr(claude, "claude_path", lambda: "claude")
+    monkeypatch.setattr(backends, "name", lambda: "claude")
+    calls = []
+
+    def boom(*a, **k):
+        calls.append(1)
+        raise subprocess.TimeoutExpired("claude", 1)
+    monkeypatch.setattr(claude.subprocess, "run", boom)
+    try:
+        claude.Session().ask("hi")
+        assert False, "should raise"
+    except claude.AskTimeout:
+        pass
+    assert len(calls) == 1 and claude.TIMEOUT < 120
+
+
+def test_expired_login_gets_a_clear_message(monkeypatch, tmp_path):
+    from wowclaude import backends, claude, config
+    monkeypatch.setattr(config, "HOME", tmp_path)
+    monkeypatch.setattr(config, "SESSION", tmp_path / "session.txt")
+    monkeypatch.setattr(claude, "claude_path", lambda: "claude")
+    monkeypatch.setattr(backends, "name", lambda: "claude")
+
+    class R:
+        returncode, stdout, stderr = 1, "", "OAuth session expired"
+    monkeypatch.setattr(claude.subprocess, "run", lambda *a, **k: R())
+    try:
+        claude.Session().ask("hi")
+        assert False, "should raise"
+    except RuntimeError as exc:
+        assert "log in again" in str(exc)
+
+
+def test_native_claude_exe_preferred(monkeypatch, tmp_path):
     import sys
+    from wowclaude import claude, config
     if sys.platform != "win32":
         return
-    from wowclaude import overlay
-    assert overlay.CHROME_BAR == round(34 * overlay.SCALE)
-    assert overlay.TOP >= overlay.CHROME_BAR + 5
+    exe = tmp_path / ".local" / "bin" / "claude.exe"
+    exe.parent.mkdir(parents=True)
+    exe.write_text("x")
+    monkeypatch.delenv("WOWCLAUDE_CLAUDE", raising=False)
+    monkeypatch.setattr(config, "load", lambda: {})
+    monkeypatch.setattr(claude.Path, "home", classmethod(lambda cls: tmp_path))
+    assert claude.claude_path() == str(exe)
+
+
+def test_lua_string_with_newline_is_valid_lua():
+    lupa = __import__("pytest").importorskip("lupa")
+    lua = lupa.LuaRuntime()
+    text = 'line one' + chr(10) + 'line "two" ' + chr(92) + ' end'
+    assert lua.execute("return " + slots.lua_string(text)) == text
+
+
+def test_deliver_stops_waiting_when_next_message_arrived(monkeypatch, tmp_path):
+    from wowclaude import bridge, decode
+    monkeypatch.setattr(bridge.time, "sleep", lambda s: None)
+    monkeypatch.setattr(bridge.slots, "publish", lambda *a, **k: None)
+
+    class St:
+        def __init__(self, seq, ack):
+            self.message_seq, self.ack_seq, self.message_idx, self.slot_next = seq, ack, 1, 5
+    monkeypatch.setattr(bridge, "_safe_read_state", lambda: St(8, 6))  # player already wrote message 8
+    assert bridge.deliver(tmp_path, St(7, 6), "hi") is True
+    monkeypatch.setattr(bridge, "_safe_read_state", lambda: St(0, 0))  # /reload resets the counter: NOT delivered
+    monkeypatch.setattr(bridge.time, "time", iter(range(0, 10000, 20)).__next__)
+    assert bridge.deliver(tmp_path, St(7, 6), "hi") is False

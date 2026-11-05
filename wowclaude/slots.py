@@ -44,7 +44,7 @@ def lua_string(text: str) -> str:
         elif ch == '"':
             out.append('\\"')
         elif ch == "\n":
-            out.append("\n")
+            out.append("\\n")  # a raw line break inside a quoted Lua string is a syntax error
         elif ord(ch) < 32:
             continue
         else:

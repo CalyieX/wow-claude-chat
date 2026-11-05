@@ -83,7 +83,7 @@ Or write the choice into `~/.wowclaude/config.json` yourself:
 | OpenAI Codex CLI | `{"backend": "codex"}` | run `codex` once to log in |
 | Any program (stdin in, answer out) | `{"backend": "command", "command": "my-tool --flag"}` | |
 
-Prefer environment variables for API keys. Small local models follow the macro and window instructions less reliably.
+The AI may open web pages in the browser window only with `https://` addresses (`[[play URL]]`). Prefer environment variables for API keys. Small local models follow the macro and window instructions less reliably.
 
 ## Privacy
 
@@ -107,7 +107,7 @@ affiliated with Blizzard or Anthropic; "World of Warcraft" is a trademark of Bli
 
 Verified: Windows 11, WoW Forever, Chrome, 100 % display scale, one monitor, Python 3.12, Claude Code and the generic
 API backends in tests. **Not verified yet:** display scale above 100 % (the program is DPI-aware now, unproven), several
-monitors, Windows 10, Edge/Brave, the Classic clients, Python 3.9-3.11. Tests: the addon itself runs inside a fake WoW
+monitors, Windows 10, Edge/Brave, the Classic clients, Python 3.9-3.11. A manual checklist for what tests cannot see is in [TESTING.md](TESTING.md); CI runs the tests on Python 3.9 and 3.12. Tests: the addon itself runs inside a fake WoW
 API (`pip install lupa`) and its strip is decoded by the Python decoder; there are no tests inside the real game.
 
 ## Deutsch (kurz)

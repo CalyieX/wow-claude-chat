@@ -11,6 +11,11 @@ from pathlib import Path
 from . import config
 
 CREATE_NO_WINDOW = 0x08000000  # Windows: no console window for the child process
+TIMEOUT = 100  # seconds; the addon gives up after 120, so one run must fit in that
+
+
+class AskTimeout(RuntimeError):
+    """Claude did not answer in time. Never retried: a second run would only answer after the addon gave up."""
 
 DEFAULT_SYSTEM = (
     "You are Claude, chatting with a World of Warcraft player inside the game's chat window. "
@@ -172,7 +177,12 @@ class Session:
             raise RuntimeError("the 'claude' command was not found (install Claude Code and log in)")
         try:
             return self._run(exe, prompt, model)
-        except RuntimeError:
+        except AskTimeout:
+            raise
+        except RuntimeError as exc:
+            low = str(exc).lower()
+            if "expired" in low or "log in" in low or "login" in low:
+                raise RuntimeError("Claude login expired: run `claude` once in a terminal and log in again.") from exc
             if not self.started:
                 self._new()  # a half-created session id must not be reused ("already in use")
                 raise
@@ -185,16 +195,17 @@ class Session:
         sysfile = config.HOME / "system_prompt.txt"
         config.HOME.mkdir(parents=True, exist_ok=True)
         sysfile.write_text(persona()[1], encoding="utf-8")
-        cmd = [exe, "-p", "--output-format", "text", "--tools", "", "--append-system-prompt-file", str(sysfile)]
+        cmd = [exe, "-p", "--output-format", "text", "--tools", "", "--strict-mcp-config",
+               "--append-system-prompt-file", str(sysfile)]
         cmd += ["--resume" if self.started else "--session-id", self.id]
         if model:
             cmd += ["--model", model]
         try:
             done = subprocess.run(cmd, input=prompt, capture_output=True, text=True, encoding="utf-8",
-                                  cwd=str(config.HOME), timeout=180,
+                                  cwd=str(config.HOME), timeout=TIMEOUT,
                                   creationflags=CREATE_NO_WINDOW if os.name == "nt" else 0)
         except subprocess.TimeoutExpired as exc:
-            raise RuntimeError("Claude did not answer within 3 minutes.") from exc
+            raise AskTimeout(f"Claude did not answer within {TIMEOUT} seconds.") from exc
         out = (done.stdout or "").strip()
         if done.returncode != 0 or not out:
             raise RuntimeError((done.stderr or out or "claude failed").strip()[:200])

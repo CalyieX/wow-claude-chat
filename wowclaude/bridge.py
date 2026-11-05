@@ -80,7 +80,7 @@ def deliver(root: Path, state: decode.GameState, reply: str) -> bool:
             if fresh is not None:
                 if fresh.ack_seq == state.message_seq:
                     return True
-                if fresh.message_seq != state.message_seq:
+                if fresh.message_seq > state.message_seq:
                     return True  # the player already wrote the next message: the answer is out, do not block the loop
                 slot_next = fresh.slot_next
     return False
