@@ -233,6 +233,17 @@ SlashCmdList["KKBROWSER"] = function(msg)
   else sendToClaude(("!browser " .. msg):gsub("%s+$", ""), "Opening browser ...") end
 end
 
+-- Remember where a window was put (UIParent-relative, so it keeps its spot when the game window is resized)
+local function savePos(f, key)
+  local point, _, rel, x, y = f:GetPoint()
+  KKMapDB.pos = KKMapDB.pos or {}
+  KKMapDB.pos[key] = { point, rel, x, y }
+end
+local function restorePos(f, key)
+  local p = KKMapDB.pos and KKMapDB.pos[key]
+  if p then f:ClearAllPoints(); f:SetPoint(p[1], UIParent, p[2], p[3], p[4]) end
+end
+
 -- Small addon menu (/wac)
 local menu
 local function buildMenu()
@@ -243,8 +254,9 @@ local function buildMenu()
   f:SetFrameStrata("DIALOG")
   f:SetMovable(true); f:EnableMouse(true); f:RegisterForDrag("LeftButton")
   f:SetScript("OnDragStart", f.StartMoving)
-  f:SetScript("OnDragStop", f.StopMovingOrSizing)
+  f:SetScript("OnDragStop", function(self) self:StopMovingOrSizing(); savePos(self, "menu") end)
   f:SetClampedToScreen(true)
+  restorePos(f, "menu")
   f:SetBackdrop({
     bgFile = "Interface\\DialogFrame\\UI-DialogBox-Background",
     edgeFile = "Interface\\DialogFrame\\UI-DialogBox-Border",
@@ -307,8 +319,9 @@ local function buildOverlay()
   f:SetFrameStrata("DIALOG")
   f:SetMovable(true); f:EnableMouse(true); f:RegisterForDrag("LeftButton")
   f:SetScript("OnDragStart", f.StartMoving)
-  f:SetScript("OnDragStop", f.StopMovingOrSizing)
+  f:SetScript("OnDragStop", function(self) self:StopMovingOrSizing(); savePos(self, "overlay") end)
   f:SetClampedToScreen(true)
+  restorePos(f, "overlay")
   f:SetBackdrop({
     bgFile = "Interface\\DialogFrame\\UI-DialogBox-Background",
     edgeFile = "Interface\\DialogFrame\\UI-DialogBox-Border",
@@ -337,7 +350,7 @@ local function buildOverlay()
   grip:SetHighlightTexture("Interface\\ChatFrame\\UI-ChatIM-SizeGrabber-Highlight")
   grip:SetPushedTexture("Interface\\ChatFrame\\UI-ChatIM-SizeGrabber-Down")
   grip:SetScript("OnMouseDown", function() f:StartSizing("BOTTOMRIGHT") end)
-  grip:SetScript("OnMouseUp", function() f:StopMovingOrSizing(); KKMapDB.overlaySize = { f:GetWidth(), f:GetHeight() } end)
+  grip:SetScript("OnMouseUp", function() f:StopMovingOrSizing(); KKMapDB.overlaySize = { f:GetWidth(), f:GetHeight() }; savePos(f, "overlay") end)
   f:SetScript("OnSizeChanged", function(self, w)
     self.body:SetWidth(math.max(60, w - 36))
     if self.data and self.renderRows then self.renderRows(self, self.data.lines or {}) end

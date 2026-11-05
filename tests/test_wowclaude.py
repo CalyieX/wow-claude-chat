@@ -267,3 +267,15 @@ def test_pin_does_not_touch_window_every_tick(monkeypatch):
     assert first == 1 and calls.count("SetWindowPos") == 1
     overlay.pin(1, 20, 10, 400, 300, 100, False)  # a real change is applied immediately
     assert calls.count("SetWindowPos") == 2
+
+
+def test_window_geometry_follows_game_window():
+    from wowclaude import overlay
+    g = (100, 50, 1700, 950)  # game client 1600x900
+    rel = overlay.to_rel(g, 500, 300, 640, 360)
+    assert overlay.from_rel(g, rel) == (500, 300, 640, 360)
+    g2 = (0, 0, 800, 450)  # game window shrunk to half and moved
+    x, y, w, h = overlay.from_rel(g2, rel)
+    assert (x, y) == (round(0 + rel[0] * 800), round(0 + rel[1] * 450)) and w == 320 and h == 180
+    g3 = (0, 0, 300, 200)  # tiny game window: the browser never gets smaller than the minimum
+    assert overlay.from_rel(g3, rel)[2:] == (overlay.MIN_W, overlay.MIN_H)

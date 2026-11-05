@@ -68,14 +68,39 @@ def _windows() -> dict[int, str]:
     return out
 
 
-def game_rect() -> tuple[int, int, int, int] | None:
-    hwnd = (user32.FindWindowW("GxWindowClass", None) or user32.FindWindowW("GxWindowClassD3d", None)
+def _game_hwnd() -> int:
+    return (user32.FindWindowW("GxWindowClass", None) or user32.FindWindowW("GxWindowClassD3d", None)
             or user32.FindWindowW(None, "World of Warcraft"))
+
+
+def game_rect() -> tuple[int, int, int, int] | None:
+    """Client area of the game window in screen pixels (without title bar and borders in windowed mode)."""
+    hwnd = _game_hwnd()
     if not hwnd:
         return None
     r = wintypes.RECT()
-    user32.GetWindowRect(hwnd, ctypes.byref(r))
-    return r.left, r.top, r.right, r.bottom
+    user32.GetClientRect(hwnd, ctypes.byref(r))
+    pt = wintypes.POINT(0, 0)
+    user32.ClientToScreen(hwnd, ctypes.byref(pt))
+    if r.right - r.left < 100 or r.bottom - r.top < 100:  # minimized (client area collapses)
+        return None
+    return pt.x, pt.y, pt.x + r.right - r.left, pt.y + r.bottom - r.top
+
+
+def game_minimized() -> bool:
+    hwnd = _game_hwnd()
+    return bool(hwnd and user32.IsIconic(hwnd))
+
+
+def to_rel(g, x: int, y: int, w: int, h: int) -> list:
+    """Window geometry as fractions of the game window, so it can follow when the game is moved or resized."""
+    gw, gh = max(1, g[2] - g[0]), max(1, g[3] - g[1])
+    return [(x - g[0]) / gw, (y - g[1]) / gh, w / gw, h / gh]
+
+
+def from_rel(g, rel) -> tuple[int, int, int, int]:
+    gw, gh = g[2] - g[0], g[3] - g[1]
+    return (round(g[0] + rel[0] * gw), round(g[1] + rel[1] * gh), max(MIN_W, round(rel[2] * gw)), max(MIN_H, round(rel[3] * gh)))
 
 
 def place(w: int, h: int, corner: str, margin: int = 24) -> tuple[int, int]:
@@ -267,12 +292,18 @@ def run(url: str | None = None, corner: str | None = None, size: str | None = No
     if last.startswith(("http://127.0.0.1", "http://localhost")):  # the AI setup page only lives while the bridge runs
         last = ""
     url = url or last or "https://www.google.com"
+    g0 = game_rect()
+    rel = saved.get("rel")
     if size:
         w, h = (int(v) for v in size.lower().split("x"))
+    elif rel and g0:
+        w, h = from_rel(g0, rel)[2:]
     else:
         w, h = int(saved.get("w", 480)), int(saved.get("h", 270))
     if corner or "x" not in saved:
         x, y = place(w, h + TOP + EDGE, corner or "br")
+    elif rel and g0:
+        x, y = from_rel(g0, rel)[:2]
     else:
         x, y = int(saved["x"]), int(saved["y"])  # remembered position (browser window top-left)
     save_state(url=url, x=x, y=y, w=w, h=h)
@@ -363,6 +394,12 @@ def slot_sprite(state: str = ""):
     icon = icon.crop((5, 5, 59, 59)).resize((36, 36), Image.LANCZOS)  # action buttons show texcoords 0.08-0.92
     out.alpha_composite(icon, (14, 14))
     out.alpha_composite(_art("UI-Quickslot2.png"))
+    from PIL import ImageDraw  # macro-style name in the game's font, centred in the slot: "WAC"
+    d = ImageDraw.Draw(out)
+    font = _font(13)
+    for ox, oy in ((-1, 0), (1, 0), (0, -1), (0, 1), (1, 1), (-1, -1), (1, -1), (-1, 1)):
+        d.text((32 + ox, 32 + oy), "WAC", font=font, fill=(0, 0, 0, 255), anchor="mm")
+    d.text((32, 32), "WAC", font=font, fill=(255, 255, 255, 255), anchor="mm")
     if state == "down":  # pressed: the icon dims slightly, like a pushed action button
         dim = Image.new("RGBA", (36, 36), (0, 0, 0, 90))
         out.alpha_composite(dim, (14, 14))
@@ -587,6 +624,14 @@ def frame_loop(hwnd: int, x: int, y: int, w: int, h: int, opacity: int, click_th
     rect = game_rect() or (0, 0, user32.GetSystemMetrics(0), user32.GetSystemMetrics(1))
     S["bx"] = int(saved.get("bx", rect[2] - 150))  # top-left of the 64x64 sprite; the slot itself is 14 px inside
     S["by"] = int(saved.get("by", rect[1] + 80))
+    S["rel"], S["brel"], S["g"], S["hid"] = saved.get("rel"), saved.get("brel"), game_rect(), False
+    if S["g"] and S["brel"]:  # the minimized-button spot follows the game window as well
+        S["bx"] = round(S["g"][0] + S["brel"][0] * (S["g"][2] - S["g"][0]))
+        S["by"] = round(S["g"][1] + S["brel"][1] * (S["g"][3] - S["g"][1]))
+    if S["g"] and not S["rel"]:
+        S["rel"] = to_rel(S["g"], S["x"], S["y"], S["w"], S["h"])
+    if S["g"] and not S["brel"]:
+        S["brel"] = to_rel(S["g"], S["bx"], S["by"], 64, 64)[:2]
     fdrag: dict = {}
 
     def keep_on_game() -> None:
@@ -601,7 +646,14 @@ def frame_loop(hwnd: int, x: int, y: int, w: int, h: int, opacity: int, click_th
         update_layered(FL["h"], sprites[state], S["bx"], S["by"])
 
     def persist() -> None:
-        save_state(x=S["x"], y=S["y"], w=S["w"], h=S["h"], ghost=S["ghost"], bx=S["bx"], by=S["by"])
+        g = game_rect()
+        extra = {}
+        if g:
+            S["rel"] = to_rel(g, S["x"], S["y"], S["w"], S["h"])
+            S["brel"] = to_rel(g, S["bx"], S["by"], 64, 64)[:2]
+            S["g"] = g
+            extra = {"rel": S["rel"], "brel": S["brel"]}
+        save_state(x=S["x"], y=S["y"], w=S["w"], h=S["h"], ghost=S["ghost"], bx=S["bx"], by=S["by"], **extra)
 
     def set_min(on: bool) -> None:
         S["min"] = on
@@ -737,6 +789,31 @@ def frame_loop(hwnd: int, x: int, y: int, w: int, h: int, opacity: int, click_th
             persist()
             root.destroy()
             return
+        if game_minimized():  # integrated look: nothing floats over the desktop while the game is minimized
+            if not S["hid"]:
+                S["hid"] = True
+                user32.ShowWindow(wintypes.HWND(hwnd), 0)
+                root.withdraw()
+                bar.withdraw()
+                fl.withdraw()
+            root.after(400, tick)
+            return
+        if S["hid"]:
+            S["hid"] = False
+            set_min(S["min"])
+        g = game_rect()
+        if g and g != S["g"] and not drag and not fdrag:  # game window moved or resized: keep the same spot, scale with it
+            if S["rel"]:
+                S["x"], S["y"], S["w"], S["h"] = from_rel(g, S["rel"])
+            if S["brel"]:
+                S["bx"] = round(g[0] + S["brel"][0] * (g[2] - g[0]))
+                S["by"] = round(g[1] + S["brel"][1] * (g[3] - g[1]))
+            S["g"] = g
+            if S["min"]:
+                fl.geometry(f"64x64+{S['bx']}+{S['by']}")
+                fl_draw()
+            else:
+                layout()
         if not S["min"]:
             ghost = S["ghost"]
             pin(hwnd, S["x"], S["y"], S["w"], S["h"], 35 if ghost else opacity, click_through or ghost)
