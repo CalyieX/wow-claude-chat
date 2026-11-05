@@ -20,6 +20,14 @@ def _safe_read_state() -> decode.GameState | None:
         return None
 
 
+def _post(kind: str, text: str) -> None:
+    try:
+        from . import chat_fake
+        chat_fake.post(kind, text)
+    except Exception:  # noqa: BLE001 - the overlay is optional, never block the answer
+        pass
+
+
 def handle_command(text: str) -> str | None:
     """In-game slash commands that the addon sends as "!name args" (never forwarded to the AI)."""
     parts = text.strip().split(None, 1)
@@ -148,6 +156,8 @@ def run(root: Path, poll: float = 0.6) -> None:
             if vinput.available() and state.frames:
                 question = vinput.frames_hint(state.frames) + question
             print(f"> {state.message.strip()}", flush=True)
+            _post("user", "Du: " + state.message.strip())
+            _post("think", "denkt ...")
             slots.reset_marker(root, state.message_idx or 1)
             try:
                 cmd_reply = handle_command(state.message) if state.message.lstrip().startswith("!") else None
@@ -155,6 +165,7 @@ def run(root: Path, poll: float = 0.6) -> None:
             except Exception as exc:  # noqa: BLE001 - tell the player, keep running
                 reply = f"No answer from the AI: {exc}. No AI set up yet? Type /wac and press AI Setup."
             print(f"< {reply}", flush=True)
+            _post("ai", claude.persona()[0] + ": " + claude.extract_play(claude.extract_overlay(claude.extract_macros(reply)[0])[0])[0])
             try:
                 delivered = deliver(root, state, reply)
             except Exception as exc:  # noqa: BLE001 - report, keep running

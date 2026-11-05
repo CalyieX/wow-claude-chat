@@ -207,7 +207,7 @@ local function renameTab(frame, new)
     if tab and tab.SetText then tab:SetText(new) end
   end)
 end
-local function claudeFrame()
+local function claudeFrame0()
   if chatFrame then return chatFrame end
   for i = 1, NUM_CHAT_WINDOWS do
     local name = GetChatWindowInfo(i)
@@ -221,6 +221,20 @@ local function claudeFrame()
   chatFrame = (ok and f) or DEFAULT_CHAT_FRAME
   if chatFrame ~= DEFAULT_CHAT_FRAME and FCF_SetChatWindowFontSize then pcall(FCF_SetChatWindowFontSize, nil, chatFrame, 16) end
   return chatFrame
+end
+-- Two small coloured squares on the tab's corners tell the overlay program where the tab is (and that it is shown).
+local function addMarks(f)
+  if not f or f == DEFAULT_CHAT_FRAME or f.kkMarks then return end
+  f.kkMarks = true
+  local a = f:CreateTexture(nil, "OVERLAY")
+  a:SetSize(6, 6); a:SetPoint("TOPLEFT", f, "TOPLEFT", 0, 0); a:SetColorTexture(1, 0, 1, 1)
+  local b = f:CreateTexture(nil, "OVERLAY")
+  b:SetSize(6, 6); b:SetPoint("BOTTOMRIGHT", f, "BOTTOMRIGHT", 0, 0); b:SetColorTexture(0, 1, 1, 1)
+end
+local function claudeFrame()
+  local f = claudeFrame0()
+  addMarks(f)
+  return f
 end
 local function say(text, r, g, b, nohist)
   r, g, b = r or 0.6, g or 0.85, b or 1

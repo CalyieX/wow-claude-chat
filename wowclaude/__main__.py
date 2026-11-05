@@ -147,6 +147,8 @@ def main(argv=None) -> int:
         a.url, a.corner, a.size, a.opacity, a.click_through))
     pch = sub.add_parser("chat", help="open the chat window over the game (talks to the AI directly, no reload needed)")
     pch.set_defaults(fn=lambda a: __import__("wowclaude.chat_overlay", fromlist=["run"]).run())
+    pfk = sub.add_parser("fake", help="paint the conversation over the empty chat tab (needs the corner marks from the addon)")
+    pfk.set_defaults(fn=lambda a: __import__("wowclaude.chat_fake", fromlist=["run"]).run())
     args = ap.parse_args(argv)
     return args.fn(args)
 
