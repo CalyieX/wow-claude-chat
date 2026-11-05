@@ -416,8 +416,11 @@ def run(url: str | None = None, corner: str | None = None, size: str | None = No
     profile = config.HOME / "overlay-profile"
     profile.mkdir(parents=True, exist_ok=True)
     hwnd, port = 0, 0
+    t0 = time.time()
+    marks: list[str] = []
     for attempt in range(3):  # Chrome sometimes opens a window that never paints (stays blank): then start it again
         _kill_profile_browsers(profile)
+        marks.append(f"cleanup {time.time() - t0:.1f}s")
         port = free_port()
         before = set(_windows())
         proc = subprocess.Popen(
@@ -438,10 +441,12 @@ def run(url: str | None = None, corner: str | None = None, size: str | None = No
         if not hwnd:
             print("Browser window did not appear.")
             return 1
+        marks.append(f"window {time.time() - t0:.1f}s")
         if _wait_painted(hwnd, w, h + CHROME_BAR):
             break
         print(f"Browser window stayed blank (try {attempt + 1}/3), restarting it ...", flush=True)
-    time.sleep(0.3)
+    marks.append(f"painted {time.time() - t0:.1f}s")
+    print("timing:", ", ".join(marks), flush=True)
     print(f"Overlay running ({w}x{h}, debug port {port}). Drag the title bar to move, the corner to resize, X to close; "
           "position and size are remembered. Log in once in this window (own profile).", flush=True)
     frame_loop(hwnd, x, y, w, h, opacity, click_through, port)
