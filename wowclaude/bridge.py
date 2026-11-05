@@ -74,6 +74,10 @@ def deliver(root: Path, state: decode.GameState, reply: str) -> bool:
             overlay["lines"] = slots.resolve_images(root, overlay["lines"], state.image_next)
         except Exception as exc:  # noqa: BLE001 - never lose the text because of a picture
             print(f"images failed: {exc}", flush=True)
+    if not macros and not overlay:  # plain answer: the overlay already shows it, no reply slot is used up
+        from . import chat_fake
+        if chat_fake.alive():
+            return True
     parts = claude.split_reply(reply or "...")
     ai_name = claude.persona()[0]
     parts[0] = ai_name + ": " + parts[0]
@@ -131,6 +135,11 @@ def run(root: Path, poll: float = 0.6) -> None:
     if acquire_lock() is None:
         print("wowclaude is already running on this PC (close the other window first).", flush=True)
         return
+    try:
+        from . import chat_fake
+        chat_fake.start()
+    except Exception:  # noqa: BLE001 - the overlay is optional
+        pass
     session = claude.Session()
     last_seq: int | None = None
     print(f"wowclaude is running (game folder: {root}). Press Ctrl+C to stop.", flush=True)

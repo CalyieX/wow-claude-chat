@@ -14,6 +14,7 @@ YELLOW = (255, 255, 0)
 TOLERANCE = 40
 MIN_MARK = 3
 MAX_MARK = 24
+MIN_FONT, MAX_FONT = 10, 32
 
 
 def _mask(img: Image.Image, colour: tuple[int, int, int]) -> Image.Image:
@@ -44,18 +45,20 @@ def _box(img: Image.Image, colour, region=None) -> tuple[int, int, int, int] | N
     return box
 
 
-def find_frame(img: Image.Image) -> tuple[int, int, int, int] | None:
-    """(left, top, right, bottom) of the tab: top-left magenta, top-right cyan, bottom-left yellow square.
+def find_marks(img: Image.Image) -> tuple[tuple[int, int, int, int], int] | None:
+    """((left, top, right, bottom), font_px) of the tab, or None.
 
-    Magenta is searched everywhere; the other two only along the magenta mark's row and column, so yellow or
-    cyan scenery elsewhere (gold frames, water) cannot confuse it.
+    Top-left magenta, top-right cyan and bottom-left yellow square. The yellow one sits ``font size`` pixels to the
+    right of the tab's left edge: that is how the addon tells the overlay the tab's text size (so the size menu of
+    the real tab keeps working). Magenta is searched everywhere; the others only along its row and column, so
+    yellow or cyan scenery elsewhere (gold frames, water) cannot confuse it.
     """
     a = _box(img, TOP_LEFT)
     if a is None:
         return None
     w, h = img.size
     row = (a[2], max(0, a[1] - 4), w, min(h, a[3] + 4))
-    col = (max(0, a[0] - 4), a[3], min(w, a[2] + 4), h)
+    col = (max(0, a[0] - 4), a[3], min(w, a[0] + MAX_FONT + MAX_MARK), h)
     c = _box(img, TOP_RIGHT, row) if row[2] > row[0] else None
     y = _box(img, YELLOW, col) if col[3] > col[1] else None
     if c is None or y is None:
@@ -63,7 +66,13 @@ def find_frame(img: Image.Image) -> tuple[int, int, int, int] | None:
     left, top, right, bottom = a[0], a[1], c[2], y[3]
     if right - left < 40 or bottom - top < 20:
         return None
-    return left, top, right, bottom
+    font = max(MIN_FONT, min(MAX_FONT, y[0] - a[0]))
+    return (left, top, right, bottom), font
+
+
+def find_frame(img: Image.Image) -> tuple[int, int, int, int] | None:
+    found = find_marks(img)
+    return found[0] if found else None
 
 
 def wrap(text: str, width_px: int, font) -> list[str]:

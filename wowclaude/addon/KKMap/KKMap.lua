@@ -226,18 +226,29 @@ end
 local function addMarks(f)
   if not f or f == DEFAULT_CHAT_FRAME or f.kkMarks then return end
   f.kkMarks = true
-  local function mark(point, r, g, b)  -- own frame on the top strata: other frames (unit frame, action bar) must not cover it
+  local function mark(point, x, r, g, b)  -- own frame on the top strata: other frames (unit frame, action bar) must not cover it
     local m = CreateFrame("Frame", nil, f)
-    m:SetFrameStrata("TOOLTIP"); m:SetSize(4, 4); m:SetPoint(point, f, point, 0, 0)
+    m:SetFrameStrata("TOOLTIP"); m:SetSize(4, 4); m:SetPoint(point, f, point, x, 0)
     local t = m:CreateTexture(nil, "OVERLAY")
     t:SetAllPoints(m); t:SetColorTexture(r, g, b, 1)
     return m
   end
-  mark("TOPLEFT", 1, 0, 1)
-  mark("TOPRIGHT", 0, 1, 1)
-  mark("BOTTOMLEFT", 1, 1, 0)
+  mark("TOPLEFT", 0, 1, 0, 1)
+  mark("TOPRIGHT", 0, 0, 1, 1)
+  -- the yellow mark sits "text size" units to the right of the left edge: that is how the overlay learns the size
+  local y = mark("BOTTOMLEFT", 0, 1, 1, 0)
+  local last
+  local watch = CreateFrame("Frame")
+  watch.t = 0
+  watch:SetScript("OnUpdate", function(self, dt)
+    self.t = self.t + dt
+    if self.t < 0.5 then return end
+    self.t = 0
+    local _, size = f:GetFont()
+    size = math.floor((size or 17) + 0.5)
+    if size ~= last then last = size; y:ClearAllPoints(); y:SetPoint("BOTTOMLEFT", f, "BOTTOMLEFT", size, 0) end
+  end)
 end
-
 -- The AI tab only shows what the AI says: message types, channels and colours do not apply to it. Take every message
 -- group away from it (nothing foreign can leak into the tab) and grey the settings out so nobody tries to change them.
 local function lockAiTab(f)

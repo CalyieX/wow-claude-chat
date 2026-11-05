@@ -35,7 +35,6 @@ small{color:#8c7b4d;display:block;margin-top:2px}
 <div id="found"></div>
 <label>Name of the AI (shown as the chat tab and before every answer)</label><input id="ainame" maxlength="20" placeholder="Claude">
 <small>The tab is renamed with the next answer (or after /reload).</small>
-<label>Chat text size</label><input id="fsize" type="number" min="10" max="32" style="width:80px">
 <details id="adv"><summary>Choose by hand / more options</summary>
 <label>Backend</label><select id="backend"></select>
 <small id="hint"></small>
@@ -66,13 +65,13 @@ function show(){const b=$("backend").value,isApi=!["claude","codex","command"].i
   s.found.forEach((f,i)=>{const b=document.createElement("button");b.className="card";b.textContent=(i?"":"★ ")+f.label;
    b.onclick=()=>{sel.value=f.backend;show();$("save").click()};F.appendChild(b)})}
  else{F.innerHTML="<label>Nothing found on this PC yet</label><small>Easiest: install Claude Code and log in, or install Ollama. Or open the options below and enter an API key.</small>";$("adv").open=true}$("model").value=s.model||"";$("base_url").value=s.base_url||"";$("command").value=s.command||"";
- $("persona").value=s.persona||"";$("ainame").value=s.name||"";$("fsize").value=s.font_size||17;$("keystate").textContent=s.has_key?"(saved)":"";show();sel.onchange=show;
+ $("persona").value=s.persona||"";$("ainame").value=s.name||"";$("keystate").textContent=s.has_key?"(saved)":"";show();sel.onchange=show;
  recheck()})();
 async function recheck(){$("msg").textContent="Checking the AI ...";$("msg").className="";
  try{const r=await api("/check");$("msg").textContent=r.status;$("msg").className=r.ok?"ok":"bad"}catch(e){$("msg").textContent="Check failed: "+e;$("msg").className="bad"}}
 $("save").onclick=async()=>{$("msg").textContent="Saving ...";$("msg").className="";
  const r=await api("/save",{backend:$("backend").value,model:$("model").value,base_url:$("base_url").value,
-  api_key:$("api_key").value,command:$("command").value,name:$("ainame").value,font_size:$("fsize").value,persona:$("persona").value});
+  api_key:$("api_key").value,command:$("command").value,name:$("ainame").value,persona:$("persona").value});
  $("msg").textContent=r.status;$("msg").className=r.ok?"ok":"bad";if(r.has_key)$("keystate").textContent="(saved)";$("api_key").value="";await recheck()};
 </script></body></html>"""
 
@@ -91,7 +90,7 @@ def _state() -> dict:
     return {"backends": ["claude", "codex", "command", "openai-compatible", *backends.PRESETS],
             "backend": backends.name(), "model": cfg.get("model", ""), "base_url": cfg.get("base_url", ""),
             "command": cfg.get("command", ""), "has_key": bool(cfg.get("api_key")),
-            "name": name, "persona": rest.strip("\n"), "found": backends.detect(), "font_size": cfg.get("font_size", 17)}
+            "name": name, "persona": rest.strip("\n"), "found": backends.detect()}
 
 
 def _check() -> dict:
@@ -118,10 +117,6 @@ def apply(data: dict) -> dict:
         cfg["name"] = name
     else:
         cfg.pop("name", None)
-    try:
-        cfg["font_size"] = max(10, min(32, int(data.get("font_size") or 17)))
-    except (TypeError, ValueError):
-        pass
     key = str(data.get("api_key", "")).strip()
     if key:
         cfg["api_key"] = key

@@ -4,7 +4,7 @@ from PIL import Image, ImageDraw
 from wowclaude import chat_marks as cm
 
 
-def scene(tl=(100, 80), br=(500, 300), size=(800, 500), mark=6, noise=True, stray=False):
+def scene(tl=(100, 80), br=(500, 300), size=(800, 500), mark=6, noise=True, stray=False, font=17):
     img = Image.new("RGB", size, (30, 60, 20))
     d = ImageDraw.Draw(img)
     if noise:
@@ -13,7 +13,7 @@ def scene(tl=(100, 80), br=(500, 300), size=(800, 500), mark=6, noise=True, stra
         d.rectangle((tl[0], tl[1], tl[0] + mark - 1, tl[1] + mark - 1), fill=cm.TOP_LEFT)
     if br:
         d.rectangle((br[0] - mark, 80, br[0] - 1, 80 + mark - 1), fill=cm.TOP_RIGHT)
-        d.rectangle((100, br[1] - mark, 100 + mark - 1, br[1] - 1), fill=cm.YELLOW)
+        d.rectangle((100 + font, br[1] - mark, 100 + font + mark - 1, br[1] - 1), fill=cm.YELLOW)
     if stray:
         d.point((5, 5), fill=cm.TOP_LEFT)
     return img
@@ -55,3 +55,8 @@ def test_scroll_changes_picture():
 
 def test_stray_pixel_ignored():
     assert cm.find_frame(scene(stray=True)) == (100, 80, 500, 300)
+
+
+def test_font_size_comes_from_yellow_offset():
+    assert cm.find_marks(scene(font=22)) == ((100, 80, 500, 300), 22)
+    assert cm.find_marks(scene(font=12))[1] == 12
