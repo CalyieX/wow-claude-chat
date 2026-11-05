@@ -226,7 +226,7 @@ local menu
 local function buildMenu()
   if menu then return menu end
   local f = CreateFrame("Frame", "KKMenuFrame", UIParent, "BackdropTemplate")
-  f:SetSize(220, 230)
+  f:SetSize(220, 262)
   f:SetPoint("CENTER", UIParent, "CENTER", -260, 60)
   f:SetFrameStrata("DIALOG")
   f:SetMovable(true); f:EnableMouse(true); f:RegisterForDrag("LeftButton")
@@ -254,6 +254,7 @@ local function buildMenu()
     y = y - 32
     return bt
   end
+  button("AI Setup", function() sendToClaude("!setup", "Opening AI setup ...") end)
   button("Open Browser", function() sendToClaude("!browser", "Opening browser ...") end)
   button("Close Browser", function() sendToClaude("!browser off", "Closing browser ...") end)
   local strip
@@ -265,7 +266,7 @@ local function buildMenu()
   end)
   button("Show Overlay Window", function() if SlashCmdList["KKOVERLAY"] then SlashCmdList["KKOVERLAY"]("") end end)
   button("Help", function()
-    say("Type in the Claude tab to chat. /browser [url] opens the browser, /browser off closes it, /kk opens this menu.")
+    say("Type in the Claude tab to chat. /kk opens this menu, /browser [url] opens the browser, /browser off closes it. AI Setup picks the AI.")
     say("Ask for macros, lists, or pages (the AI can create macros and open videos for you).")
   end)
   f:Hide()

@@ -682,14 +682,14 @@ def frame_loop(hwnd: int, x: int, y: int, w: int, h: int, opacity: int, click_th
     root.mainloop()
 
 
-def play(url: str) -> None:
+def play(url: str, size: str | None = None) -> None:
     """Called by the bridge for [[play URL]] / "/browser": start the overlay in the background ("" = last page),
     or close it for ``off``."""
     if url == "off":
         _kill_profile_browsers(config.HOME / "overlay-profile")
         return
     import sys
-    args = [sys.executable, "-m", "wowclaude", "overlay"] + ([url] if url else [])
+    args = [sys.executable, "-m", "wowclaude", "overlay"] + ([url] if url else []) + (["--size", size] if size else [])
     subprocess.Popen(args, creationflags=0x08000000)
 
 

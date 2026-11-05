@@ -20,6 +20,10 @@ def handle_command(text: str) -> str | None:
         from . import overlay
         overlay.play("off" if arg in ("off", "close") else arg)
         return "Browser closed." if arg in ("off", "close") else "Browser opened."
+    if cmd == "!setup":
+        from . import overlay, setup_ui
+        overlay.play(setup_ui.start_background(), "640x520")
+        return "AI setup opened in the browser window."
     return None
 
 

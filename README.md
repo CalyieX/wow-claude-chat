@@ -86,3 +86,12 @@ wowclaude overlay https://www.netflix.com --click-through
 
 Opens a small always-on-top Chrome/Edge window (own profile: log in once) over the game, in the look of the game's own windows (real UI textures, gold "WoW Browser" label, address bar for URLs or search words, red close button, resize grip). Position and size are remembered. The AI can open pages itself with `[[play URL]]`. Needs the game in windowed
 or borderless mode. `--click-through` sends mouse clicks to the game. Close the window to stop.
+
+## Choosing the AI (no files to edit)
+
+In the game type `/kk` and press **AI Setup**. A page opens in the WoW browser window where you pick the backend
+(Claude, Codex, OpenRouter, DeepSeek, OpenAI, Groq, local models such as Ollama ...), the model, paste an API key if the
+backend needs one, and set a persona. Without the game: `wowclaude config`. The page runs on 127.0.0.1 only; an API key
+you enter is stored in `~/.wowclaude/config.json` on your computer.
+
+Other in-game commands: `/browser [url]` opens the browser window, `/browser off` closes it, `/kk` opens the small menu.

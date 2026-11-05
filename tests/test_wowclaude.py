@@ -207,3 +207,36 @@ def test_bridge_command_browser(monkeypatch):
     assert bridge.handle_command("!browser off") == "Browser closed."
     assert seen == ["", "https://x.y", "off"]
     assert bridge.handle_command("!unknown") is None
+
+
+def test_setup_ui_apply_and_state(tmp_path, monkeypatch):
+    from wowclaude import config, setup_ui
+    monkeypatch.setattr(config, "HOME", tmp_path)
+    monkeypatch.setattr(config, "CONFIG", tmp_path / "config.json")
+    monkeypatch.setattr(config, "PERSONA", tmp_path / "persona.txt")
+    monkeypatch.delenv("WOWCLAUDE_BACKEND", raising=False)
+    out = setup_ui.apply({"backend": "openrouter", "model": "x/y", "api_key": "sk-test", "persona": "Gorel\nBe brief."})
+    assert out["ok"] and out["has_key"]
+    cfg = config.load()
+    assert cfg["backend"] == "openrouter" and cfg["model"] == "x/y" and cfg["api_key"] == "sk-test"
+    assert (tmp_path / "persona.txt").read_text(encoding="utf-8").startswith("Gorel")
+    st = setup_ui._state()
+    assert st["backend"] == "openrouter" and st["has_key"] and "api_key" not in st
+    assert setup_ui.apply({"backend": "nope"})["ok"] is False
+    # empty key keeps the saved one, empty persona removes the file
+    setup_ui.apply({"backend": "openrouter", "api_key": "", "persona": ""})
+    assert config.load()["api_key"] == "sk-test" and not (tmp_path / "persona.txt").exists()
+
+
+def test_setup_page_requires_token():
+    import urllib.error
+    import urllib.request
+    from wowclaude import setup_ui
+    url = setup_ui.start_background()
+    base = url.split("?")[0]
+    try:
+        urllib.request.urlopen(base + "state", timeout=3)
+        assert False, "must be forbidden without token"
+    except urllib.error.HTTPError as exc:
+        assert exc.code == 403
+    assert b"AI setup" in urllib.request.urlopen(url, timeout=3).read()
