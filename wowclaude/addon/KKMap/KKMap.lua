@@ -226,10 +226,16 @@ end
 local function addMarks(f)
   if not f or f == DEFAULT_CHAT_FRAME or f.kkMarks then return end
   f.kkMarks = true
-  local a = f:CreateTexture(nil, "OVERLAY")
-  a:SetSize(6, 6); a:SetPoint("TOPLEFT", f, "TOPLEFT", 0, 0); a:SetColorTexture(1, 0, 1, 1)
-  local b = f:CreateTexture(nil, "OVERLAY")
-  b:SetSize(6, 6); b:SetPoint("BOTTOMRIGHT", f, "BOTTOMRIGHT", 0, 0); b:SetColorTexture(0, 1, 1, 1)
+  local function mark(point, r, g, b)  -- own frame on the top strata: other frames (unit frame, action bar) must not cover it
+    local m = CreateFrame("Frame", nil, f)
+    m:SetFrameStrata("TOOLTIP"); m:SetSize(6, 6); m:SetPoint(point, f, point, 0, 0)
+    local t = m:CreateTexture(nil, "OVERLAY")
+    t:SetAllPoints(m); t:SetColorTexture(r, g, b, 1)
+    return m
+  end
+  mark("TOPLEFT", 1, 0, 1)
+  mark("TOPRIGHT", 0, 1, 1)
+  mark("BOTTOMLEFT", 1, 1, 0)
 end
 local function claudeFrame()
   local f = claudeFrame0()

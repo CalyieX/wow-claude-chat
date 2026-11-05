@@ -61,10 +61,11 @@ def apply_events(entries: list[tuple[str, str]], events: list[dict]) -> list[tup
 
 def paint(entries: list[tuple[str, str]], size: tuple[int, int], scroll: int = 0) -> Image.Image:
     img = chat_marks.render(entries, size, scroll=scroll).convert("RGBA")
-    img.putalpha(235)
+    img.putalpha(255)
     d = ImageDraw.Draw(img)
     d.rectangle((0, 0, MARK_HOLE - 1, MARK_HOLE - 1), fill=(0, 0, 0, 0))
-    d.rectangle((size[0] - MARK_HOLE, size[1] - MARK_HOLE, size[0] - 1, size[1] - 1), fill=(0, 0, 0, 0))
+    d.rectangle((size[0] - MARK_HOLE, 0, size[0] - 1, MARK_HOLE - 1), fill=(0, 0, 0, 0))
+    d.rectangle((0, size[1] - MARK_HOLE, MARK_HOLE - 1, size[1] - 1), fill=(0, 0, 0, 0))
     return img
 
 
@@ -89,7 +90,11 @@ def _make_window():
     root.geometry("10x10+-100+-100")
     root.update()
     u = ctypes.windll.user32
+    u.GetParent.restype = ctypes.c_void_p
+    u.GetParent.argtypes = [ctypes.c_void_p]
     hwnd = u.GetParent(root.winfo_id()) or root.winfo_id()
+    u.GetWindowLongW.argtypes = [ctypes.c_void_p, ctypes.c_int]
+    u.SetWindowLongW.argtypes = [ctypes.c_void_p, ctypes.c_int, ctypes.c_long]
     ex = u.GetWindowLongW(hwnd, -20) | 0x80000 | 0x20 | 0x08000000 | 0x80  # LAYERED|TRANSPARENT|NOACTIVATE|TOOLWINDOW
     u.SetWindowLongW(hwnd, -20, ex)
     return root, hwnd
@@ -97,15 +102,21 @@ def _make_window():
 
 def run(poll: float = 0.25, find_every: float = 0.5) -> None:
     root, hwnd = _make_window()
-    root.withdraw()
+    root.update()
+    u = ctypes.windll.user32
+    u.ShowWindow.argtypes = [ctypes.c_void_p, ctypes.c_int]
+    u.SetWindowPos.argtypes = [ctypes.c_void_p, ctypes.c_void_p, ctypes.c_int, ctypes.c_int, ctypes.c_int,
+                               ctypes.c_int, ctypes.c_uint]
+    park = lambda: overlay.update_layered(hwnd, Image.new('RGBA', (1, 1), (0, 0, 0, 0)), -100, -100)
+    park()  # invisible until the tab is found (hiding the window itself made Tk lose it)
     entries: list[tuple[str, str]] = []
     offset = EVENTS.stat().st_size if EVENTS.exists() else 0
     frame, last_find, shown_key, visible = None, 0.0, None, False
-    u = ctypes.windll.user32
     while True:
         try:
             root.update()
-        except Exception:  # noqa: BLE001 - window closed
+        except Exception as exc:  # noqa: BLE001 - window closed
+            print(f'tk update failed: {exc}', flush=True)
             return
         events, offset = read_new(offset)
         if events:
@@ -116,23 +127,22 @@ def run(poll: float = 0.25, find_every: float = 0.5) -> None:
             last_find = now
             try:
                 frame = find_in_game()
-            except Exception:  # noqa: BLE001 - a failed screenshot must not end the overlay
+            except Exception as exc:  # noqa: BLE001 - a failed screenshot must not end the overlay
+                print(f'find failed: {exc}', flush=True)
                 frame = None
         if frame is None:
             if visible:
-                root.withdraw()
+                park()
                 visible = False
+                shown_key = None
             time.sleep(poll)
             continue
         key = (frame, len(entries), entries[-1] if entries else None)
         if key != shown_key or not visible:
             shown_key = key
             w, h = frame[2] - frame[0], frame[3] - frame[1]
-            if not visible:
-                root.deiconify()
-                visible = True
+            print(f'paint {frame} entries={len(entries)}', flush=True)
             overlay.update_layered(hwnd, paint(entries, (w, h)), frame[0], frame[1])
-            u.SetWindowPos.argtypes = [wintypes.HWND, wintypes.HWND, ctypes.c_int, ctypes.c_int, ctypes.c_int,
-                                       ctypes.c_int, wintypes.UINT]
-            u.SetWindowPos(wintypes.HWND(hwnd), wintypes.HWND(-1), frame[0], frame[1], w, h, 0x10 | 0x40)
+            visible = True
+            u.SetWindowPos(hwnd, -1, 0, 0, 0, 0, 0x1 | 0x2 | 0x10)  # topmost: NOSIZE|NOMOVE|NOACTIVATE
         time.sleep(poll)

@@ -1,15 +1,16 @@
-"""Find the two corner marks the addon puts on the chat tab, and paint the chat text for the overlay.
+"""Find the three corner marks the addon puts on the chat tab, and paint the chat text for the overlay.
 
-The addon draws a magenta square in the top-left and a cyan square in the bottom-right corner of the tab.
-A screenshot of the game shows where the tab is; the overlay then paints the answers over that rectangle.
-Pure Pillow, no game access: it works on any image.
+The addon draws a magenta square on the tab's top-left, a cyan one on its top-right and a yellow one on its
+bottom-left corner. A screenshot of the game shows where the tab is; the overlay then paints the answers over
+that rectangle. Pure Pillow, no game access: it works on any image.
 """
 from __future__ import annotations
 
-from PIL import Image, ImageDraw, ImageFont
+from PIL import Image, ImageDraw, ImageFilter, ImageFont
 
 TOP_LEFT = (255, 0, 255)
-BOTTOM_RIGHT = (0, 255, 255)
+TOP_RIGHT = (0, 255, 255)
+YELLOW = (255, 255, 0)
 TOLERANCE = 40
 MIN_MARK = 3
 MAX_MARK = 24
@@ -24,10 +25,19 @@ def _mask(img: Image.Image, colour: tuple[int, int, int]) -> Image.Image:
     return out
 
 
-def _box(img: Image.Image, colour) -> tuple[int, int, int, int] | None:
-    box = _mask(img, colour).getbbox()
+def _box(img: Image.Image, colour, region=None) -> tuple[int, int, int, int] | None:
+    """Bounding box of the one solid square of ``colour`` (stray pixels of the same colour are ignored).
+
+    ``region`` = (l, t, r, b) limits the search; the returned box is in full-image coordinates.
+    """
+    ox, oy = (region[0], region[1]) if region else (0, 0)
+    sub = img.crop(region) if region else img
+    solid = _mask(sub, colour).filter(ImageFilter.MinFilter(MIN_MARK))  # only blocks >= MIN_MARK wide survive
+    box = solid.getbbox()
     if box is None:
         return None
+    pad = MIN_MARK // 2
+    box = (box[0] - pad + ox, box[1] - pad + oy, box[2] + pad + ox, box[3] + pad + oy)
     w, h = box[2] - box[0], box[3] - box[1]
     if not (MIN_MARK <= w <= MAX_MARK and MIN_MARK <= h <= MAX_MARK):
         return None  # a big magenta/cyan area is scenery, not our mark
@@ -35,11 +45,22 @@ def _box(img: Image.Image, colour) -> tuple[int, int, int, int] | None:
 
 
 def find_frame(img: Image.Image) -> tuple[int, int, int, int] | None:
-    """(left, top, right, bottom) between the two marks inside ``img``, or None when a mark is missing."""
-    a, b = _box(img, TOP_LEFT), _box(img, BOTTOM_RIGHT)
-    if a is None or b is None:
+    """(left, top, right, bottom) of the tab: top-left magenta, top-right cyan, bottom-left yellow square.
+
+    Magenta is searched everywhere; the other two only along the magenta mark's row and column, so yellow or
+    cyan scenery elsewhere (gold frames, water) cannot confuse it.
+    """
+    a = _box(img, TOP_LEFT)
+    if a is None:
         return None
-    left, top, right, bottom = a[0], a[1], b[2], b[3]
+    w, h = img.size
+    row = (a[2], max(0, a[1] - 4), w, min(h, a[3] + 4))
+    col = (max(0, a[0] - 4), a[3], min(w, a[2] + 4), h)
+    c = _box(img, TOP_RIGHT, row) if row[2] > row[0] else None
+    y = _box(img, YELLOW, col) if col[3] > col[1] else None
+    if c is None or y is None:
+        return None
+    left, top, right, bottom = a[0], a[1], c[2], y[3]
     if right - left < 40 or bottom - top < 20:
         return None
     return left, top, right, bottom
@@ -84,6 +105,8 @@ def render(entries: list[tuple[str, str]], size: tuple[int, int], font=None, scr
         rows += [(kind, ln) for ln in wrap(text, size[0] - 12, font)]
     fit = max(1, (size[1] - 8) // lh)
     end = len(rows) - max(0, scroll)
-    for i, (kind, ln) in enumerate(rows[max(0, end - fit):max(0, end)]):
-        draw.text((6, 4 + i * lh), ln, fill=COLOURS.get(kind, (255, 255, 255)), font=font)
+    shown = rows[max(0, end - fit):max(0, end)]
+    top = size[1] - 4 - len(shown) * lh  # newest line at the bottom, like a chat
+    for i, (kind, ln) in enumerate(shown):
+        draw.text((6, top + i * lh), ln, fill=COLOURS.get(kind, (255, 255, 255)), font=font)
     return img
