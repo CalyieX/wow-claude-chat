@@ -158,7 +158,12 @@ def test_unknown_backend_reports(monkeypatch, tmp_path):
 
 def test_no_private_details_in_sources():
     import re
-    bad = re.compile(r"(C:\\\\Users|C:\\Users|\.claude[/\\]|qo-virtual|@gmail|@proton)", re.I)
+    # generic patterns live here; the maintainer's own names are kept OUT of the repository, in a local file
+    words = [r"C:\\\\Users", r"C:\\Users", r"\.claude[/\\]", "@gmail", "@proton"]
+    private = Path.home() / ".wowclaude" / "private-words.txt"  # one word per line, never committed
+    if private.exists():
+        words += [re.escape(w.strip()) for w in private.read_text(encoding="utf-8").splitlines() if w.strip()]
+    bad = re.compile("(" + "|".join(words) + ")", re.I)
     for f in Path(__file__).parent.parent.rglob("*"):
         if f.suffix in (".py", ".lua", ".toc", ".md", ".bat", ".toml") and f.name != "test_wowclaude.py":
             hit = bad.search(f.read_text(encoding="utf-8", errors="replace"))
