@@ -24,6 +24,7 @@ from ctypes import wintypes
 from pathlib import Path
 
 from . import config
+from .winproc import hidden
 
 user32 = ctypes.windll.user32 if os.name == "nt" else None
 
@@ -261,7 +262,7 @@ def _kill_profile_browsers(profile: Path) -> None:
            "$_.Name -match 'chrome|msedge|brave' } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force }")
     try:
         subprocess.run(["powershell", "-NoProfile", "-Command", cmd], capture_output=True, timeout=20,
-                       creationflags=CREATE_NO_WINDOW)
+                       **hidden())
         time.sleep(1.0)
     except (OSError, subprocess.SubprocessError):
         pass

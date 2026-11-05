@@ -10,6 +10,7 @@ import uuid
 from pathlib import Path
 
 from . import config
+from .winproc import hidden
 
 CREATE_NO_WINDOW = 0x08000000  # Windows: no console window for the child process
 TIMEOUT = 100  # seconds; the addon gives up after 120, so one run must fit in that
@@ -172,13 +173,12 @@ def _exec(cmd: list, prompt: str, timeout: float | None = None) -> tuple:
     otherwise keep running) and AskTimeout is raised. Returns (exit code, stdout, stderr)."""
     proc = subprocess.Popen(cmd, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
                             text=True, encoding="utf-8", errors="replace", cwd=neutral_cwd(), env=_clean_env(),
-                            creationflags=CREATE_NO_WINDOW if os.name == "nt" else 0)
+                            **hidden())
     try:
         out, err = proc.communicate(prompt, timeout=timeout or TIMEOUT)
     except subprocess.TimeoutExpired as exc:
         if os.name == "nt":
-            subprocess.run(["taskkill", "/F", "/T", "/PID", str(proc.pid)], capture_output=True,
-                           creationflags=CREATE_NO_WINDOW)
+            subprocess.run(["taskkill", "/F", "/T", "/PID", str(proc.pid)], capture_output=True, **hidden())
         else:
             proc.kill()
         try:

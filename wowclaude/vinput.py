@@ -15,6 +15,8 @@ import re
 import subprocess
 from pathlib import Path
 
+from .winproc import hidden
+
 DEFAULT_AHK = r"C:\Program Files\AutoHotkey\v2\AutoHotkey64_UIA.exe"
 TITLE = "World of Warcraft"
 MAX_ACTIONS = 5
@@ -60,7 +62,7 @@ def run(cmd: str) -> bool:
     else:
         args = ["-Action", "type", "-Title", TITLE, "-Text", parts[1]]
     r = subprocess.run(["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", str(sc), *args],
-                       capture_output=True, text=True, timeout=20, creationflags=0x08000000)
+                       capture_output=True, text=True, timeout=20, **hidden())
     return r.returncode == 0
 
 

@@ -957,3 +957,14 @@ def test_slot_count_matches_addon_and_install_cleans_old_slots(tmp_path):
     slots.install(tmp_path)
     left = sorted(p.name for p in addons.glob("KKR*"))
     assert len(left) == slots.SLOTS and "KKR041" not in left and "KKR200" not in left and "KKR001" in left
+
+
+def test_every_helper_process_is_started_hidden():
+    """No black console windows: each subprocess call in the package passes hidden() or an explicit creationflags."""
+    pkg = Path(__file__).parent.parent / "wowclaude"
+    for f in pkg.glob("*.py"):
+        lines = f.read_text(encoding="utf-8").splitlines()
+        for i, ln in enumerate(lines):
+            if "subprocess.Popen(" in ln or "subprocess.run(" in ln:
+                block = " ".join(lines[i:i + 8])
+                assert "hidden()" in block or "creationflags" in block, f"{f.name}:{i + 1} starts a visible process"

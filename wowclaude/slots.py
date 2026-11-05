@@ -76,7 +76,7 @@ def install(root: Path) -> dict:
     target.mkdir(exist_ok=True)
     for name in ("KKMap.lua", "KKMap.toc"):
         shutil.copyfile(ADDON_SRC / name, target / name)
-    toc = "## Interface: 11508, 11509, 11510, 20505, 30403, 40402, 40403, 50503, 50504, 16001\n## Title: {name}\n## LoadOnDemand: 1\nReply.lua\n"
+    toc = "## Interface: 11508, 11509, 11510, 20505, 30403, 40402, 40403, 50503, 50504, 16001\n## Title: {name}\n## LoadOnDemand: 1\n## Group: KKMap\nReply.lua\n"
     sig = target / "sig"
     sig.mkdir(exist_ok=True)
 
@@ -85,8 +85,10 @@ def install(root: Path) -> dict:
         folder = addons / name
         folder.mkdir(exist_ok=True)
         made = 0
-        if not (folder / f"{name}.toc").exists():
-            (folder / f"{name}.toc").write_text(toc.format(name=name), encoding="utf-8")
+        tocfile = folder / f"{name}.toc"
+        want = toc.format(name=name)
+        if not tocfile.exists() or tocfile.read_text(encoding="utf-8", errors="replace") != want:
+            tocfile.write_text(want, encoding="utf-8")  # (also upgrades slots made by an older version)
             made = 1
         if not (folder / "Reply.lua").exists():
             (folder / "Reply.lua").write_text("KKReplyData = nil\n", encoding="utf-8")
