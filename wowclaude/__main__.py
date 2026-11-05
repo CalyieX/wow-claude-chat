@@ -145,6 +145,8 @@ def main(argv=None) -> int:
     po.add_argument("--click-through", action="store_true", help="mouse clicks go to the game")
     po.set_defaults(fn=lambda a: __import__("wowclaude.overlay", fromlist=["run"]).run(
         a.url, a.corner, a.size, a.opacity, a.click_through))
+    pch = sub.add_parser("chat", help="open the chat window over the game (talks to the AI directly, no reload needed)")
+    pch.set_defaults(fn=lambda a: __import__("wowclaude.chat_overlay", fromlist=["run"]).run())
     args = ap.parse_args(argv)
     return args.fn(args)
 

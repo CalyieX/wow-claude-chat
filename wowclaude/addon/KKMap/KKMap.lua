@@ -286,6 +286,8 @@ SLASH_KKCHAT2 = "/claude"
 SlashCmdList["KKCHAT"] = function(m) sendToClaude(m) end
 
 -- Commands for the bridge ("!browser ..." is handled by wowclaude, not sent to the AI)
+SLASH_KKCHATWIN1 = "/chat"
+SlashCmdList["KKCHATWIN"] = function() sendToClaude("!chat", "Opening chat window ...") end
 SLASH_KKBROWSER1 = "/browser"
 SLASH_KKBROWSER2 = "/wb"
 SlashCmdList["KKBROWSER"] = function(msg)

@@ -31,6 +31,9 @@ def handle_command(text: str) -> str | None:
         if problem:
             return "Browser did not open: " + problem
         return "Browser closed." if closing else "Browser opened."
+    if cmd == "!chat":
+        from . import chat_overlay
+        return chat_overlay.start()
     if cmd == "!setup":
         from . import overlay, setup_ui
         url = setup_ui.start_background()
