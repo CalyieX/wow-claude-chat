@@ -75,7 +75,7 @@ def test_install_and_publish():
         assert res["slots_created"] == slots.SLOTS
         assert (root / "Interface" / "AddOns" / "KKMap" / "KKMap.lua").exists()
         slots.publish(root, 99, 3, ["Claude: hi"])
-        reply = (root / "Interface" / "AddOns" / "KKR200" / "Reply.lua").read_text(encoding="utf-8")
+        reply = (root / "Interface" / "AddOns" / f"KKR{slots.SLOTS:03d}" / "Reply.lua").read_text(encoding="utf-8")
         assert "seq = 99" in reply
         assert (root / "Interface" / "AddOns" / "KKMap" / "sig" / "003.wav").stat().st_size > 0
         assert (root / "Interface" / "AddOns" / "KKMap" / "sig" / "004.wav").stat().st_size == 0
@@ -299,7 +299,7 @@ def test_publish_writes_only_the_next_slots():
         add = root / "Interface" / "AddOns"
         assert "seq = 7" in (add / "KKR010" / "Reply.lua").read_text(encoding="utf-8")
         assert "seq = 7" in (add / "KKR001" / "Reply.lua").read_text(encoding="utf-8")
-        assert "seq = 7" not in (add / "KKR100" / "Reply.lua").read_text(encoding="utf-8")
+        assert "seq = 7" not in (add / "KKR030" / "Reply.lua").read_text(encoding="utf-8")
 
 
 def test_deliver_retries_when_files_are_locked(monkeypatch):
