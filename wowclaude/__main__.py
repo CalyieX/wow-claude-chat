@@ -66,7 +66,22 @@ def cmd_doctor(args) -> int:
     return 0
 
 
+def _dpi_aware() -> None:
+    """Without this, Windows display scaling (125 %, 150 %) shifts screen coordinates: the 1-pixel strip is read blurred."""
+    if sys.platform != "win32":
+        return
+    import ctypes
+    try:
+        ctypes.windll.shcore.SetProcessDpiAwareness(2)
+    except (OSError, AttributeError):
+        try:
+            ctypes.windll.user32.SetProcessDPIAware()
+        except (OSError, AttributeError):
+            pass
+
+
 def main(argv=None) -> int:
+    _dpi_aware()
     ap = argparse.ArgumentParser(prog="wowclaude", description="Chat with Claude inside the World of Warcraft chat.")
     ap.add_argument("--version", action="version", version=__version__)
     sub = ap.add_subparsers(dest="cmd", required=True)

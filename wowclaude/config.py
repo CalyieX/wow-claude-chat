@@ -27,7 +27,7 @@ def save(cfg: dict) -> None:
 
 
 def _is_client(p: Path) -> bool:
-    return (p / "Interface" / "AddOns").is_dir() and (p / "Wow.exe").exists()
+    return (p / "Interface" / "AddOns").is_dir() and any(p.glob("Wow*.exe"))
 
 
 def find_clients() -> list[Path]:

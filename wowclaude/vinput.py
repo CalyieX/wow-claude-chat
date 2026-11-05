@@ -17,7 +17,15 @@ MAX_ACTIONS = 5
 INPUT_RE = re.compile(r"\[\[(click \d{1,5} \d{1,5}(?: [LRM])?|keys [^\]\n]{1,80})\]\]")
 
 
+def enabled() -> bool:
+    """Typing into the game is off unless you switch it on (config.json: "input_control": true, or WOWCLAUDE_VMOUSE)."""
+    from . import config
+    return bool(config.load().get("input_control")) or bool(os.environ.get("WOWCLAUDE_VMOUSE"))
+
+
 def script() -> Path | None:
+    if not enabled():
+        return None
     cands = [os.environ.get("WOWCLAUDE_VMOUSE"),
              str(Path.home() / ".claude" / "skills" / "qo-virtual-mouse" / "scripts" / "vmouse.ps1")]
     for c in cands:

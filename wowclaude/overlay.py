@@ -39,6 +39,8 @@ CANDIDATES = [
     r"C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe",
     r"C:\Program Files\Microsoft\Edge\Application\msedge.exe",
     r"C:\Program Files\BraveSoftware\Brave-Browser\Application\brave.exe",
+    os.path.expandvars(r"%LOCALAPPDATA%\Google\Chrome\Application\chrome.exe"),
+    os.path.expandvars(r"%LOCALAPPDATA%\BraveSoftware\Brave-Browser\Application\brave.exe"),
 ]
 
 
@@ -116,6 +118,22 @@ def place(w: int, h: int, corner: str, margin: int = 24) -> tuple[int, int]:
 _pinned: dict = {}
 
 
+def _border(hwnd: int) -> int:
+    """Chrome keeps an invisible resize border (7 px at 100 %) left, right and below the page: measure it so the
+    page can be made to fill the frame without gaps."""
+    if "b" in _pinned:
+        return _pinned["b"]
+    r = wintypes.RECT()
+    user32.GetWindowRect(wintypes.HWND(hwnd), ctypes.byref(r))
+    pt = wintypes.POINT(0, 0)
+    user32.ClientToScreen(wintypes.HWND(hwnd), ctypes.byref(pt))
+    b = pt.x - r.left
+    if 0 <= b <= 24:
+        _pinned["b"] = b
+        return b
+    return 0
+
+
 def pin(hwnd: int, x: int, y: int, w: int, h: int, opacity: int, click_through: bool) -> None:
     """Place the browser window: its top-left is (x, y), size w x (h + CHROME_BAR). The WoW frame covers the bar.
 
@@ -129,10 +147,15 @@ def pin(hwnd: int, x: int, y: int, w: int, h: int, opacity: int, click_through: 
         # Chrome drops the clip region now and then (page load, navigation): its grey title bar would show: put it back
         probe = ctypes.windll.gdi32.CreateRectRgn(0, 0, 0, 0)
         has_region = user32.GetWindowRgn(wintypes.HWND(hwnd), ctypes.c_void_p(probe)) != 0
-        ctypes.windll.gdi32.DeleteObject(ctypes.c_void_p(probe))
+        box = wintypes.RECT()
         if has_region:
+            ctypes.windll.gdi32.GetRgnBox(ctypes.c_void_p(probe), ctypes.byref(box))
+        ctypes.windll.gdi32.DeleteObject(ctypes.c_void_p(probe))
+        # it must be OUR region: Chrome sets its own (rounded corners) and that one shows the title bar
+        b = _border(hwnd)
+        if has_region and box.left == b and box.top == CHROME_BAR and box.right == b + w and box.bottom == CHROME_BAR + h:
             return
-        rgn = ctypes.windll.gdi32.CreateRectRgn(0, CHROME_BAR, w, h + CHROME_BAR)
+        rgn = ctypes.windll.gdi32.CreateRectRgn(b, CHROME_BAR, b + w, CHROME_BAR + h)
         user32.SetWindowRgn(wintypes.HWND(hwnd), ctypes.c_void_p(rgn), False)
         return
     _pinned.update(key=key, n=n)
@@ -147,10 +170,11 @@ def pin(hwnd: int, x: int, y: int, w: int, h: int, opacity: int, click_through: 
         user32.SetLayeredWindowAttributes(hwnd, 0, int(255 * max(10, min(100, opacity)) / 100), LWA_ALPHA)
     user32.SetWindowPos.argtypes = [wintypes.HWND, wintypes.HWND, ctypes.c_int, ctypes.c_int, ctypes.c_int,
                                     ctypes.c_int, wintypes.UINT]
-    user32.SetWindowPos(wintypes.HWND(hwnd), wintypes.HWND(HWND_TOPMOST), x, y - CHROME_BAR, w, h + CHROME_BAR,
-                        SWP_NOACTIVATE | SWP_SHOWWINDOW)
+    b = _border(hwnd)
+    user32.SetWindowPos(wintypes.HWND(hwnd), wintypes.HWND(HWND_TOPMOST), x - b, y - CHROME_BAR, w + 2 * b,
+                        h + CHROME_BAR + b, SWP_NOACTIVATE | SWP_SHOWWINDOW)
     # Chrome's own title bar is the top CHROME_BAR pixels: cut them off
-    rgn = ctypes.windll.gdi32.CreateRectRgn(0, CHROME_BAR, w, h + CHROME_BAR)
+    rgn = ctypes.windll.gdi32.CreateRectRgn(b, CHROME_BAR, b + w, CHROME_BAR + h)
     user32.SetWindowRgn(wintypes.HWND(hwnd), ctypes.c_void_p(rgn), False)
 
 
@@ -354,7 +378,7 @@ ART = Path(__file__).parent / "art"
 EDGE_SIZE, INSET, MARGIN = 24, 6, 9
 KEY_RGB, KEY = (1, 2, 3), "#010203"  # border art size, backdrop inset, visible border thickness (content margin)
 EDGE = MARGIN  # frame thickness left/right/bottom
-TOP = 30  # top strip with the address bar and the close button; the browser area starts below it
+TOP = 40  # top strip with the address bar and buttons; Chrome draws its first 7 rows over the frame edge, so they must lie under the opaque part (TOP >= CHROME_BAR + 5)
 
 
 def _art(name: str):
@@ -421,7 +445,7 @@ def slot_sprite(state: str = ""):
 
 
 CB = (6, 7, 25, 25)  # the red button inside the 32x32 UIPanelCloseButton texture (19x18)
-BW, BH, BY = CB[2] - CB[0], CB[3] - CB[1], 10
+BW, BH, BY = CB[2] - CB[0], CB[3] - CB[1], 14
 
 
 def buttons(fw: int) -> dict:
@@ -710,7 +734,7 @@ def frame_loop(hwnd: int, x: int, y: int, w: int, h: int, opacity: int, click_th
         fw = S["w"] + 2 * EDGE
         lw = label_width()
         gx = buttons(fw)["ghost"][0]
-        bar.geometry(f"{max(60, gx - 4 - lw)}x18+{S['x'] - EDGE + lw}+{S['y'] - TOP + 10}")
+        bar.geometry(f"{max(60, gx - 4 - lw)}x18+{S['x'] - EDGE + lw}+{S['y'] - TOP + 14}")
 
     def dims():
         return S["w"] + 2 * EDGE, S["h"] + TOP + EDGE
@@ -850,7 +874,9 @@ def play(url: str, size: str | None = None) -> None:
         return
     import sys
     args = [sys.executable, "-m", "wowclaude", "overlay"] + ([url] if url else []) + (["--size", size] if size else [])
-    subprocess.Popen(args, creationflags=0x08000000)
+    config.HOME.mkdir(parents=True, exist_ok=True)
+    log = open(config.HOME / "overlay.log", "a", encoding="utf-8")  # a failing overlay leaves a trace here
+    subprocess.Popen(args, creationflags=0x08000000, stdout=log, stderr=log)
 
 
 _ours: set[int] = set()

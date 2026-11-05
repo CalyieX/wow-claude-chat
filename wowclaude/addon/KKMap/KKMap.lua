@@ -8,6 +8,7 @@ local CELL, COLS, ROWS = 1, 128, 40
 -- The button list is sent only with a question (so the AI can click in menus); /kkmap frames keeps it on permanently.
 local MAGIC = {{255,0,255},{0,255,255},{255,255,0},{0,0,0},{255,255,255},{255,0,0},{0,255,0},{0,0,255}}
 KKMapDB = KKMapDB or {}
+local pending  -- set while a question waits for its answer (declared early: the frame scan reads it)
 local DE = GetLocale() == "deDE"
 local function L(de, en) if DE then return de end return en end
 local host = CreateFrame("Frame", "KKMapHost", UIParent)
@@ -151,7 +152,6 @@ KKMapState = KKMapState or { seq = 0, out = "", idx = 0, ack = 0 }
 KKMapDB.n = KKMapDB.n or 0
 local SIG = "Interface\\AddOns\\KKMap\\sig\\"
 local chatFrame
-local pending
 local nextSlot = 1
 
 -- Streifen nur bei Bedarf sichtbar (Antwort offen, Chatbox offen, kurz nach Zustellung) + dezente Leiste darunter.

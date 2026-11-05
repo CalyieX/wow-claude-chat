@@ -10,7 +10,7 @@ You: how do I get to the Undercity from Tirisfal?
 Claude: Follow the road south-east to the Ruins of Lordaeron, the elevator is at the entrance.
 ```
 
-The game never gets any keystrokes from this tool. The addon draws a small colour strip in the top-left corner,
+The game never gets any keystrokes from this tool (unless you switch on the optional input control, see the fair-play note). The addon draws a small colour strip in the top-left corner,
 a Python program on your PC reads it from the screen, asks Claude, and hands the answer back through
 pre-made addon files. (The return channel is the idea from the MIT-licensed *wow-ai* project.)
 
@@ -61,7 +61,8 @@ Small local models follow the macro and window instructions less reliably than C
 
 ## Fair-play note
 
-This tool reads your own screen and writes only into addon files; it presses no keys and sends no commands to the game.
+This tool reads your own screen and writes only into addon files; by default it presses no keys and sends no commands to the game.
+The optional input control (`"input_control": true` in `~/.wowclaude/config.json`; needs AutoHotkey v2 and a helper script) lets the AI click and type into the game window, which can include chat and slash commands. It is off by default; do not enable it where automation is forbidden.
 It still is third-party software next to a game client: check the rules of the server or client you play on, and use it
 at your own risk. It is not affiliated with Blizzard or Anthropic.
 

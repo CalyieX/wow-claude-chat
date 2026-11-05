@@ -12,6 +12,7 @@ import io
 import os
 import re
 import shutil
+import time
 import wave
 from pathlib import Path
 
@@ -74,7 +75,7 @@ def install(root: Path) -> dict:
     target.mkdir(exist_ok=True)
     for name in ("KKMap.lua", "KKMap.toc"):
         shutil.copyfile(ADDON_SRC / name, target / name)
-    toc = "## Interface: 11509, 16001\n## Title: {name}\n## LoadOnDemand: 1\nReply.lua\n"
+    toc = "## Interface: 11508, 11509, 11510, 20505, 30403, 40402, 40403, 50503, 50504, 16001\n## Title: {name}\n## LoadOnDemand: 1\nReply.lua\n"
     created = 0
     for i in range(1, SLOTS + 1):
         name = f"KKR{i:03d}"
@@ -109,11 +110,22 @@ def publish(root: Path, seq: int, idx: int, parts: list[str], overlay: dict | No
     """Write the reply into every slot, then flip the silent-sound marker ``idx`` to playable."""
     addons = _addons(root)
     content = reply_lua(seq, parts, overlay, macros).encode("utf-8")
-    for i in range(1, SLOTS + 1):
+    def write(i: int) -> None:
         target = addons / f"KKR{i:03d}" / "Reply.lua"
         tmp = target.with_suffix(".tmp")
+        for attempt in range(5):  # a virus scanner may hold a file for a moment
+            try:
+                tmp.write_bytes(content)
+                os.replace(tmp, target)
+                return
+            except PermissionError:
+                time.sleep(0.2 * (attempt + 1))
         tmp.write_bytes(content)
         os.replace(tmp, target)
+
+    from concurrent.futures import ThreadPoolExecutor
+    with ThreadPoolExecutor(max_workers=16) as pool:  # 200 small files: one after the other took 20+ s with a scanner
+        list(pool.map(write, range(1, SLOTS + 1)))
     marker = addons / "KKMap" / "sig" / f"{((int(idx) - 1) % SLOTS) + 1:03d}.wav"
     tmp = marker.with_suffix(".tmp")
     tmp.write_bytes(_silent_wav())
