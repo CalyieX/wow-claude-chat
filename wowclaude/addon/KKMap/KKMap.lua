@@ -2,7 +2,10 @@
 -- Format: Zellen 4x4 Pixel, 128 Zellen pro Zeile, 3 Bytes (R,G,B) pro Zelle.
 -- Zellen 0..7 = feste Kalibrierfarben, danach: 4 Byte Länge (LE), 4 Byte Prüfsumme, dann UTF-8-Text.
 -- Textzeilen: name|typ|text|x|y|b|h   (Pixel). Erste Zeile: #screen|breite|höhe
-local CELL, COLS, ROWS = 4, 128, 20
+-- The strip is tiny: 1 pixel per cell, 128 cells per row, only as many rows as the data needs (about 4).
+-- The decoder detects the cell size itself, so this can be changed (2 is more robust on odd UI scales).
+local CELL, COLS, ROWS = 1, 128, 12
+local WANT_FRAMES = false -- the chat bridge does not need the button list
 local MAGIC = {{255,0,255},{0,255,255},{255,255,0},{0,0,0},{255,255,255},{255,0,0},{0,255,0},{0,0,255}}
 KKMapDB = KKMapDB or {}
 local DE = GetLocale() == "deDE"
@@ -89,7 +92,7 @@ local function collect()
   local pw = select(1, GetPhysicalScreenSize())
   local top = UIParent:GetTop() * UIParent:GetEffectiveScale() * (ph / 768)
   local entries = {}
-  local f = EnumerateFrames()
+  local f = WANT_FRAMES and EnumerateFrames() or nil
   local n = 0
   while f and n < 1500 do
     n = n + 1
@@ -156,7 +159,7 @@ local nextSlot = 1
 local holdUntil, stripOn, lastEdit = 0, true, false
 local deco = CreateFrame("Frame", nil, host, "BackdropTemplate")
 deco:SetPoint("TOPLEFT", host, "BOTTOMLEFT", 0, 0)
-deco:SetSize(COLS * CELL, 18)
+deco:SetSize(300, 14)
 deco:SetBackdrop({ bgFile = "Interface\\Buttons\\WHITE8X8", edgeFile = "Interface\\Buttons\\WHITE8X8", edgeSize = 1 })
 deco:SetBackdropColor(0.06, 0.05, 0.03, 0.85)
 deco:SetBackdropBorderColor(0.85, 0.65, 0.2, 1)

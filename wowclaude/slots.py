@@ -120,6 +120,16 @@ def publish(root: Path, seq: int, idx: int, parts: list[str], overlay: dict | No
     os.replace(tmp, marker)
 
 
+def reset_marker(root: Path, idx: int) -> None:
+    """Make the marker for ``idx`` silent again. A marker left playable from an earlier answer would make the
+    addon think a reply is ready and burn one reply slot every poll while the new answer is still being written."""
+    marker = _addons(root) / "KKMap" / "sig" / f"{((int(idx) - 1) % SLOTS) + 1:03d}.wav"
+    try:
+        marker.write_bytes(b"")
+    except OSError:
+        pass
+
+
 def install_images(root: Path) -> int:
     from PIL import Image
     folder = _addons(root) / "KKMap" / "img"

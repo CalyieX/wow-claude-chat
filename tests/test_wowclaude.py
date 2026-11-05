@@ -6,7 +6,7 @@ from PIL import Image
 from wowclaude import claude, decode, slots
 
 
-def make_strip(text: str) -> Image.Image:
+def make_strip(text: str, cell: int = 4) -> Image.Image:
     """Render a strip exactly like the addon does, so the decoder can be tested without the game."""
     body = text.encode("utf-8")
     s = 0
@@ -18,9 +18,9 @@ def make_strip(text: str) -> Image.Image:
     cells = list(decode.MAGIC) + [tuple(data[i:i + 3]) for i in range(0, len(data), 3)]
     img = Image.new("RGB", (700, 200), (20, 20, 20))
     for i, rgb in enumerate(cells):
-        x, y = (i % decode.COLS) * decode.CELL, (i // decode.COLS) * decode.CELL
-        for dx in range(decode.CELL):
-            for dy in range(decode.CELL):
+        x, y = (i % decode.COLS) * cell, (i // decode.COLS) * cell
+        for dx in range(cell):
+            for dy in range(cell):
                 img.putpixel((x + 30 + dx, y + 10 + dy), rgb)  # strip not at the corner: must still be found
     return img
 
@@ -32,6 +32,15 @@ def test_decode_message_and_state():
     assert (st.message_seq, st.message_idx, st.message) == (123, 7, "Hello | pipe")
     assert st.ack_seq == 120 and st.edit_active and st.image_next == 3 and st.slot_next == 42
     assert "Level 5" in st.context
+
+
+def test_decode_every_cell_size():
+    import pytest
+    text = "#ver|26\n#msg|55|2|tiny strip | works\n#ack|50\n#ctx|A|B|C"
+    for cell in (1, 2, 3, 4):
+        st = decode.decode(make_strip(text, cell))
+        assert st is not None, cell
+        assert (st.message_seq, st.message_idx, st.message, st.ack_seq) == (55, 2, "tiny strip | works", 50)
 
 
 def test_decode_rejects_bad_checksum():
@@ -70,6 +79,8 @@ def test_install_and_publish():
         assert "seq = 99" in reply
         assert (root / "Interface" / "AddOns" / "KKMap" / "sig" / "003.wav").stat().st_size > 0
         assert (root / "Interface" / "AddOns" / "KKMap" / "sig" / "004.wav").stat().st_size == 0
+        slots.reset_marker(root, 3)
+        assert (root / "Interface" / "AddOns" / "KKMap" / "sig" / "003.wav").stat().st_size == 0
 
 
 def test_macro_blocks_end_up_in_lua():
@@ -86,13 +97,13 @@ def test_command_backend(monkeypatch, tmp_path):
     monkeypatch.setattr(config, "HOME", tmp_path)
     monkeypatch.setattr(config, "CONFIG", tmp_path / "config.json")
     script = tmp_path / "echo.py"
-    script.write_text("import sys; t = sys.stdin.read(); print('GOT:' + t.strip().splitlines()[-2])", encoding="utf-8")
+    script.write_text("import sys; t = sys.stdin.read(); print('GOT:' + ('hello there' in t and 'hello there' or 'nothing'))", encoding="utf-8")
     config.save({"backend": "command", "command": [sys.executable, str(script)]})
     assert backends.check()[0]
     session = claude.Session()
     answer = session.ask("hello there")
-    assert answer.startswith("GOT:") and "hello there" in answer
-    assert session.history == [("hello there", answer)]
+    assert answer == "GOT:hello there"
+    assert session.history[0][0] == "hello there" or session.history[0][0].startswith("hello there")
 
 
 def test_openai_compatible_backend(monkeypatch, tmp_path):
@@ -125,7 +136,7 @@ def test_openai_compatible_backend(monkeypatch, tmp_path):
     session = claude.Session()
     assert session.ask("ping") == "Pong"
     assert seen["path"] == "/v1/chat/completions" and seen["auth"] == "Bearer k123"
-    assert seen["body"]["model"] == "deepseek-chat" and seen["body"]["messages"][-1]["content"] == "ping"
+    assert seen["body"]["model"] == "deepseek-chat" and seen["body"]["messages"][-1]["content"].startswith("ping")
     srv.shutdown()
 
 

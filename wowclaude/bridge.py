@@ -54,6 +54,7 @@ def run(root: Path, poll: float = 0.6) -> None:
             if state.context:
                 question = "[Game state: " + state.context + "]\n" + question
             print(f"> {state.message.strip()}", flush=True)
+            slots.reset_marker(root, state.message_idx or 1)
             try:
                 reply = session.ask(question, model)
             except Exception as exc:  # noqa: BLE001 - tell the player, keep running

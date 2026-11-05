@@ -1,16 +1,15 @@
 """Decode the colour strip that the KKMap addon draws in the top-left corner of the game window.
 
-Layout: 4x4 pixel cells, 128 per row, 3 bytes (R, G, B) per cell. The first 8 cells are fixed
-calibration colours; then 4 bytes length (LE), 4 bytes checksum, then UTF-8 text lines such as
-``#msg|seq|slot|text`` or ``#ack|seq``.
+Layout: square cells (1 to 4 pixels, detected automatically), 128 cells per row, 3 bytes (R, G, B) per cell.
+The first 8 cells are fixed calibration colours; then 4 bytes length (LE), 4 bytes checksum, then UTF-8 text
+lines such as ``#msg|seq|slot|text`` or ``#ack|seq``.
 """
 from __future__ import annotations
 
 from dataclasses import dataclass
 
-CELL = 4
 COLS = 128
-ROWS = 20
+MAX_ROWS = 40
 MAGIC = ((255, 0, 255), (0, 255, 255), (255, 255, 0), (0, 0, 0),
          (255, 255, 255), (255, 0, 0), (0, 255, 0), (0, 0, 255))
 
@@ -28,23 +27,34 @@ class GameState:
     slot_next: int = 1
 
 
-def _cell(px, ox: int, oy: int, i: int) -> tuple[int, int, int]:
-    x = ox + (i % COLS) * CELL + CELL // 2
-    y = oy + (i // COLS) * CELL + CELL // 2
+def _cell(px, ox: int, oy: int, i: int, cell: int) -> tuple[int, int, int]:
+    x = ox + (i % COLS) * cell + cell // 2
+    y = oy + (i // COLS) * cell + cell // 2
     return tuple(int(v) for v in px[x, y][:3])
+
+
+def _cell_size(px, ox: int, oy: int, width: int) -> int:
+    """Width in pixels of the first (magenta) calibration cell = the cell size."""
+    n = 0
+    while n < 8 and ox + n < width and tuple(px[ox + n, oy][:3]) == MAGIC[0]:
+        n += 1
+    return n
 
 
 def _locate(image, search_w: int = 400, search_h: int = 400):
     px = image.convert("RGB").load()
     w, h = image.size
-    for oy in range(0, max(0, min(search_h, h - CELL * ROWS))):
-        for ox in range(0, max(0, min(search_w, w - CELL * COLS))):
+    for oy in range(0, max(0, min(search_h, h - 4))):
+        for ox in range(0, max(0, min(search_w, w - 8))):
             if tuple(px[ox, oy]) != MAGIC[0]:
                 continue
             if (ox > 0 and tuple(px[ox - 1, oy]) == MAGIC[0]) or (oy > 0 and tuple(px[ox, oy - 1]) == MAGIC[0]):
                 continue
-            if all(_cell(px, ox, oy, i) == MAGIC[i] for i in range(8)):
-                return px, ox, oy
+            cell = _cell_size(px, ox, oy, w)
+            if cell < 1 or ox + COLS * cell > w:
+                continue
+            if all(_cell(px, ox, oy, i, cell) == MAGIC[i] for i in range(8)):
+                return px, ox, oy, cell, w, h
     return None
 
 
@@ -53,10 +63,19 @@ def decode(image) -> GameState | None:
     found = _locate(image)
     if found is None:
         return None
-    px, ox, oy = found
+    px, ox, oy, cell, w, h = found
+    rows = max(0, min(MAX_ROWS, (h - oy) // cell))
     raw = bytearray()
-    for i in range(8, COLS * ROWS):
-        raw.extend(_cell(px, ox, oy, i))
+    need = None
+    for i in range(8, COLS * rows):
+        raw.extend(_cell(px, ox, oy, i, cell))
+        if need is None and len(raw) >= 8:  # length + checksum are in: now we know how much more to read
+            length = int.from_bytes(raw[0:4], "little")
+            if length <= 0 or length > COLS * rows * 3:
+                return None
+            need = 8 + length
+        if need is not None and len(raw) >= need:
+            break
     length = int.from_bytes(raw[0:4], "little")
     checksum = int.from_bytes(raw[4:8], "little")
     body = bytes(raw[8:8 + length])

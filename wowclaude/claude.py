@@ -137,7 +137,7 @@ class Session:
     def ask(self, prompt: str, model: str | None = None) -> str:
         from . import backends
         if backends.name() != "claude":
-            answer = backends.ask(persona()[1], self.history, prompt, model)
+            answer = backends.ask(persona()[1], self.history, prompt + REMINDER, model)
             self.history.append((prompt, answer))
             return answer
         exe = claude_path()
