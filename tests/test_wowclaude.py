@@ -985,3 +985,24 @@ def test_lua_secret_text_does_not_raise():
     assert st is not None and st.message == "hi"
     shown = [str(x) for x in lua.eval("DEFAULT_CHAT_FRAME.__log").values()]
     assert not any("Fehler" in x for x in shown)
+
+
+def test_lua_zero_byte_marker_does_not_deliver_or_burn_slot(tmp_path):
+    """Control for the real-file round trip: a marker that exists but is empty (still being written) must not count as ready."""
+    h, lua = _lua_addon()
+    addons = tmp_path / "Interface" / "AddOns"
+    (addons / "KKMap" / "sig").mkdir(parents=True)
+    for i in range(1, 8):
+        (addons / f"KKR{i:03d}").mkdir()
+    lua.eval("function() SlashCmdList['KKCHAT']('Hallo') end")()
+    st = decode.decode(h.strip_image(lua))
+    marker = addons / "KKMap" / "sig" / f"{st.message_idx:03d}.wav"
+    marker.write_bytes(b"")
+    slots.publish(tmp_path, st.message_seq, st.message_idx, ["Claude: x"], None, None, 1)
+    marker.write_bytes(b"")                                   # publish finished the marker; force "still empty"
+    lua.globals().__play = lambda path: marker.stat().st_size > 0
+    lua.globals().__load = lambda name: False
+    for _ in range(10):
+        lua.eval("function() __update(1.0) end")()
+    after = decode.decode(h.strip_image(lua))
+    assert after.ack_seq != st.message_seq and after.slot_next == 1   # nothing delivered, no slot used up
