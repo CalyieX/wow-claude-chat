@@ -94,6 +94,14 @@ LOCK_PORT = 47831
 _lock_socket = None
 
 
+FRESH_SECONDS = 25
+
+
+def is_fresh(seq: int, now: float | None = None) -> bool:
+    """The addon uses the send time (epoch seconds) as message number: a message sent within the last seconds is new."""
+    return 0 <= (now if now is not None else time.time()) - int(seq) <= FRESH_SECONDS
+
+
 def acquire_lock():
     """Only one bridge per PC: a second one would answer every question twice. Returns the socket, or None if taken."""
     import socket
@@ -125,7 +133,9 @@ def run(root: Path, poll: float = 0.6) -> None:
             time.sleep(poll)
             continue
         if last_seq is None:
-            last_seq = state.message_seq
+            # first reading after a game start: an old message is skipped, but one that was sent just now (the player
+            # typed /browser right after the start) is not, or the very first message after a restart would be lost
+            last_seq = 0 if (state.message.strip() and is_fresh(state.message_seq)) else state.message_seq
         elif state.message_seq != last_seq and state.message.strip():
             last_seq = state.message_seq
             question = state.message.strip()

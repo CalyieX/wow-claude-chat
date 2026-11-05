@@ -83,3 +83,10 @@ def test_lua_menu_command_does_not_reload_while_a_slot_is_left():
         asked += 1
         lua.eval("function() __update(8.0) end")()
     assert asked == slots.SLOTS  # a normal question reloads two slots earlier; a menu command uses every slot first
+
+
+def test_first_message_after_a_game_start_is_not_swallowed():
+    from wowclaude import bridge
+    assert bridge.is_fresh(1000, now=1010)        # sent 10 s ago: answer it
+    assert not bridge.is_fresh(1000, now=1100)    # left over from an earlier game session: skip it
+    assert not bridge.is_fresh(1000, now=900)     # a number from the future is no send time: skip it
