@@ -240,3 +240,30 @@ def test_setup_page_requires_token():
     except urllib.error.HTTPError as exc:
         assert exc.code == 403
     assert b"AI setup" in urllib.request.urlopen(url, timeout=3).read()
+
+
+def test_pin_does_not_touch_window_every_tick(monkeypatch):
+    """Regression: re-applying style/region/position every 250 ms made the browser page blink."""
+    from wowclaude import overlay
+    calls = []
+
+    class Fake:
+        def __getattr__(self, name):
+            def fn(*a, **k):
+                calls.append(name)
+                return 0
+            fn.argtypes = None
+            return fn
+
+    fake = Fake()
+    fake.SetWindowPos = type("F", (), {"argtypes": None, "__call__": lambda self, *a, **k: calls.append("SetWindowPos")})()
+    monkeypatch.setattr(overlay, "user32", fake)
+    monkeypatch.setattr(overlay.ctypes, "windll", type("W", (), {"gdi32": fake})(), raising=False)
+    overlay._pinned.clear()
+    overlay.pin(1, 10, 10, 400, 300, 100, False)
+    first = calls.count("SetWindowPos")
+    for _ in range(15):
+        overlay.pin(1, 10, 10, 400, 300, 100, False)
+    assert first == 1 and calls.count("SetWindowPos") == 1
+    overlay.pin(1, 20, 10, 400, 300, 100, False)  # a real change is applied immediately
+    assert calls.count("SetWindowPos") == 2
