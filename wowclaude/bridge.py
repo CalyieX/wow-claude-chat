@@ -15,6 +15,20 @@ def read_state() -> decode.GameState | None:
 def deliver(root: Path, state: decode.GameState, reply: str) -> bool:
     reply, macros = claude.extract_macros(reply)
     reply, overlay = claude.extract_overlay(reply)
+    reply, play = claude.extract_play(reply)
+    from . import vinput
+    reply, acts = vinput.extract(reply) if vinput.available() else (reply, [])
+    for act in acts:
+        try:
+            print(f"input {act}: {'ok' if vinput.run(act) else 'failed'}", flush=True)
+        except Exception as exc:  # noqa: BLE001
+            print(f"input failed: {exc}", flush=True)
+    if play:
+        try:
+            from . import overlay as ov
+            ov.play(play)
+        except Exception as exc:  # noqa: BLE001 - the text answer must still arrive
+            print(f"overlay failed: {exc}", flush=True)
     if overlay:
         try:
             overlay["lines"] = slots.resolve_images(root, overlay["lines"], state.image_next)

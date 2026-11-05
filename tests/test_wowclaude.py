@@ -170,3 +170,20 @@ def test_overlay_place_corners(monkeypatch):
     monkeypatch.setattr(overlay, "game_rect", lambda: (100, 50, 1100, 650))
     assert overlay.place(400, 200, "br", 10) == (690, 440)
     assert overlay.place(400, 200, "tl", 10) == (110, 100)
+
+
+def test_extract_play():
+    from wowclaude import claude
+    text, url = claude.extract_play("Bitte. [[play https://www.youtube.com/watch?v=abc]]")
+    assert url == "https://www.youtube.com/watch?v=abc" and text == "Bitte."
+    assert claude.extract_play("zu. [[play off]]")[1] == "off"
+    assert claude.extract_play("[[play file:///c:/x.exe]]")[1] is None
+    assert claude.extract_play("[[play http://evil]]")[1] is None
+
+
+def test_vinput_extract_limits_and_validates():
+    from wowclaude import vinput
+    text, cmds = vinput.extract("ok [[click 100 200]] [[keys {Esc}]] [[click 1 2 R]] [[click x y]] [[keys " + "a" * 100 + "]]")
+    assert cmds == ["click 100 200", "keys {Esc}", "click 1 2 R"]
+    assert "[[click x y]]" in text
+    assert len(vinput.extract("[[click 1 1]]" * 9)[1]) == vinput.MAX_ACTIONS

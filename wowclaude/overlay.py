@@ -26,6 +26,7 @@ WS_EX_LAYERED, WS_EX_TRANSPARENT, WS_EX_TOOLWINDOW = 0x80000, 0x20, 0x80
 HWND_TOPMOST = -1
 SWP_NOACTIVATE, SWP_SHOWWINDOW = 0x10, 0x40
 LWA_ALPHA = 0x2
+CHROME_BAR = 34  # height of Chrome's own app-window title bar (hidden behind the WoW frame)
 
 CANDIDATES = [
     r"C:\Program Files\Google\Chrome\Application\chrome.exe",
@@ -81,14 +82,24 @@ def place(w: int, h: int, corner: str, margin: int = 24) -> tuple[int, int]:
     return x, y
 
 
+_clipped: set = set()
+
+
 def pin(hwnd: int, x: int, y: int, w: int, h: int, opacity: int, click_through: bool) -> None:
     ex = user32.GetWindowLongW(hwnd, GWL_EXSTYLE) | WS_EX_LAYERED | WS_EX_TOOLWINDOW
     ex = ex | WS_EX_TRANSPARENT if click_through else ex & ~WS_EX_TRANSPARENT
     user32.SetWindowLongW(hwnd, GWL_EXSTYLE, ex)
     user32.SetLayeredWindowAttributes(hwnd, 0, int(255 * max(10, min(100, opacity)) / 100), LWA_ALPHA)
+    # Chrome draws its own title bar inside the client area: move the window up and clip that strip away.
     user32.SetWindowPos.argtypes = [wintypes.HWND, wintypes.HWND, ctypes.c_int, ctypes.c_int, ctypes.c_int,
                                     ctypes.c_int, wintypes.UINT]
-    user32.SetWindowPos(wintypes.HWND(hwnd), wintypes.HWND(HWND_TOPMOST), x, y, w, h, SWP_NOACTIVATE | SWP_SHOWWINDOW)
+    gdi32 = ctypes.windll.gdi32
+    gdi32.CreateRectRgn.restype = wintypes.HANDLE
+    if (hwnd, w, h) not in _clipped:
+        rgn = gdi32.CreateRectRgn(0, CHROME_BAR, w, h + CHROME_BAR)
+        user32.SetWindowRgn(wintypes.HWND(hwnd), rgn, True)
+        _clipped.add((hwnd, w, h))
+    user32.SetWindowPos(wintypes.HWND(hwnd), wintypes.HWND(HWND_TOPMOST), x, y - CHROME_BAR, w, h + CHROME_BAR, SWP_NOACTIVATE | SWP_SHOWWINDOW)
 
 
 def run(url: str, corner: str = "br", size: str = "480x270", opacity: int = 90,
@@ -120,7 +131,83 @@ def run(url: str, corner: str = "br", size: str = "480x270", opacity: int = 90,
         print("Browser window did not appear.")
         return 1
     time.sleep(1.0)
-    pin(hwnd, x, y, w, h, opacity, click_through)
     print(f"Overlay running ({w}x{h}, {opacity}% opacity{', click-through' if click_through else ''}). "
-          "Close the window to stop. Log in once in this window (own profile).")
+          "Close it with the X in the frame. Log in once in this window (own profile).")
+    frame_loop(hwnd, x, y, w, h, opacity, click_through)
     return 0
+
+
+GOLD, DARK, TXT = "#d9a633", "#100d08", "#e6cc80"
+BAR, EDGE = 20, 3
+
+
+def frame_loop(hwnd: int, x: int, y: int, w: int, h: int, opacity: int, click_through: bool) -> None:
+    """Wrap the browser window in a WoW-style frame (dark panel, gold border, title bar with X)."""
+    import tkinter as tk
+
+    GWL_STYLE, WS_CAPTION, WS_THICKFRAME, WS_BORDER = -16, 0xC00000, 0x40000, 0x800000
+    st = user32.GetWindowLongW(hwnd, GWL_STYLE) & ~(WS_CAPTION | WS_THICKFRAME | WS_BORDER)
+    user32.SetWindowLongW(hwnd, GWL_STYLE, st)
+    pos = {"x": x, "y": y}
+    root = tk.Tk()
+    root.overrideredirect(True)
+    root.attributes("-topmost", True)
+    fw, fh = w + 2 * EDGE, h + BAR + 2 * EDGE
+    root.geometry(f"{fw}x{fh}+{x - EDGE}+{y - BAR - EDGE}")
+    root.configure(bg=GOLD)
+    inner = tk.Frame(root, bg=DARK)
+    inner.place(x=1, y=1, width=fw - 2, height=fh - 2)
+    bar = tk.Frame(inner, bg=DARK, height=BAR)
+    bar.pack(fill="x")
+    title = tk.Label(bar, text="K&K WoW AI Chat", bg=DARK, fg=TXT, font=("Friz Quadrata TT", 9, "bold"))
+    title.pack(side="left", padx=6)
+    close = tk.Label(bar, text=" X ", bg=DARK, fg=TXT, font=("Arial", 9, "bold"), cursor="hand2")
+    close.pack(side="right")
+    close.bind("<Button-1>", lambda e: user32.PostMessageW(wintypes.HWND(hwnd), 0x0010, 0, 0))
+    close.bind("<Enter>", lambda e: close.config(bg="#6b1d1d"))
+    close.bind("<Leave>", lambda e: close.config(bg=DARK))
+    drag = {}
+
+    def down(e):
+        drag["dx"], drag["dy"] = e.x_root - root.winfo_x(), e.y_root - root.winfo_y()
+
+    def move(e):
+        nx, ny = e.x_root - drag["dx"], e.y_root - drag["dy"]
+        root.geometry(f"+{nx}+{ny}")
+        pos["x"], pos["y"] = nx + EDGE, ny + BAR + EDGE
+
+    for wdg in (bar, title):
+        wdg.bind("<Button-1>", down)
+        wdg.bind("<B1-Motion>", move)
+
+    def tick():
+        if not user32.IsWindow(wintypes.HWND(hwnd)):
+            root.destroy()
+            return
+        pin(hwnd, pos["x"], pos["y"], w, h, opacity, click_through)
+        root.after(250, tick)
+
+    tick()
+    root.mainloop()
+
+
+def play(url: str) -> None:
+    """Called by the bridge for [[play URL]]: start the overlay in the background, or close it for ``off``."""
+    if url == "off":
+        for hwnd, title in _windows().items():
+            if (config.HOME / "overlay-profile").exists() and hwnd in _ours:
+                user32.PostMessageW(hwnd, 0x0010, 0, 0)  # WM_CLOSE
+        _ours.clear()
+        return
+    import sys
+    before = set(_windows())
+    subprocess.Popen([sys.executable, "-m", "wowclaude", "overlay", url], creationflags=0x08000000)
+    for _ in range(40):
+        time.sleep(0.5)
+        new = set(_windows()) - before
+        if new:
+            _ours.update(new)
+            break
+
+
+_ours: set[int] = set()

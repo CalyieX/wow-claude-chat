@@ -32,6 +32,9 @@ def persona() -> tuple[str, str]:
         base += "\n\n" + (Path(__file__).parent / "macro_skill.md").read_text(encoding="utf-8")
     except OSError:
         pass
+    from . import vinput
+    if vinput.available():
+        base += "\n\n" + vinput.SKILL
     try:
         lines = config.PERSONA.read_text(encoding="utf-8").splitlines()
         if lines and lines[0].strip():
@@ -45,8 +48,17 @@ REMINDER = (
     "\n\n[wowclaude format reminder, not from the player: if the player wants a macro, do NOT explain how to type it. "
     "Reply with one short sentence plus a block exactly like [[macro Name]]first command line\nsecond command line[[/macro]] "
     "(use the player's game language for spell names). The addon creates the macro for the player. "
-    "For lists or plans use [[overlay Title]]lines[[/overlay]].]"
+    "For lists or plans use [[overlay Title]]lines[[/overlay]]. "
+    "To show a video or web page over the game (YouTube, Twitch, Netflix ...) put [[play https://full-url]] in the reply; "
+    "[[play off]] closes it.]"
 )
+
+def reminder() -> str:
+    from . import vinput
+    extra = ("\n[You also have background input: [[click X Y]] / [[keys TEXT]] act in the game window without interrupting the player.]"
+             if vinput.available() else "")
+    return REMINDER + extra
+
 
 MACRO_RE = re.compile(r"\[\[macro ([^\]\n]{1,40})\]\]\s*(.*?)\s*\[\[/macro\]\]", re.S)
 
@@ -55,6 +67,15 @@ def extract_macros(text: str) -> tuple[str, list[dict]]:
     """Pull all [[macro Name]]...[[/macro]] blocks out of a reply."""
     macros = [{"name": m.group(1).strip()[:16], "body": m.group(2).strip()} for m in MACRO_RE.finditer(text)]
     return MACRO_RE.sub("", text).strip(), macros[:6]
+
+
+PLAY_RE = re.compile(r"\[\[play (off|https://[^\s\]]{4,300})\]\]")
+
+
+def extract_play(text: str) -> tuple[str, str | None]:
+    """Pull a [[play https://...]] (or [[play off]]) command out of a reply. Only https URLs are accepted."""
+    m = PLAY_RE.search(text)
+    return (PLAY_RE.sub("", text).strip(), m.group(1) if m else None)
 
 
 def extract_overlay(text: str) -> tuple[str, dict | None]:
@@ -137,7 +158,7 @@ class Session:
     def ask(self, prompt: str, model: str | None = None) -> str:
         from . import backends
         if backends.name() != "claude":
-            answer = backends.ask(persona()[1], self.history, prompt + REMINDER, model)
+            answer = backends.ask(persona()[1], self.history, prompt + reminder(), model)
             self.history.append((prompt, answer))
             return answer
         exe = claude_path()
@@ -152,7 +173,7 @@ class Session:
             return self._run(exe, prompt, model)
 
     def _run(self, exe: str, prompt: str, model: str | None) -> str:
-        prompt = prompt + REMINDER
+        prompt = prompt + reminder()
         cmd = [exe, "-p", "--output-format", "text", "--tools", "", "--append-system-prompt", persona()[1]]
         cmd += ["--resume" if self.started else "--session-id", self.id]
         if model:
