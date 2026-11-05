@@ -121,6 +121,48 @@ def pin(hwnd: int, x: int, y: int, w: int, h: int, opacity: int, click_through: 
     user32.SetWindowRgn(wintypes.HWND(hwnd), ctypes.c_void_p(rgn), False)
 
 
+def _painted(hwnd: int, w: int, h: int) -> bool:
+    """True when the browser window really contains a picture (a blank Chrome window prints as one flat colour)."""
+    from PIL import Image
+    gdi = ctypes.windll.gdi32
+    user32.GetDC.restype = ctypes.c_void_p
+    hdc = user32.GetDC(None)
+    gdi.CreateCompatibleDC.restype = ctypes.c_void_p
+    mdc = gdi.CreateCompatibleDC(ctypes.c_void_p(hdc))
+    gdi.CreateCompatibleBitmap.restype = ctypes.c_void_p
+    bmp = gdi.CreateCompatibleBitmap(ctypes.c_void_p(hdc), w, h)
+    gdi.SelectObject(ctypes.c_void_p(mdc), ctypes.c_void_p(bmp))
+    try:
+        user32.PrintWindow(wintypes.HWND(hwnd), ctypes.c_void_p(mdc), 2)
+
+        class BI(ctypes.Structure):
+            _fields_ = [("s", wintypes.DWORD), ("w", wintypes.LONG), ("h", wintypes.LONG), ("p", wintypes.WORD),
+                        ("b", wintypes.WORD), ("c", wintypes.DWORD), ("z", wintypes.DWORD), ("x", wintypes.LONG),
+                        ("y", wintypes.LONG), ("u", wintypes.DWORD), ("i", wintypes.DWORD)]
+
+        bi = BI(ctypes.sizeof(BI), w, -h, 1, 32, 0, 0, 0, 0, 0, 0)
+        buf = ctypes.create_string_buffer(w * h * 4)
+        gdi.GetDIBits(ctypes.c_void_p(mdc), ctypes.c_void_p(bmp), 0, h, buf, ctypes.byref(bi), 0)
+        im = Image.frombuffer("RGBA", (w, h), buf, "raw", "BGRA", 0, 1).convert("RGB")
+        seen = {im.getpixel((x, y)) for x in range(CHROME_BAR, w - 10, 23) for y in range(CHROME_BAR + 10, h - 10, 17)}
+        return len(seen) > 1
+    except Exception:  # noqa: BLE001 - if we cannot tell, assume it is fine
+        return True
+    finally:
+        gdi.DeleteObject(ctypes.c_void_p(bmp))
+        gdi.DeleteDC(ctypes.c_void_p(mdc))
+        user32.ReleaseDC(None, ctypes.c_void_p(hdc))
+
+
+def _wait_painted(hwnd: int, w: int, h: int, seconds: float = 8.0) -> bool:
+    end = time.time() + seconds
+    while time.time() < end:
+        if _painted(hwnd, w, h):
+            return True
+        time.sleep(0.7)
+    return False
+
+
 def _kill_profile_browsers(profile: Path) -> None:
     """A browser already running on our own profile would swallow the new window (and the debug port): close it."""
     cmd = ("Get-CimInstance Win32_Process | Where-Object { $_.CommandLine -like '*" + profile.name + "*' -and "
@@ -236,24 +278,29 @@ def run(url: str | None = None, corner: str | None = None, size: str | None = No
     save_state(url=url, x=x, y=y, w=w, h=h)
     profile = config.HOME / "overlay-profile"
     profile.mkdir(parents=True, exist_ok=True)
-    _kill_profile_browsers(profile)
-    port = free_port()
-    before = set(_windows())
-    subprocess.Popen([exe, f"--app={url}", f"--user-data-dir={profile}", f"--window-size={w},{h + CHROME_BAR}",
-                      f"--window-position={x},{y - CHROME_BAR}", "--autoplay-policy=no-user-gesture-required",
-                      "--no-first-run", "--disable-features=Translate", f"--remote-debugging-port={port}",
-                      "--remote-allow-origins=*"],
-                     creationflags=0x08000000)
-    hwnd = 0
-    for _ in range(60):
-        time.sleep(0.5)
-        new = set(_windows()) - before
-        if new:
-            hwnd = sorted(new)[0]
+    hwnd, port = 0, 0
+    for attempt in range(3):  # Chrome sometimes opens a window that never paints (stays blank): then start it again
+        _kill_profile_browsers(profile)
+        port = free_port()
+        before = set(_windows())
+        subprocess.Popen([exe, f"--app={url}", f"--user-data-dir={profile}", f"--window-size={w},{h + CHROME_BAR}",
+                          f"--window-position={x},{y - CHROME_BAR}", "--autoplay-policy=no-user-gesture-required",
+                          "--no-first-run", "--disable-features=Translate", f"--remote-debugging-port={port}",
+                          "--remote-allow-origins=*"],
+                         creationflags=0x08000000)
+        hwnd = 0
+        for _ in range(60):
+            time.sleep(0.5)
+            new = set(_windows()) - before
+            if new:
+                hwnd = sorted(new)[0]
+                break
+        if not hwnd:
+            print("Browser window did not appear.")
+            return 1
+        if _wait_painted(hwnd, w, h + CHROME_BAR):
             break
-    if not hwnd:
-        print("Browser window did not appear.")
-        return 1
+        print(f"Browser window stayed blank (try {attempt + 1}/3), restarting it ...", flush=True)
     time.sleep(1.0)
     print(f"Overlay running ({w}x{h}, debug port {port}). Drag the title bar to move, the corner to resize, X to close; "
           "position and size are remembered. Log in once in this window (own profile).", flush=True)
