@@ -25,6 +25,7 @@ class GameState:
     context: str = ""
     image_next: int = 1
     slot_next: int = 1
+    frames: tuple = ()  # (name, kind, text, centre_x, centre_y) of visible clickable frames
 
 
 def _cell(px, ox: int, oy: int, i: int, cell: int) -> tuple[int, int, int]:
@@ -87,7 +88,7 @@ def decode(image) -> GameState | None:
     if s != checksum:
         return None
     st = {"message_seq": 0, "message_idx": 0, "message": "", "ack_seq": 0, "edit_active": False,
-          "addon_version": 0, "context": "", "image_next": 1, "slot_next": 1}
+          "addon_version": 0, "context": "", "image_next": 1, "slot_next": 1, "frames": []}
     for line in body.decode("utf-8", "replace").split("\n"):
         p = line.split("|")
         key = p[0]
@@ -110,4 +111,8 @@ def decode(image) -> GameState | None:
             st["slot_next"] = int(p[1])
         elif key == "#ctx" and len(p) >= 2:
             st["context"] = " | ".join(p[1:])
+        elif len(p) == 7 and not key.startswith("#") and all(v.lstrip("-").isdigit() for v in p[3:]):
+            x, y, w, h = (int(v) for v in p[3:])
+            st["frames"].append((p[0], p[1], p[2], x + w // 2, y + h // 2))
+    st["frames"] = tuple(st["frames"])
     return GameState(**st)

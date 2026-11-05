@@ -187,3 +187,12 @@ def test_vinput_extract_limits_and_validates():
     assert cmds == ["click 100 200", "keys {Esc}", "click 1 2 R"]
     assert "[[click x y]]" in text
     assert len(vinput.extract("[[click 1 1]]" * 9)[1]) == vinput.MAX_ACTIONS
+
+
+def test_overlay_compose_is_transparent_in_the_middle():
+    from wowclaude import overlay
+    im = overlay.compose(300, 200, overlay.TOP)
+    assert im.size == (300, 200)
+    assert im.getpixel((150, 120))[3] == 0          # browser area: see-through
+    assert im.getpixel((150, 3))[3] > 0             # border is drawn
+    assert overlay.label_width() > 40

@@ -67,6 +67,9 @@ def run(root: Path, poll: float = 0.6) -> None:
             question = state.message.strip()
             if state.context:
                 question = "[Game state: " + state.context + "]\n" + question
+            from . import vinput
+            if vinput.available() and state.frames:
+                question = vinput.frames_hint(state.frames) + question
             print(f"> {state.message.strip()}", flush=True)
             slots.reset_marker(root, state.message_idx or 1)
             try:

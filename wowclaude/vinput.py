@@ -58,6 +58,23 @@ You can act in the game window without taking focus or moving the player's curso
 [[click X Y R]] right click        [[keys TEXT]]   send keys, AutoHotkey syntax, e.g. [[keys {Esc}]]
 You decide when to use it. Use it only when the player asked for an action in the interface (open a window, click a
 button) and no macro or answer is enough. At most 5 commands per reply, say in one sentence what you did, never click
-blindly: if you do not know the exact position, say so instead. Protected combat actions (casting, targeting, movement)
+blindly: if you do not know the exact position, say so instead. Each question comes with a line "[Visible clickable elements ... x,y ...]": the buttons, checkboxes, sliders and text
+fields currently on screen with their centre positions, topmost window first. Use exactly those positions. To change
+a setting: click the element; to write into a text field: click it, then [[keys the text]] and [[keys {Enter}]].
+If the element you need is not in the list, tell the player which menu to open (or open it with [[keys {Esc}]] and a
+click) and ask them to ask again. Protected combat actions (casting, targeting, movement)
 cannot be triggered this way; make a macro for those.
 """
+
+
+def frames_hint(frames, limit: int = 45) -> str:
+    """One line for the AI: the visible buttons/fields with their click positions (topmost windows first)."""
+    items = []
+    for name, kind, text, x, y in frames:
+        label = (text or name).replace("[", "(").replace("]", ")")[:40]
+        if name.startswith("~") and not text:
+            continue  # anonymous and unlabeled: nothing the AI could refer to
+        items.append(f"{label} ({kind[:4]}) {x},{y}")
+        if len(items) >= limit:
+            break
+    return "[Visible clickable elements, centre x,y in game pixels, topmost first: " + "; ".join(items) + "]\n" if items else ""

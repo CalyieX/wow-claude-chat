@@ -84,5 +84,5 @@ wowclaude overlay https://www.youtube.com --corner br --size 480x270 --opacity 9
 wowclaude overlay https://www.netflix.com --click-through
 ```
 
-Opens a small always-on-top Chrome/Edge window (own profile: log in once) over the game. Needs the game in windowed
+Opens a small always-on-top Chrome/Edge window (own profile: log in once) over the game, in the look of the game's own windows (real UI textures, gold "WoW Browser" label, address bar for URLs or search words, red close button, resize grip). Position and size are remembered. The AI can open pages itself with `[[play URL]]`. Needs the game in windowed
 or borderless mode. `--click-through` sends mouse clicks to the game. Close the window to stop.

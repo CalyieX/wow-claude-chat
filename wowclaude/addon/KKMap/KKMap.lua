@@ -5,7 +5,7 @@
 -- The strip is tiny: 1 pixel per cell, 128 cells per row, only as many rows as the data needs (about 4).
 -- The decoder detects the cell size itself, so this can be changed (2 is more robust on odd UI scales).
 local CELL, COLS, ROWS = 1, 128, 40
--- The chat bridge does not need the list of clickable buttons; /kkmap frames turns it on for tools that do.
+-- The button list is sent only with a question (so the AI can click in menus); /kkmap frames keeps it on permanently.
 local MAGIC = {{255,0,255},{0,255,255},{255,255,0},{0,0,0},{255,255,255},{255,0,0},{0,255,0},{0,0,255}}
 KKMapDB = KKMapDB or {}
 local DE = GetLocale() == "deDE"
@@ -92,7 +92,7 @@ local function collect()
   local pw = select(1, GetPhysicalScreenSize())
   local top = UIParent:GetTop() * UIParent:GetEffectiveScale() * (ph / 768)
   local entries = {}
-  local f = KKMapDB.frames and EnumerateFrames() or nil
+  local f = (KKMapDB.frames or pending ~= nil) and EnumerateFrames() or nil
   local n = 0
   while f and n < 1500 do
     n = n + 1
