@@ -370,7 +370,7 @@ local menu
 local function buildMenu()
   if menu then return menu end
   local f = CreateFrame("Frame", "KKMenuFrame", UIParent, "BackdropTemplate")
-  f:SetSize(220, 170)
+  f:SetSize(220, 140)
   f:SetPoint("CENTER", UIParent, "CENTER", -260, 60)
   f:SetFrameStrata("DIALOG")
   f:SetMovable(true); f:EnableMouse(true); f:RegisterForDrag("LeftButton")
@@ -399,18 +399,10 @@ local function buildMenu()
     y = y - 32
     return bt
   end
-  button("AI Setup", function() sendToClaude("!setup") end)
-  button("Open Browser", function() sendToClaude("!browser") end)
-  local strip
-  local function stripText() return KKMapDB.always and "Bridge: always visible" or "Bridge: only when needed" end
-  strip = button(stripText(), function()
-    KKMapDB.always = not KKMapDB.always
-    strip:SetText(stripText())
-    if applyVisible then applyVisible() end
-  end)
-  button("Help", function()
-    say("Type in the AI tab to chat. /wac opens this menu, /browser [url] opens the browser, /browser off closes it. AI Setup picks the AI.")
-    say("/c text = ask  |  /wm Name~Text = macro  |  /strip always|auto|off = colour strip")
+  button("KI verbinden", function() sendToClaude("!setup") end)
+  button("Browser", function() sendToClaude("!browser") end)
+  button("Hilfe", function()
+    say("Schreib im WoW-AI-Tab einfach los. /wac = dieses Menü, /browser [url] = Browser, /c Text = fragen.")
   end)
   f:Hide()
   menu = f

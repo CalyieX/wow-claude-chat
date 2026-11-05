@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import argparse
+import subprocess
 import sys
 
 from . import __version__, config
@@ -33,6 +34,32 @@ def cmd_setup(args) -> int:
           "  4. Click the Claude tab and write a message.\n"
           "  In the game: /wac opens the menu (AI Setup, browser window).")
     return 0
+
+
+def cmd_go(args) -> int:
+    """The one command for normal people: install what is missing, pick the AI that is already there, run."""
+    from . import backends, installer
+    root = _root(args)
+    cfg = config.load()
+    addon = root / "Interface" / "AddOns" / "KKMap" / "KKMap.lua"
+    src = installer.ADDON_SRC / "KKMap.lua"
+    if not addon.exists() or addon.read_bytes() != src.read_bytes():
+        installer.install(root, cfg.get("name", ""))
+        print("Addon installed/updated. If the game is running: type /reload in the game.", flush=True)
+    cfg = config.load()
+    cfg["wow_root"] = str(root)
+    found = backends.detect()
+    if not cfg.get("backend") and found:  # nothing chosen yet: take the best AI that is already on this PC
+        cfg["backend"] = found[0]["backend"]
+        print("AI chosen automatically: " + found[0]["label"], flush=True)
+    config.save(cfg)
+    if not cfg.get("backend") and not found:  # nothing there: open the one-click page once
+        from . import setup_ui
+        url = setup_ui.start_background()
+        subprocess.Popen([sys.executable, "-m", "wowclaude", "overlay", url, "--size", "640x520"],
+                         creationflags=0x08000000 if sys.platform == "win32" else 0)
+        print("No AI found yet: the setup page opened. Pick one there.", flush=True)
+    return cmd_run(args)
 
 
 def cmd_uninstall(args) -> int:
@@ -126,7 +153,8 @@ def main(argv=None) -> int:
     ap = argparse.ArgumentParser(prog="wowclaude", description="Chat with Claude inside the World of Warcraft chat.")
     ap.add_argument("--version", action="version", version=__version__)
     sub = ap.add_subparsers(dest="cmd", required=True)
-    for name, fn, help_ in (("setup", cmd_setup, "install the addon into the game folder"),
+    for name, fn, help_ in (("go", cmd_go, "install what is missing and start (the one command you need)"),
+                            ("setup", cmd_setup, "install the addon into the game folder"),
                             ("run", cmd_run, "start the bridge (keep it running while you play)"),
                             ("doctor", cmd_doctor, "check that everything is in place"),
                             ("uninstall", cmd_uninstall, "remove the addon from the game folder")):

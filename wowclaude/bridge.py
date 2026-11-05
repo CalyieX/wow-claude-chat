@@ -158,7 +158,7 @@ def run(root: Path, poll: float = 0.6) -> None:
                 cmd_reply = handle_command(state.message) if state.message.lstrip().startswith("!") else None
                 reply = cmd_reply if cmd_reply is not None else session.ask(question, config.load().get("model"))
             except Exception as exc:  # noqa: BLE001 - tell the player, keep running
-                reply = f"No answer from the AI: {exc}. No AI set up yet? Type /wac and press AI Setup."
+                reply = "Die KI antwortet gerade nicht. Tippe /wac und klick auf KI verbinden. (" + str(exc)[:80] + ")"
             print(f"< {reply}", flush=True)
             try:
                 deliver(state, reply)
