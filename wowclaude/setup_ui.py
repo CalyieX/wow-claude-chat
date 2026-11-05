@@ -46,6 +46,9 @@ small{color:#8c7b4d;display:block;margin-top:2px}
 <label>Extra instructions (optional, e.g. how it should talk)</label>
 <textarea id="persona"></textarea>
 </details>
+<details><summary>Let my own AI set this up</summary>
+<small>Copy this text into an AI that can edit files on your PC (Claude Code, Codex ...). It writes the settings for you.</small>
+<textarea id="aiprompt" readonly style="height:130px"></textarea><button id="copy" type="button">Copy</button></details>
 <button id="save">Save and test</button><div id="msg"></div>
 <script>
 const T=new URLSearchParams(location.search).get("t");
@@ -65,7 +68,7 @@ function show(){const b=$("backend").value,isApi=!["claude","codex","command"].i
   s.found.forEach((f,i)=>{const b=document.createElement("button");b.className="card";b.textContent=(i?"":"★ ")+f.label;
    b.onclick=()=>{sel.value=f.backend;show();$("save").click()};F.appendChild(b)})}
  else{F.innerHTML="<label>Nothing found on this PC yet</label><small>Easiest: install Claude Code and log in, or install Ollama. Or open the options below and enter an API key.</small>";$("adv").open=true}$("model").value=s.model||"";$("base_url").value=s.base_url||"";$("command").value=s.command||"";
- $("persona").value=s.persona||"";$("ainame").value=s.name||"";$("keystate").textContent=s.has_key?"(saved)":"";show();sel.onchange=show;
+ $("aiprompt").value=s.prompt;$("copy").onclick=()=>{$("aiprompt").select();document.execCommand("copy")};$("persona").value=s.persona||"";$("ainame").value=s.name||"";$("keystate").textContent=s.has_key?"(saved)":"";show();sel.onchange=show;
  recheck()})();
 async function recheck(){$("msg").textContent="Checking the AI ...";$("msg").className="";
  try{const r=await api("/check");$("msg").textContent=r.status;$("msg").className=r.ok?"ok":"bad"}catch(e){$("msg").textContent="Check failed: "+e;$("msg").className="bad"}}
@@ -74,6 +77,17 @@ $("save").onclick=async()=>{$("msg").textContent="Saving ...";$("msg").className
   api_key:$("api_key").value,command:$("command").value,name:$("ainame").value,persona:$("persona").value});
  $("msg").textContent=r.status;$("msg").className=r.ok?"ok":"bad";if(r.has_key)$("keystate").textContent="(saved)";$("api_key").value="";await recheck()};
 </script></body></html>"""
+
+
+def ai_prompt() -> str:
+    """Text the user can hand to their own AI agent so that it configures this program."""
+    return (f"Please set up the WoW AI chat program for me. Edit the JSON file {config.CONFIG} (create it if missing, keep "
+            "other keys). Set \"backend\" to one of: claude (Claude Code login), codex (ChatGPT login), ollama, lmstudio, "
+            "openrouter, openai, anthropic, gemini, groq, deepseek, mistral, xai, together, perplexity, cerebras, or "
+            "\"openai-compatible\" (then also set \"base_url\"), or \"command\" (then set \"command\" to a shell command "
+            "that reads the prompt on stdin and prints the answer). Optional keys: \"model\". For API backends put the key "
+            "in the environment variable named for the service (e.g. OPENROUTER_API_KEY) rather than in the file. "
+            "Afterwards run: py -3 -m wowclaude doctor --deep  and tell me whether the AI answered.")
 
 
 def _state() -> dict:
@@ -90,7 +104,7 @@ def _state() -> dict:
     return {"backends": ["claude", "codex", "command", "openai-compatible", *backends.PRESETS],
             "backend": backends.name(), "model": cfg.get("model", ""), "base_url": cfg.get("base_url", ""),
             "command": cfg.get("command", ""), "has_key": bool(cfg.get("api_key")),
-            "name": name, "persona": rest.strip("\n"), "found": backends.detect()}
+            "name": name, "persona": rest.strip("\n"), "found": backends.detect(), "prompt": ai_prompt()}
 
 
 def _check() -> dict:

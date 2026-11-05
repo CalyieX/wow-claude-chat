@@ -38,27 +38,38 @@ def cmd_setup(args) -> int:
 
 def cmd_go(args) -> int:
     """The one command for normal people: install what is missing, pick the AI that is already there, run."""
-    from . import backends, installer
+    from . import backends, claude, installer
     root = _root(args)
     cfg = config.load()
     addon = root / "Interface" / "AddOns" / "KKMap" / "KKMap.lua"
     src = installer.ADDON_SRC / "KKMap.lua"
     if not addon.exists() or addon.read_bytes() != src.read_bytes():
         installer.install(root, cfg.get("name", ""))
-        print("Addon installed/updated. If the game is running: type /reload in the game.", flush=True)
+        print("Addon installed/updated. Restart the game completely (a new addon is only loaded at game start).", flush=True)
     cfg = config.load()
     cfg["wow_root"] = str(root)
     found = backends.detect()
-    if not cfg.get("backend") and found:  # nothing chosen yet: take the best AI that is already on this PC
-        cfg["backend"] = found[0]["backend"]
-        print("AI chosen automatically: " + found[0]["label"], flush=True)
+    if not cfg.get("backend") and found:  # nothing chosen yet: take the first AI on this PC that really answers
+        import os
+        for f in found:
+            cfg["backend"] = f["backend"]
+            config.save(cfg)
+            os.environ["WOWCLAUDE_BACKEND"] = f["backend"]
+            ok, msg = claude.check_login() if f["backend"] == "claude" else backends.check()
+            print(("OK: " if ok else "not usable: ") + f["label"] + " - " + msg, flush=True)
+            if ok:
+                break
+            cfg.pop("backend", None)
+        os.environ.pop("WOWCLAUDE_BACKEND", None)
+        config.save(cfg)
+    cfg = config.load()
     config.save(cfg)
-    if not cfg.get("backend") and not found:  # nothing there: open the one-click page once
+    if not cfg.get("backend"):  # nothing that works: open the one-click page once
         from . import setup_ui
         url = setup_ui.start_background()
         subprocess.Popen([sys.executable, "-m", "wowclaude", "overlay", url, "--size", "640x520"],
                          creationflags=0x08000000 if sys.platform == "win32" else 0)
-        print("No AI found yet: the setup page opened. Pick one there.", flush=True)
+        print("No working AI found yet: the setup page opened. Pick one there.", flush=True)
     return cmd_run(args)
 
 

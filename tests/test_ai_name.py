@@ -56,3 +56,9 @@ def test_real_tab_names_are_never_taken_over():
     from wowclaude import claude
     assert claude.clean_name("General") == "" and claude.clean_name("Allgemein") == ""
     assert claude.clean_name("Gorel") == "Gorel"
+
+
+def test_state_offers_a_prompt_for_the_users_own_ai():
+    from wowclaude import setup_ui
+    p = setup_ui._state()["prompt"]
+    assert "backend" in p and "doctor --deep" in p and "openrouter" in p
