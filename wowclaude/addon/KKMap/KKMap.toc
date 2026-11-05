@@ -1,0 +1,6 @@
+## Interface: 11509, 16001
+## Title: KKMap
+## Notes: Chat with Claude inside WoW. Draws a colour strip (top-left) that the wowclaude bridge reads. /kkmap always|auto|off
+## Version: 1.0
+## SavedVariables: KKMapDB
+KKMap.lua

@@ -1,0 +1,21 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "wowclaude"
+version = "0.1.0"
+description = "Chat with Claude inside the World of Warcraft chat window (WoW Forever / Classic), no keystrokes injected."
+readme = "README.md"
+requires-python = ">=3.9"
+license = { text = "MIT" }
+dependencies = ["Pillow>=10"]
+
+[project.scripts]
+wowclaude = "wowclaude.__main__:main"
+
+[tool.setuptools]
+packages = ["wowclaude"]
+
+[tool.setuptools.package-data]
+wowclaude = ["addon/KKMap/*"]
