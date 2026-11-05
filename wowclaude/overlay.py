@@ -277,14 +277,19 @@ def _wait_painted(hwnd: int, w: int, h: int, seconds: float = 8.0) -> bool:
 def _kill_profile_browsers(profile: Path) -> None:
     """A browser already running on our own profile would swallow the new window (and the debug port): close it."""
     # WQL filter on the name (fast) instead of looking at every process; "K" is printed per closed process
-    cmd = ("Get-CimInstance Win32_Process -Filter \"Name='chrome.exe' OR Name='msedge.exe' OR Name='brave.exe'\" | "
-           "Where-Object { $_.CommandLine -like '*" + profile.name + "*' } | "
-           "ForEach-Object { Stop-Process -Id $_.ProcessId -Force; 'K' }")
+    # Closed politely first (CloseMainWindow, up to 4 s): a killed Chrome loses the cookies and logins of the last ~30 s.
+    cmd = ("$ids = @(Get-CimInstance Win32_Process -Filter \"Name='chrome.exe' OR Name='msedge.exe' OR Name='brave.exe'\" | "
+           "Where-Object { $_.CommandLine -like '*" + profile.name + "*' } | ForEach-Object { $_.ProcessId }); "
+           "foreach ($i in $ids) { Get-Process -Id $i -ErrorAction SilentlyContinue | ForEach-Object { [void]$_.CloseMainWindow() } }; "
+           "$end = (Get-Date).AddSeconds(4); "
+           "while ((Get-Date) -lt $end -and @(Get-Process -Id $ids -ErrorAction SilentlyContinue).Count -gt 0) { Start-Sleep -Milliseconds 150 }; "
+           "foreach ($i in $ids) { Stop-Process -Id $i -Force -ErrorAction SilentlyContinue }; "
+           "if ($ids.Count -gt 0) { 'K' }")
     try:
-        r = subprocess.run(["powershell", "-NoProfile", "-Command", cmd], capture_output=True, text=True, timeout=20,
+        r = subprocess.run(["powershell", "-NoProfile", "-Command", cmd], capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=25,
                            **hidden())
         if "K" in (r.stdout or ""):
-            time.sleep(1.0)  # only wait when something was really closed
+            time.sleep(0.5)  # only wait when something was really closed
     except (OSError, subprocess.SubprocessError):
         pass
 
@@ -389,7 +394,8 @@ def run(url: str | None = None, corner: str | None = None, size: str | None = No
         print("No Chrome/Edge/Brave found.")
         return 2
     saved = load_state()
-    url = url or "https://www.google.com"  # no address given (/browser, button): always start at the search engine
+    # no address given (/browser, button): come back to the page the browser was closed on, else the search engine
+    url = url or saved.get("last_page") or "https://www.google.com"
     g0 = game_rect()
     rel = saved.get("rel")
     if size:
@@ -907,6 +913,9 @@ def frame_loop(hwnd: int, x: int, y: int, w: int, h: int, opacity: int, click_th
             draw()
             if zone(e) == "close":
                 persist()
+                found = _page_ws(port) if port else None
+                if found and found[1].startswith(("http://", "https://")):
+                    save_state(last_page=found[1])  # closed with X: open this page again next time
                 user32.PostMessageW(wintypes.HWND(hwnd), 0x0010, 0, 0)
         elif was == "min" and zone(e) == "min":
             persist()
@@ -1007,6 +1016,8 @@ def frame_loop(hwnd: int, x: int, y: int, w: int, h: int, opacity: int, click_th
                 found = _page_ws(port)
                 if found and found[1] and found[1] != var.get() and not found[1].startswith("chrome-error"):
                     var.set(found[1])
+                if found and found[1].startswith(("http://", "https://")) and found[1] != load_state().get("last_page"):
+                    save_state(last_page=found[1])  # the page to come back to when the browser is opened again
         else:
             user32.SetWindowPos(ctypes.c_void_p(FL["h"]), wintypes.HWND(HWND_TOPMOST), 0, 0, 0, 0, 0x53)
         root.after(250, tick)
