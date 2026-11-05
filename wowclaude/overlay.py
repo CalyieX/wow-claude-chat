@@ -69,7 +69,8 @@ def _windows() -> dict[int, str]:
 
 
 def game_rect() -> tuple[int, int, int, int] | None:
-    hwnd = user32.FindWindowW("GxWindowClass", None) or user32.FindWindowW("GxWindowClassD3d", None)
+    hwnd = (user32.FindWindowW("GxWindowClass", None) or user32.FindWindowW("GxWindowClassD3d", None)
+            or user32.FindWindowW(None, "World of Warcraft"))
     if not hwnd:
         return None
     r = wintypes.RECT()
@@ -283,6 +284,29 @@ def label_width() -> int:
     return int(_font(13).getlength(LABEL)) + 22
 
 
+def slot_sprite(state: str = ""):
+    """An empty-looking action bar button (64x64 sprite, the 36x36 slot in the middle) with the browser icon in it,
+    built from the game's own action button textures: dark slot, icon, slot frame, hover glow, pressed look."""
+    from PIL import Image, ImageChops
+
+    out = Image.new("RGBA", (64, 64), (0, 0, 0, 0))
+    out.alpha_composite(_art("UI-Quickslot.png"))
+    icon = _art("INV_Misc_Map_01.png")
+    icon = icon.crop((5, 5, 59, 59)).resize((36, 36), Image.LANCZOS)  # action buttons show texcoords 0.08-0.92
+    out.alpha_composite(icon, (14, 14))
+    out.alpha_composite(_art("UI-Quickslot2.png"))
+    if state == "down":  # pressed: the icon dims slightly, like a pushed action button
+        dim = Image.new("RGBA", (36, 36), (0, 0, 0, 90))
+        out.alpha_composite(dim, (14, 14))
+    if state == "hover":
+        hl = _art("ButtonHilight-Square.png").resize((36, 36), Image.LANCZOS)
+        region = out.crop((14, 14, 50, 50))
+        rgb = ImageChops.add(region.convert("RGB"), hl.convert("RGB"))
+        rgb.putalpha(region.getchannel("A"))
+        out.paste(rgb, (14, 14))
+    return out
+
+
 CB = (6, 7, 25, 25)  # the red button inside the 32x32 UIPanelCloseButton texture (19x18)
 BW, BH, BY = CB[2] - CB[0], CB[3] - CB[1], 8
 
@@ -478,23 +502,29 @@ def frame_loop(hwnd: int, x: int, y: int, w: int, h: int, opacity: int, click_th
     entry.bind("<Button-1>", lambda e: (bar.focus_force(), entry.focus_set()))
     entry.bind("<Escape>", lambda e: root.focus_force())
 
-    # floating button shown while minimized: the green minimize face, draggable, click restores
+    # floating button shown while minimized: an action-bar slot, draggable onto an empty slot, click restores
     fl = tk.Toplevel(root)
     fl.overrideredirect(True)
-    fl.attributes("-topmost", True, "-transparentcolor", KEY)
-    fl.configure(bg=KEY)
-    face = _button_art("min").resize((BW * 2, BH * 2), 1)
-    from PIL import Image as _Im
-    plate = _Im.new("RGBA", face.size, KEY_RGB + (255,))
-    plate.alpha_composite(face)
-    fl_img = ImageTk.PhotoImage(plate)
-    fl_lbl = tk.Label(fl, image=fl_img, bd=0, bg=KEY, cursor="hand2")
-    fl_lbl.pack()
-    fl.withdraw()
+    fl.attributes("-topmost", True)
+    fl.geometry("64x64+0+0")
+    FL = {"h": 0}
+
+    def fl_layered() -> None:
+        """(Re)apply the layered style: Tk may create a new native window when it is shown again."""
+        fl.update_idletasks()
+        FL["h"] = user32.GetParent(fl.winfo_id()) or fl.winfo_id()
+        user32.SetWindowLongW(ctypes.c_void_p(FL["h"]), GWL_EXSTYLE,
+                              user32.GetWindowLongW(ctypes.c_void_p(FL["h"]), GWL_EXSTYLE) | WS_EX_LAYERED | WS_EX_TOOLWINDOW)
+    sprites = {s: slot_sprite(s) for s in ("", "hover", "down")}
     rect = game_rect() or (0, 0, user32.GetSystemMetrics(0), user32.GetSystemMetrics(1))
-    S["bx"] = int(saved.get("bx", rect[2] - 120))
-    S["by"] = int(saved.get("by", rect[1] + 60))
+    S["bx"] = int(saved.get("bx", rect[2] - 150))  # top-left of the 64x64 sprite; the slot itself is 14 px inside
+    S["by"] = int(saved.get("by", rect[1] + 80))
     fdrag: dict = {}
+
+    def fl_draw(state: str = "") -> None:
+        fl.geometry(f"64x64+{S['bx']}+{S['by']}")
+        fl.update_idletasks()
+        update_layered(FL["h"], sprites[state], S["bx"], S["by"])
 
     def persist() -> None:
         save_state(x=S["x"], y=S["y"], w=S["w"], h=S["h"], ghost=S["ghost"], bx=S["bx"], by=S["by"])
@@ -505,8 +535,10 @@ def frame_loop(hwnd: int, x: int, y: int, w: int, h: int, opacity: int, click_th
             user32.ShowWindow(wintypes.HWND(hwnd), 0)
             root.withdraw()
             bar.withdraw()
-            fl.geometry(f"+{S['bx']}+{S['by']}")
             fl.deiconify()
+            fl_layered()
+            fl_draw()
+            user32.SetWindowPos(ctypes.c_void_p(FL["h"]), wintypes.HWND(HWND_TOPMOST), 0, 0, 0, 0, 0x53)
         else:
             fl.withdraw()
             root.deiconify()
@@ -515,23 +547,29 @@ def frame_loop(hwnd: int, x: int, y: int, w: int, h: int, opacity: int, click_th
             layout()
 
     def fl_down(e):
-        fdrag.update(dx=e.x_root - fl.winfo_x(), dy=e.y_root - fl.winfo_y(), sx=e.x_root, sy=e.y_root, moved=False)
+        fdrag.update(dx=e.x_root - S["bx"], dy=e.y_root - S["by"], sx=e.x_root, sy=e.y_root, moved=False)
+        fl_draw("down")
 
     def fl_move(e):
         if abs(e.x_root - fdrag["sx"]) + abs(e.y_root - fdrag["sy"]) > 4:
             fdrag["moved"] = True
         if fdrag["moved"]:
             S["bx"], S["by"] = e.x_root - fdrag["dx"], e.y_root - fdrag["dy"]
-            fl.geometry(f"+{S['bx']}+{S['by']}")
+            fl_draw("down")
 
     def fl_up(_e):
         persist()
         if not fdrag.get("moved"):
             set_min(False)
+        else:
+            fl_draw()
 
-    fl_lbl.bind("<Button-1>", fl_down)
-    fl_lbl.bind("<B1-Motion>", fl_move)
-    fl_lbl.bind("<ButtonRelease-1>", fl_up)
+    fl.bind("<Button-1>", fl_down)
+    fl.bind("<B1-Motion>", fl_move)
+    fl.bind("<ButtonRelease-1>", fl_up)
+    fl.bind("<Enter>", lambda e: fl_draw("hover") if not fdrag else None)
+    fl.bind("<Leave>", lambda e: fl_draw() if not fdrag else None)
+    fl.withdraw()
 
     def place_bar() -> None:
         fw = S["w"] + 2 * EDGE
@@ -637,7 +675,7 @@ def frame_loop(hwnd: int, x: int, y: int, w: int, h: int, opacity: int, click_th
                 if found and found[1] and found[1] != var.get() and not found[1].startswith("chrome-error"):
                     var.set(found[1])
         else:
-            fl.attributes("-topmost", True)
+            user32.SetWindowPos(ctypes.c_void_p(FL["h"]), wintypes.HWND(HWND_TOPMOST), 0, 0, 0, 0, 0x53)
         root.after(250, tick)
 
     tick()
