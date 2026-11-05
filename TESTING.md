@@ -29,4 +29,14 @@ system prompt) the same questions revealed the account e-mail and the Windows us
 marker .wav, and whether the real `LoadAddOn` picks up a freshly written `KKR###` slot. The Lua tests stub both. Live check:
 type `/c hello`, read `slot_next` in `python -m wowclaude doctor` before and after: it must grow by exactly 1 per answer.
 
-**Mutation testing** of the slot back-off and isolation code: see the commit message of the matching commit.
+**Mutation testing** (`py -3 tools/mutation.py M30 M31 M32 M33 M34 M35`, about a minute per mutant): one small bug is
+put into a copy of the repo, the whole test suite must fail. Result of the run on 2026-11-05:
+
+| Mutant | Bug put in | Result |
+|---|---|---|
+| M30 | addon advances the slot number on an empty slot (burns slots) | KILLED (1 failed, 61 passed) |
+| M31 | no back-off between polls | KILLED (1 failed, 61 passed) |
+| M32 | misses are never counted | KILLED (1 failed, 61 passed) |
+| M33 | protected frames are measured without protection | KILLED (1 failed, 63 passed) |
+| M34 | Claude runs inside the user's profile folder | KILLED (1 failed, 62 passed) |
+| M35 | `--setting-sources ""` removed | KILLED (1 failed, 6 passed) |
