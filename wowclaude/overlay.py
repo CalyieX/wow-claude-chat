@@ -198,8 +198,6 @@ def pin(hwnd: int, x: int, y: int, w: int, h: int, opacity: int, click_through: 
     n = _pinned.get("n", 0) + 1
     if _pinned.get("key") == key and n % 20:
         _pinned["n"] = n
-        if not user32.GetWindowLongW(hwnd, GWL_EXSTYLE) & 0x8:  # WS_EX_TOPMOST lost (game or Chrome took it): the page would hide behind the game
-            user32.SetWindowPos(wintypes.HWND(hwnd), wintypes.HWND(HWND_TOPMOST), 0, 0, 0, 0, 0x13)  # NOMOVE|NOSIZE|NOACTIVATE
         # Chrome drops the clip region now and then (page load, navigation): its grey title bar would show: put it back
         probe = ctypes.windll.gdi32.CreateRectRgn(0, 0, 0, 0)
         has_region = user32.GetWindowRgn(wintypes.HWND(hwnd), ctypes.c_void_p(probe)) != 0
