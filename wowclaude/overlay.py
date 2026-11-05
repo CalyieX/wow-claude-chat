@@ -207,7 +207,10 @@ def run(url: str | None = None, corner: str | None = None, size: str | None = No
         print("No Chrome/Edge/Brave found.")
         return 2
     saved = load_state()
-    url = url or saved.get("url") or "https://www.google.com"
+    last = saved.get("url") or ""
+    if last.startswith(("http://127.0.0.1", "http://localhost")):  # the AI setup page only lives while the bridge runs
+        last = ""
+    url = url or last or "https://www.google.com"
     if size:
         w, h = (int(v) for v in size.lower().split("x"))
     else:
