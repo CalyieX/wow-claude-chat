@@ -171,7 +171,7 @@ local function applyVisible()
   if lastEdit and not ae then holdUntil = math.max(holdUntil, GetTime() + 2) end
   lastEdit = ae
   local want = KKMapDB.always or pending ~= nil or ae or GetTime() < holdUntil
-  if pending ~= nil then deco.fs:SetText(L("K&K WoW AI Chat | denkt ...  (Streifen nicht verdecken)", "K&K WoW AI Chat | thinking ...  (do not cover the strip)"))
+  if pending ~= nil then deco.fs:SetText(L("K&K WoW AI Chat | denkt ...", "K&K WoW AI Chat | thinking ..."))
   elseif ae then deco.fs:SetText(L("K&K WoW AI Chat | aktiv", "K&K WoW AI Chat | active"))
   else deco.fs:SetText("K&K WoW AI Chat") end
   deco:SetWidth(math.max(120, deco.fs:GetStringWidth() + 14))
