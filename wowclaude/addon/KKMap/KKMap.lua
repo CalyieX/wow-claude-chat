@@ -505,13 +505,19 @@ local function createMacro(name, body, perChar)
   return true
 end
 
+local misses = 0   -- loads of the marker's slot that produced nothing (slot not written yet): back off instead of burning slots
 local function deliver()
   local name = string.format("KKR%03d", nextSlot)
-  nextSlot = nextSlot + 1
-  KKSlotNext = nextSlot
   KKReplyData = nil
   loadAddon(name)
   local d = KKReplyData
+  if d == nil then  -- nothing in that slot: keep the number, try again later (0.5 s, 1 s, 2 s, ... max 4 s)
+    misses = misses + 1
+    return
+  end
+  misses = 0
+  nextSlot = nextSlot + 1
+  KKSlotNext = nextSlot
   if d and pending and d.seq == pending.seq then
     for _, part in ipairs(d.parts or {}) do say(part) end
     if d.overlay then KKShowOverlay(d.overlay) end
@@ -532,7 +538,7 @@ local pollAcc = 0
 local function poll(dt)
   if not pending then return end
   pollAcc = pollAcc + dt
-  if pollAcc < 0.5 then return end
+  if pollAcc < math.min(4, 0.5 * 2 ^ math.min(misses, 3)) then return end
   pollAcc = 0
   local willPlay = PlaySoundFile(SIG .. string.format("%03d", pending.idx) .. ".wav", "Master")
   if willPlay then

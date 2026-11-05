@@ -880,3 +880,34 @@ def test_claude_runs_without_the_players_claude_md(monkeypatch):
     code, out, err = claude._exec([sys.executable, "-c",
                                    "import os; print(os.environ.get('CLAUDE_CODE_DISABLE_CLAUDE_MDS'), os.environ.get('CLAUDE_CODE_DISABLE_AUTO_MEMORY'))"], "")
     assert out.strip() == "1 1"
+
+
+def test_lua_marker_without_slot_does_not_burn_slots(tmp_path):
+    """The marker plays but the slot file is not there (yet): many polls must not eat slot numbers."""
+    h, lua = _lua_addon()
+    lua.eval("function() SlashCmdList['KKCHAT']('Hallo') end")()
+    st = decode.decode(h.strip_image(lua))
+    loads = []
+    lua.globals().__play = lambda path: True       # marker says "ready"
+    lua.globals().__load = lambda name: loads.append(str(name)) or False  # ... but nothing to load
+    for _ in range(40):
+        lua.eval("function() __update(1.0) end")()
+    assert decode.decode(h.strip_image(lua)).slot_next == st.slot_next  # no slot number used up
+    assert len(loads) <= 12 and set(loads) == {"KKR001"}                # backed off, always the same slot
+
+
+def test_claude_runs_isolated(monkeypatch):
+    """No user settings, and not inside the user's profile folder (that would leak the Windows user name)."""
+    seen = {}
+
+    class P:
+        returncode = 0
+        def communicate(self, prompt, timeout=None): return "ok", ""
+
+    def popen(cmd, **kw):
+        seen["cmd"], seen["cwd"] = cmd, kw["cwd"]
+        return P()
+    monkeypatch.setattr(claude.subprocess, "Popen", popen)
+    claude._exec(["claude", "-p", *claude.ISOLATION], "hi")
+    assert "--setting-sources" in seen["cmd"] and seen["cmd"][seen["cmd"].index("--setting-sources") + 1] == ""
+    assert str(claude.config.HOME) not in seen["cwd"] and "Users" not in seen["cwd"]

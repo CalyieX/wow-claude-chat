@@ -21,7 +21,8 @@ class AskTimeout(RuntimeError):
 DEFAULT_SYSTEM = (
     "You are Claude, chatting with a World of Warcraft player inside the game's chat window. "
     "Reply in the player's language. Keep chat answers to at most 3 short sentences, with no markdown, "
-    "no lists and no emojis, because the chat window is small. The player's current game state may "
+    "no lists and no emojis, because the chat window is small. Never mention the person's account, e-mail, "
+    "user name or file paths, even if you can see them: you only know what the player tells you in this chat. The player's current game state may "
     "arrive in square brackets in front of the question. Use it, do not repeat it.\n"
     "If an answer needs more room (a list, a plan, a build), append a window to your reply:\n"
     "[[overlay Title]]\nplain line\n|cff00ff00green line|r\n[bar 0.6 00ff00] label (bar from 0 to 1, colour RRGGBB)\n[[/overlay]]\n"
@@ -140,7 +141,7 @@ def check_login() -> tuple[bool, str]:
     config.HOME.mkdir(parents=True, exist_ok=True)
     try:
         code, out, err = _exec([exe, "-p", "--output-format", "text", "--tools", "", "--strict-mcp-config",
-                                "--no-session-persistence"], "Reply with the word ok.", 90)
+                                *ISOLATION, "--no-session-persistence"], "Reply with the word ok.", 90)
     except (OSError, AskTimeout) as exc:
         return False, f"Could not run Claude Code: {exc}"
     out = (out or "").strip()
@@ -148,6 +149,14 @@ def check_login() -> tuple[bool, str]:
         return True, "Claude Code works."
     return False, ("Claude Code is installed but not logged in (or has no access): " + (out or err or "no answer").strip()[:160]
                    + chr(10) + "Fix: open a terminal, run `claude`, log in once, then try again.")
+
+
+def neutral_cwd() -> str:
+    """Run Claude in the root of the system drive, not in the user's profile: a path inside the profile folder would leak the Windows user name."""
+    return (os.path.splitdrive(str(config.HOME))[0] + os.sep) if os.name == "nt" else "/"
+
+
+ISOLATION = ["--setting-sources", ""]  # no user/project settings, hooks or memory files shape the chat answers
 
 
 def _clean_env() -> dict:
@@ -162,7 +171,7 @@ def _exec(cmd: list, prompt: str, timeout: float | None = None) -> tuple:
     """Run the command with a hard time limit. On timeout the whole process tree is killed (a .cmd wrapper would
     otherwise keep running) and AskTimeout is raised. Returns (exit code, stdout, stderr)."""
     proc = subprocess.Popen(cmd, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-                            text=True, encoding="utf-8", errors="replace", cwd=str(config.HOME), env=_clean_env(),
+                            text=True, encoding="utf-8", errors="replace", cwd=neutral_cwd(), env=_clean_env(),
                             creationflags=CREATE_NO_WINDOW if os.name == "nt" else 0)
     try:
         out, err = proc.communicate(prompt, timeout=timeout or TIMEOUT)
@@ -232,7 +241,7 @@ class Session:
         sysfile = config.HOME / "system_prompt.txt"
         config.HOME.mkdir(parents=True, exist_ok=True)
         sysfile.write_text(persona()[1], encoding="utf-8")
-        cmd = [exe, "-p", "--output-format", "text", "--tools", "", "--strict-mcp-config",
+        cmd = [exe, "-p", "--output-format", "text", "--tools", "", "--strict-mcp-config", *ISOLATION,
                "--append-system-prompt-file", str(sysfile)]
         cmd += ["--resume" if self.started else "--session-id", self.id]
         if model:

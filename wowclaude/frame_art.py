@@ -1,4 +1,4 @@
-"""Our own artwork for the WoW-style window frame, drawn in code (no game assets are shipped).
+"""Fallback artwork for the WoW-style window frame, drawn in code. The shipped art/*.png (Blizzard interface textures, see README) takes precedence.
 
 The frame, buttons and the action-bar slot look like the game's own windows, but every pixel here is generated.
 If you want the exact in-game look, drop the original textures (same file names) into ``~/.wowclaude/art/``; they
