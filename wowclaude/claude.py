@@ -149,6 +149,28 @@ def check_login() -> tuple[bool, str]:
                    + "\nFix: open a terminal, run `claude`, log in once, then try again.")
 
 
+def _exec(cmd: list, prompt: str) -> tuple:
+    """Run the command with a hard time limit. On timeout the whole process tree is killed (a .cmd wrapper would
+    otherwise keep running) and AskTimeout is raised. Returns (exit code, stdout, stderr)."""
+    proc = subprocess.Popen(cmd, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                            text=True, encoding="utf-8", errors="replace", cwd=str(config.HOME),
+                            creationflags=CREATE_NO_WINDOW if os.name == "nt" else 0)
+    try:
+        out, err = proc.communicate(prompt, timeout=TIMEOUT)
+    except subprocess.TimeoutExpired as exc:
+        if os.name == "nt":
+            subprocess.run(["taskkill", "/F", "/T", "/PID", str(proc.pid)], capture_output=True,
+                           creationflags=CREATE_NO_WINDOW)
+        else:
+            proc.kill()
+        try:
+            proc.communicate(timeout=5)
+        except Exception:  # noqa: BLE001 - nothing more to collect
+            pass
+        raise AskTimeout(f"Claude did not answer within {TIMEOUT} seconds.") from exc
+    return proc.returncode, out, err
+
+
 class Session:
     """One conversation that survives bridge restarts (session id kept in ~/.wowclaude/session.txt)."""
 
@@ -178,13 +200,16 @@ class Session:
         try:
             return self._run(exe, prompt, model)
         except AskTimeout:
+            if not self.started:
+                self._new()  # the aborted run may have claimed the session id ("already in use" next time)
             raise
         except RuntimeError as exc:
             low = str(exc).lower()
+            if not self.started:
+                self._new()  # a half-created session id must not be reused ("already in use")
             if "expired" in low or "log in" in low or "login" in low:
                 raise RuntimeError("Claude login expired: run `claude` once in a terminal and log in again.") from exc
             if not self.started:
-                self._new()  # a half-created session id must not be reused ("already in use")
                 raise
             self._new()  # stale or unknown session: start a fresh one once
             return self._run(exe, prompt, model)
@@ -200,14 +225,9 @@ class Session:
         cmd += ["--resume" if self.started else "--session-id", self.id]
         if model:
             cmd += ["--model", model]
-        try:
-            done = subprocess.run(cmd, input=prompt, capture_output=True, text=True, encoding="utf-8",
-                                  cwd=str(config.HOME), timeout=TIMEOUT,
-                                  creationflags=CREATE_NO_WINDOW if os.name == "nt" else 0)
-        except subprocess.TimeoutExpired as exc:
-            raise AskTimeout(f"Claude did not answer within {TIMEOUT} seconds.") from exc
-        out = (done.stdout or "").strip()
-        if done.returncode != 0 or not out:
-            raise RuntimeError((done.stderr or out or "claude failed").strip()[:200])
+        code, out, err = _exec(cmd, prompt)
+        out = (out or "").strip()
+        if code != 0 or not out:
+            raise RuntimeError((err or out or "claude failed").strip()[:200])
         self.started = True
         return out

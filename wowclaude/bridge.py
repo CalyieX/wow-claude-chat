@@ -79,6 +79,7 @@ def deliver(root: Path, state: decode.GameState, reply: str) -> bool:
             fresh = _safe_read_state()
             if fresh is not None:
                 if fresh.ack_seq == state.message_seq:
+                    slots.reset_marker(root, state.message_idx or 1)  # silent again, so it cannot burn slots later
                     return True
                 if fresh.message_seq > state.message_seq:
                     return True  # the player already wrote the next message: the answer is out, do not block the loop
@@ -115,7 +116,7 @@ def run(root: Path, poll: float = 0.6) -> None:
                 cmd_reply = handle_command(state.message) if state.message.lstrip().startswith("!") else None
                 reply = cmd_reply if cmd_reply is not None else session.ask(question, config.load().get("model"))
             except Exception as exc:  # noqa: BLE001 - tell the player, keep running
-                reply = f"No AI answered yet - open /wac and press AI Setup. ({exc})"
+                reply = f"No answer from the AI: {exc}. No AI set up yet? Type /wac and press AI Setup."
             print(f"< {reply}", flush=True)
             try:
                 delivered = deliver(root, state, reply)

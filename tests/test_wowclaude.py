@@ -194,7 +194,7 @@ def test_overlay_compose_is_transparent_in_the_middle():
     im = overlay.compose(300, 200, overlay.TOP)
     assert im.size == (300, 200)
     assert im.getpixel((150, 120))[3] == 0          # browser area: see-through
-    assert im.getpixel((150, 3))[3] > 0             # border is drawn
+    assert any(im.getpixel((150, y))[3] > 0 for y in range(0, 9))  # border is drawn (works with generated art too)
     assert overlay.label_width() > 40
 
 
@@ -402,9 +402,9 @@ def test_session_timeout_is_reported_and_session_renewed(tmp_path, monkeypatch):
     monkeypatch.setattr(backends, "name", lambda: "claude")
 
     def boom(*a, **k):
-        raise subprocess.TimeoutExpired("claude", 1)
+        raise claude.AskTimeout("Claude did not answer within 1 seconds.")
 
-    monkeypatch.setattr(claude.subprocess, "run", boom)
+    monkeypatch.setattr(claude, "_exec", boom)
     s = claude.Session()
     first = s.id
     try:
@@ -412,7 +412,7 @@ def test_session_timeout_is_reported_and_session_renewed(tmp_path, monkeypatch):
         assert False, "should raise"
     except RuntimeError as exc:
         assert "did not answer" in str(exc)
-    assert s.id == first  # a timeout is not a session problem: no retry, session kept
+    assert s.id != first  # the aborted run may have claimed the id: never reuse it
 
 
 def test_window_on_unplugged_monitor_is_detected(monkeypatch):
@@ -442,12 +442,10 @@ def test_claude_gets_system_prompt_as_file(monkeypatch, tmp_path):
     monkeypatch.setattr(config, "HOME", tmp_path)
     seen = {}
 
-    def fake_run(cmd, **kw):
+    def fake_run(cmd, prompt):
         seen["cmd"] = cmd
-        class R:
-            returncode, stdout, stderr = 0, "ok", ""
-        return R()
-    monkeypatch.setattr(claude.subprocess, "run", fake_run)
+        return 0, "ok", ""
+    monkeypatch.setattr(claude, "_exec", fake_run)
     s = claude.Session.__new__(claude.Session)
     s.history, s.id, s.started = [], "id-1", False
     assert s._run("claude", "hi", None) == "ok"
@@ -467,8 +465,8 @@ def test_timeout_is_not_retried(monkeypatch, tmp_path):
 
     def boom(*a, **k):
         calls.append(1)
-        raise subprocess.TimeoutExpired("claude", 1)
-    monkeypatch.setattr(claude.subprocess, "run", boom)
+        raise claude.AskTimeout("Claude did not answer within 1 seconds.")
+    monkeypatch.setattr(claude, "_exec", boom)
     try:
         claude.Session().ask("hi")
         assert False, "should raise"
@@ -484,9 +482,7 @@ def test_expired_login_gets_a_clear_message(monkeypatch, tmp_path):
     monkeypatch.setattr(claude, "claude_path", lambda: "claude")
     monkeypatch.setattr(backends, "name", lambda: "claude")
 
-    class R:
-        returncode, stdout, stderr = 1, "", "OAuth session expired"
-    monkeypatch.setattr(claude.subprocess, "run", lambda *a, **k: R())
+    monkeypatch.setattr(claude, "_exec", lambda *a, **k: (1, "", "OAuth session expired"))
     try:
         claude.Session().ask("hi")
         assert False, "should raise"
@@ -528,3 +524,32 @@ def test_deliver_stops_waiting_when_next_message_arrived(monkeypatch, tmp_path):
     monkeypatch.setattr(bridge, "_safe_read_state", lambda: St(0, 0))  # /reload resets the counter: NOT delivered
     monkeypatch.setattr(bridge.time, "time", iter(range(0, 10000, 20)).__next__)
     assert bridge.deliver(tmp_path, St(7, 6), "hi") is False
+
+
+def test_exec_kills_on_timeout(monkeypatch):
+    import sys
+    from wowclaude import claude
+    monkeypatch.setattr(claude, "TIMEOUT", 1)
+    import time
+    t0 = time.time()
+    try:
+        claude._exec([sys.executable, "-c", "import time; time.sleep(30)"], "x")
+        assert False, "should raise"
+    except claude.AskTimeout:
+        pass
+    assert time.time() - t0 < 10
+
+
+def test_marker_silenced_after_ack(monkeypatch, tmp_path):
+    from wowclaude import bridge
+    monkeypatch.setattr(bridge.time, "sleep", lambda s: None)
+    monkeypatch.setattr(bridge.slots, "publish", lambda *a, **k: None)
+    silenced = []
+    monkeypatch.setattr(bridge.slots, "reset_marker", lambda root, idx: silenced.append(idx))
+
+    class St:
+        def __init__(self, seq, ack):
+            self.message_seq, self.ack_seq, self.message_idx, self.slot_next = seq, ack, 3, 5
+    monkeypatch.setattr(bridge, "_safe_read_state", lambda: St(7, 7))
+    assert bridge.deliver(tmp_path, St(7, 6), "hi") is True
+    assert silenced == [3]
