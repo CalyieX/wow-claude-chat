@@ -270,18 +270,21 @@ def _wait_painted(hwnd: int, w: int, h: int, seconds: float = 8.0) -> bool:
     while time.time() < end:
         if _painted(hwnd, w, h):
             return True
-        time.sleep(0.7)
+        time.sleep(0.15)
     return False
 
 
 def _kill_profile_browsers(profile: Path) -> None:
     """A browser already running on our own profile would swallow the new window (and the debug port): close it."""
-    cmd = ("Get-CimInstance Win32_Process | Where-Object { $_.CommandLine -like '*" + profile.name + "*' -and "
-           "$_.Name -match 'chrome|msedge|brave' } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force }")
+    # WQL filter on the name (fast) instead of looking at every process; "K" is printed per closed process
+    cmd = ("Get-CimInstance Win32_Process -Filter \"Name='chrome.exe' OR Name='msedge.exe' OR Name='brave.exe'\" | "
+           "Where-Object { $_.CommandLine -like '*" + profile.name + "*' } | "
+           "ForEach-Object { Stop-Process -Id $_.ProcessId -Force; 'K' }")
     try:
-        subprocess.run(["powershell", "-NoProfile", "-Command", cmd], capture_output=True, timeout=20,
-                       **hidden())
-        time.sleep(1.0)
+        r = subprocess.run(["powershell", "-NoProfile", "-Command", cmd], capture_output=True, text=True, timeout=20,
+                           **hidden())
+        if "K" in (r.stdout or ""):
+            time.sleep(1.0)  # only wait when something was really closed
     except (OSError, subprocess.SubprocessError):
         pass
 
@@ -407,11 +410,11 @@ def run(url: str | None = None, corner: str | None = None, size: str | None = No
              f"--remote-debugging-port={port}"],
             creationflags=CREATE_NO_WINDOW)
         hwnd = 0
-        for _ in range(60):
-            time.sleep(0.5)
+        for _ in range(300):
+            time.sleep(0.1)
             new = set(_windows()) - before
             mine = [h_ for h_ in new if _window_pid(h_) == proc.pid]  # not another Chrome-based app that opened meanwhile
-            if mine or (new and _ > 20):
+            if mine or (new and _ > 100):
                 hwnd = sorted(mine or new)[0]
                 break
         if not hwnd:
@@ -420,7 +423,7 @@ def run(url: str | None = None, corner: str | None = None, size: str | None = No
         if _wait_painted(hwnd, w, h + CHROME_BAR):
             break
         print(f"Browser window stayed blank (try {attempt + 1}/3), restarting it ...", flush=True)
-    time.sleep(1.0)
+    time.sleep(0.3)
     print(f"Overlay running ({w}x{h}, debug port {port}). Drag the title bar to move, the corner to resize, X to close; "
           "position and size are remembered. Log in once in this window (own profile).", flush=True)
     frame_loop(hwnd, x, y, w, h, opacity, click_through, port)
@@ -1005,8 +1008,20 @@ def play(url: str, size: str | None = None) -> str:
     args = [sys.executable, "-m", "wowclaude", "overlay"] + ([url] if url else []) + (["--size", size] if size else [])
     config.HOME.mkdir(parents=True, exist_ok=True)
     log = open(config.HOME / "overlay.log", "a", encoding="utf-8")  # a failing overlay leaves a trace here
+    logfile = config.HOME / "overlay.log"
+    start = logfile.stat().st_size  # byte offset: only what the new overlay writes counts
     proc = subprocess.Popen(args, creationflags=CREATE_NO_WINDOW, stdout=log, stderr=log)
-    time.sleep(4)  # an overlay that cannot start (no Chrome, no game window ...) ends within a moment
+    for _ in range(80):  # return as soon as the overlay reports it runs; one that cannot start ends within a moment
+        time.sleep(0.1)
+        if proc.poll() is not None:
+            break
+        try:
+            with open(logfile, "rb") as fh:
+                fh.seek(start)
+                if b"Overlay running" in fh.read():
+                    return ""
+        except OSError:
+            pass
     if proc.poll() is not None:
         log.flush()
         try:
