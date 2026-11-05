@@ -32,6 +32,11 @@ PRESETS = {  # name -> (base url, default model, environment variable holding th
     "groq": ("https://api.groq.com/openai/v1", "llama-3.3-70b-versatile", "GROQ_API_KEY"),
     "mistral": ("https://api.mistral.ai/v1", "mistral-small-latest", "MISTRAL_API_KEY"),
     "gemini": ("https://generativelanguage.googleapis.com/v1beta/openai", "gemini-2.0-flash", "GEMINI_API_KEY"),
+    "anthropic": ("https://api.anthropic.com/v1", "claude-sonnet-5-5", "ANTHROPIC_API_KEY"),
+    "xai": ("https://api.x.ai/v1", "grok-4", "XAI_API_KEY"),
+    "together": ("https://api.together.xyz/v1", "meta-llama/Llama-3.3-70B-Instruct-Turbo", "TOGETHER_API_KEY"),
+    "perplexity": ("https://api.perplexity.ai", "sonar", "PERPLEXITY_API_KEY"),
+    "cerebras": ("https://api.cerebras.ai/v1", "llama-3.3-70b", "CEREBRAS_API_KEY"),
 }
 
 

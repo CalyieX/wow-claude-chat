@@ -1,6 +1,6 @@
 """The real WoW chat tab stays as an empty frame; this click-through overlay paints the conversation over it.
 
-The addon puts a magenta square on the tab's top-left and a cyan one on its bottom-right corner (see chat_marks).
+The addon puts a magenta square on the tab's top-left and a cyan one on its top-right and a yellow one on its bottom-left corner (see chat_marks).
 A screenshot of the game tells where the tab is right now, wherever the player moved or resized it. The bridge
 posts events (question / thinking / answer) into a small file; the overlay draws them. No reload, no reply slots.
 """
@@ -128,6 +128,7 @@ def run(poll: float = 0.25, find_every: float = 0.5) -> None:
     u.SetWindowPos.argtypes = [ctypes.c_void_p, ctypes.c_void_p, ctypes.c_int, ctypes.c_int, ctypes.c_int,
                                ctypes.c_int, ctypes.c_uint]
     park = lambda: overlay.update_layered(hwnd, Image.new('RGBA', (1, 1), (0, 0, 0, 0)), -100, -100)
+    misses = 0
     park()  # invisible until the tab is found (hiding the window itself made Tk lose it)
     entries: list[tuple[str, str]] = []
     offset = EVENTS.stat().st_size if EVENTS.exists() else 0
@@ -152,10 +153,16 @@ def run(poll: float = 0.25, find_every: float = 0.5) -> None:
             last_find = now
             try:
                 found = find_in_game()
-                frame, fs = found if found else (None, fs)
             except Exception as exc:  # noqa: BLE001 - a failed screenshot must not end the overlay
                 print(f'find failed: {exc}', flush=True)
-                frame = None
+                found = None
+            if found:
+                frame, fs = found
+                misses = 0
+            else:
+                misses += 1
+                if misses >= 3:  # one hidden marker (a tooltip over it) must not make the overlay blink away
+                    frame = None
         if frame is None:
             if visible:
                 park()

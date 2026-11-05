@@ -33,8 +33,8 @@ small{color:#8c7b4d;display:block;margin-top:2px}
 </style></head><body>
 <h1>AI setup</h1>
 <div id="found"></div>
-<label>Name of the AI (shown as the chat tab and before every answer)</label><input id="ainame" maxlength="20" placeholder="Claude">
-<small>The tab is renamed after /reload (or the next game start).</small>
+<label>Name the AI writes with (the tab itself is always called WoW AI)</label><input id="ainame" maxlength="20" placeholder="Claude">
+<small>Applies after /reload (or the next game start).</small>
 <details id="adv"><summary>Choose by hand / more options</summary>
 <label>Backend</label><select id="backend"></select>
 <small id="hint"></small>
@@ -121,7 +121,7 @@ def apply(data: dict) -> dict:
     if key:
         cfg["api_key"] = key
     config.save(cfg)
-    try:  # the tab name lives in the addon's Name.lua (applies after /reload)
+    try:  # the AI's name lives in the addon's Name.lua (applies after /reload)
         from . import installer
         root = config.client_root()
         if root:

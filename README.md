@@ -126,10 +126,9 @@ py -3 -m pytest
 
 MIT licensed.
 
-## Chat window over the game (no addon slots, no reload)
+## How the chat works
 
-`/chat` in the game (or `wowclaude chat`) opens a chat window over the game that looks like the WoW chat and talks to
-the AI directly. Click into it or press `Ctrl+Shift+Space` to write, `Enter` sends and gives the keyboard back to the
-game, `Esc` too. Drag the title to move it, the corner to resize it; it follows the game window and is hidden while the
-game is minimized. Answers can still open pages (`[[play URL]]`) and show window/macro blocks as text lines.
-
+The AI tab of the game stays an empty frame. A small click-through overlay program (started by the bridge) finds the tab
+by three tiny coloured corner marks the addon draws, and paints the conversation over it in the tab's own text size.
+No reload, endless chatting. The tab can be moved and resized like any other. Answers can still open pages
+(`[[play URL]]`) and show window/macro blocks as text lines.

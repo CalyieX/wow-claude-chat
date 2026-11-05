@@ -35,9 +35,14 @@ CHUNK = 380
 MAX_CHUNKS = 6
 
 
+RESERVED_TABS = {"general", "allgemein", "combat log", "kampflog", "trade", "handel", "localdefense", "lokale verteidigung",
+                 "lookingforgroup", "gruppensuche", "whisper", "fluestern", "flüstern", "guild", "gilde", "officer", "offizier"}
+
+
 def clean_name(raw) -> str:
     """The AI's name as shown in the tab and before answers: one short line, no control or separator characters."""
-    return re.sub(r"[\x00-\x1f|\\]", "", str(raw or "")).strip()[:20]
+    name = re.sub(r"[\x00-\x1f|\\]", "", str(raw or "")).strip()[:20]
+    return "" if name.lower() in RESERVED_TABS else name  # a real game tab (General ...) must never be taken over
 
 
 def persona() -> tuple[str, str]:

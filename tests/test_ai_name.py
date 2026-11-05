@@ -50,3 +50,9 @@ def test_state_lists_found(monkeypatch):
     from wowclaude import backends, setup_ui
     monkeypatch.setattr(backends, "detect", lambda: [{"backend": "claude", "label": "Claude Code"}])
     assert setup_ui._state()["found"][0]["backend"] == "claude"
+
+
+def test_real_tab_names_are_never_taken_over():
+    from wowclaude import claude
+    assert claude.clean_name("General") == "" and claude.clean_name("Allgemein") == ""
+    assert claude.clean_name("Gorel") == "Gorel"

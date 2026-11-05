@@ -189,7 +189,8 @@ local function applyVisible()
   elseif not want and stripOn then stripOn = false; host:SetAlpha(0) end
 end
 
--- The name of the AI (set on the AI setup page, stored in Name.lua) is the name of the chat tab.
+-- The tab is always called TABNAME. The AI's own name (AI setup page, stored in Name.lua) is only who writes in it.
+local TABNAME = "WoW AI"
 local function aiName()
   local n = KKAiName  -- Name.lua, written by the AI setup page (applies after /reload)
   if type(n) == "string" and n ~= "" then return n end
@@ -205,17 +206,29 @@ local function renameTab(frame, new)
 end
 local function claudeFrame0()
   if chatFrame then return chatFrame end
+  -- the tab may carry the previous name (the AI was renamed): find it by the name we used last, rename it, and never
+  -- leave a second tab behind
+  local olds = { [TABNAME] = true, [KKMapDB.tabName or "Claude"] = true, Claude = true }
+  local found
   for i = 1, NUM_CHAT_WINDOWS do
     local name = GetChatWindowInfo(i)
-    if name == aiName() then chatFrame = _G["ChatFrame" .. i]; return chatFrame end
+    local fr = _G["ChatFrame" .. i]
+    if name and olds[name] and fr and fr ~= DEFAULT_CHAT_FRAME then
+      if not found then found = fr
+      elseif FCF_Close then pcall(FCF_Close, fr) end  -- a leftover duplicate from an earlier rename
+    end
   end
-  for i = 1, NUM_CHAT_WINDOWS do  -- the tab still has the old name (the AI was renamed while the game was closed)
-    local name = GetChatWindowInfo(i)
-    if name == "Claude" then chatFrame = _G["ChatFrame" .. i]; renameTab(chatFrame, aiName()); return chatFrame end
+  if found then
+    chatFrame = found
+    renameTab(chatFrame, TABNAME)
+    KKMapDB.tabName = TABNAME
+    return chatFrame
   end
-  local ok, f = pcall(FCF_OpenNewWindow, aiName())
-  chatFrame = (ok and f) or DEFAULT_CHAT_FRAME
-  if chatFrame ~= DEFAULT_CHAT_FRAME and FCF_SetChatWindowFontSize then pcall(FCF_SetChatWindowFontSize, nil, chatFrame, 16) end
+  local ok, f = pcall(FCF_OpenNewWindow, TABNAME)
+  if not (ok and f) or f == DEFAULT_CHAT_FRAME then return nil end  -- never fall back to the normal chat: it would swallow every message
+  chatFrame = f
+  KKMapDB.tabName = TABNAME
+  if FCF_SetChatWindowFontSize then pcall(FCF_SetChatWindowFontSize, nil, chatFrame, 16) end
   return chatFrame
 end
 -- Two small coloured squares on the tab's corners tell the overlay program where the tab is (and that it is shown).
@@ -277,7 +290,7 @@ local function greyConfig()
     fs:SetPoint("BOTTOM", ChatConfigFrame, "BOTTOM", 0, 14)
     ChatConfigFrame.kkNote = fs
   end
-  ChatConfigFrame.kkNote:SetText("|cffffd100" .. aiName() .. "|r tab: these settings do not apply (it only shows the AI).")
+  ChatConfigFrame.kkNote:SetText("|cffffd100" .. TABNAME .. "|r tab: these settings do not apply (it only shows the AI).")
   ChatConfigFrame.kkNote:Show()
 end
 local lockWatcher = CreateFrame("Frame")
@@ -436,15 +449,12 @@ local function createMacro(name, body, perChar)
 end
 
 -- The answer comes back through the overlay program, not through the game: the question only has to stay in the strip
--- long enough for the bridge to read it, and a silent bridge is reported after a while.
+-- long enough for the bridge to read it.
 local function poll()
   if not pending then return end
   local age = GetTime() - pending.t0
   if age > 8 and not pending.read then pending.read = true; holdUntil = GetTime() + 2 end
-  if age > 40 then
-    DEFAULT_CHAT_FRAME:AddMessage(L(aiName() .. " antwortet nicht. Laeuft die Bruecke?", aiName() .. " did not answer. Is the bridge running?"), 1, 0.4, 0.4)
-    pending = nil
-  end
+  if age > 12 then pending = nil end  -- the bridge has read it by now; the answer arrives in the overlay, not here
 end
 
 local function isClaudeBox(eb)
