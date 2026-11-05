@@ -126,6 +126,14 @@ def pin(hwnd: int, x: int, y: int, w: int, h: int, opacity: int, click_through: 
     n = _pinned.get("n", 0) + 1
     if _pinned.get("key") == key and n % 20:
         _pinned["n"] = n
+        # Chrome drops the clip region now and then (page load, navigation): its grey title bar would show: put it back
+        probe = ctypes.windll.gdi32.CreateRectRgn(0, 0, 0, 0)
+        has_region = user32.GetWindowRgn(wintypes.HWND(hwnd), ctypes.c_void_p(probe)) != 0
+        ctypes.windll.gdi32.DeleteObject(ctypes.c_void_p(probe))
+        if has_region:
+            return
+        rgn = ctypes.windll.gdi32.CreateRectRgn(0, CHROME_BAR, w, h + CHROME_BAR)
+        user32.SetWindowRgn(wintypes.HWND(hwnd), ctypes.c_void_p(rgn), False)
         return
     _pinned.update(key=key, n=n)
     ex = user32.GetWindowLongW(hwnd, GWL_EXSTYLE) | WS_EX_TOOLWINDOW
