@@ -96,10 +96,16 @@ local function collect()
   local n = 0
   while f and n < 1500 do
     n = n + 1
-    if f ~= host and f ~= UIParent and f.IsVisible and f:IsVisible() and f.GetLeft and f:GetLeft() then
+    -- protected/restricted frames (secure UI, nameplates ...) refuse to be measured: never let that abort the whole scan
+    local usable = false
+    if f ~= host and f ~= UIParent and not (f.IsForbidden and f:IsForbidden()) and f.IsVisible and f.GetLeft then
+      local okm, vis, left = pcall(function() return f:IsVisible(), f:GetLeft() end)
+      usable = okm and vis and left and true or false
+    end
+    if usable then
       local typ = f.GetObjectType and f:GetObjectType() or "?"
       local clickable = (typ == "Button" or typ == "CheckButton" or typ == "EditBox" or typ == "Slider")
-      if clickable then
+      if clickable and pcall(function() return f:GetTop(), f:GetWidth(), f:GetEffectiveScale() end) then
         local es = f:GetEffectiveScale() * (ph / 768)
         local w, h = f:GetWidth() * es, f:GetHeight() * es
         if w >= 6 and h >= 6 and w < pw and h < ph then

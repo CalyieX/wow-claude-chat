@@ -911,3 +911,19 @@ def test_claude_runs_isolated(monkeypatch):
     claude._exec(["claude", "-p", *claude.ISOLATION], "hi")
     assert "--setting-sources" in seen["cmd"] and seen["cmd"][seen["cmd"].index("--setting-sources") + 1] == ""
     assert str(claude.config.HOME) not in seen["cwd"] and "Users" not in seen["cwd"]
+
+
+def test_lua_restricted_frame_does_not_break_the_scan():
+    """Secure/protected frames raise on GetLeft ('Can't measure restricted regions'): the strip must still be written."""
+    h, lua = _lua_addon()
+    lua.execute("""
+        local bad = CreateFrame("Button", "SecureThing")
+        bad.GetLeft = function() error("Can't measure restricted regions") end
+        bad.IsVisible = function() return true end
+        function EnumerateFrames(f) if f == nil then return bad end return nil end
+    """)
+    lua.eval("function() SlashCmdList['KKCHAT']('was ist?') end")()   # a pending question turns the frame scan on
+    st = decode.decode(h.strip_image(lua))
+    assert st is not None and st.message == "was ist?"
+    shown = [str(x) for x in lua.eval("DEFAULT_CHAT_FRAME.__log").values()]
+    assert not any("Fehler" in x or "restricted" in x for x in shown)
