@@ -4,8 +4,8 @@
 -- Textzeilen: name|typ|text|x|y|b|h   (Pixel). Erste Zeile: #screen|breite|höhe
 -- The strip is tiny: 1 pixel per cell, 128 cells per row, only as many rows as the data needs (about 4).
 -- The decoder detects the cell size itself, so this can be changed (2 is more robust on odd UI scales).
-local CELL, COLS, ROWS = 1, 128, 12
-local WANT_FRAMES = false -- the chat bridge does not need the button list
+local CELL, COLS, ROWS = 1, 128, 40
+-- The chat bridge does not need the list of clickable buttons; /kkmap frames turns it on for tools that do.
 local MAGIC = {{255,0,255},{0,255,255},{255,255,0},{0,0,0},{255,255,255},{255,0,0},{0,255,0},{0,0,255}}
 KKMapDB = KKMapDB or {}
 local DE = GetLocale() == "deDE"
@@ -92,7 +92,7 @@ local function collect()
   local pw = select(1, GetPhysicalScreenSize())
   local top = UIParent:GetTop() * UIParent:GetEffectiveScale() * (ph / 768)
   local entries = {}
-  local f = WANT_FRAMES and EnumerateFrames() or nil
+  local f = KKMapDB.frames and EnumerateFrames() or nil
   local n = 0
   while f and n < 1500 do
     n = n + 1
@@ -576,6 +576,7 @@ SlashCmdList["KKMACRO"] = function(msg)
 end
 
 SlashCmdList["KKMAP"] = function(msg)
+  if msg == "frames" then KKMapDB.frames = not KKMapDB.frames; print("KKMap: button list " .. (KKMapDB.frames and "on" or "off")) return end
   if msg == "always" then KKMapDB.always = true; KKMapDB.off = false; host:Show(); host:SetAlpha(1); stripOn = true; render(); print("KKMap: strip always visible") return end
   if msg == "auto" then KKMapDB.always = false; KKMapDB.off = false; host:Show(); print("KKMap: strip only when needed") return end
   if msg == "off" then KKMapDB.off = true; host:Hide()
