@@ -89,7 +89,28 @@ def deliver(root: Path, state: decode.GameState, reply: str) -> bool:
     return False
 
 
+LOCK_PORT = 47831
+_lock_socket = None
+
+
+def acquire_lock():
+    """Only one bridge per PC: a second one would answer every question twice. Returns the socket, or None if taken."""
+    import socket
+    global _lock_socket
+    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    try:
+        sock.bind(("127.0.0.1", LOCK_PORT))  # no SO_REUSEADDR: a second bind must fail
+    except OSError:
+        sock.close()
+        return None
+    _lock_socket = sock  # kept alive for the whole run; the OS frees it when the program ends, even on a crash
+    return sock
+
+
 def run(root: Path, poll: float = 0.6) -> None:
+    if acquire_lock() is None:
+        print("wowclaude is already running on this PC (close the other window first).", flush=True)
+        return
     session = claude.Session()
     last_seq: int | None = None
     print(f"wowclaude is running (game folder: {root}). Press Ctrl+C to stop.", flush=True)

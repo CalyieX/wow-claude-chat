@@ -587,7 +587,8 @@ def test_lua_reply_round_trip_through_slots(tmp_path):
     root = tmp_path
     addons = root / "Interface" / "AddOns"
     (addons / "KKMap" / "sig").mkdir(parents=True)
-    (addons / "KKR001").mkdir()
+    for i in range(1, 8):
+        (addons / f"KKR{i:03d}").mkdir()
     lua.eval("function() SlashCmdList['KKCHAT']('Hallo wie gehts?') end")()
     st = decode.decode(h.strip_image(lua))
     assert st.message == "Hallo wie gehts?" and st.slot_next == 1
@@ -606,8 +607,9 @@ def test_lua_reply_round_trip_through_slots(tmp_path):
 
     lua.eval("function() __update(1.0) end")()           # nothing published yet: addon keeps waiting
     assert decode.decode(h.strip_image(lua)).ack_seq != st.message_seq
-    (addons / "KKR001" / "Reply.lua").write_text(slots.reply_lua(st.message_seq, ["Claude: Gut, danke!"]), encoding="utf-8")
-    marker.write_bytes(b"RIFF" + b"\0" * 40)
+    slots.reset_marker(root, st.message_idx)             # what the bridge does before it asks the AI
+    assert not play(marker.name)
+    slots.publish(root, st.message_seq, st.message_idx, ["Claude: Gut, danke!"], None, None, 1)  # the real publisher
     lua.eval("function() __update(1.0) end")()
     shown = [str(x) for x in lua.eval("DEFAULT_CHAT_FRAME.__log").values()]
     assert "Claude: Gut, danke!" in shown
@@ -675,3 +677,149 @@ def test_retry_only_for_stale_sessions_and_session_id_always_renewed(monkeypatch
     assert len(ids) == n + 2
     burnt = ids[-1]
     assert not s.started and s.id != burnt  # the id of the failed retry is never reused
+
+
+def test_only_one_bridge_can_run(monkeypatch):
+    from wowclaude import bridge
+    monkeypatch.setattr(bridge, "LOCK_PORT", 47999)
+    first = bridge.acquire_lock()
+    try:
+        assert first is not None
+        assert bridge.acquire_lock() is None
+    finally:
+        first.close()
+    again = bridge.acquire_lock()  # freed again after the first one ends
+    assert again is not None
+    again.close()
+
+
+def test_lua_cut_uses_whole_characters_for_3_and_4_byte_text():
+    h, lua = _lua_addon()
+    for ch in ("€", "😀"):
+        lua.eval("function() DEFAULT_CHAT_FRAME.__log = nil; SlashCmdList['KKCHAT']('" + ch * 120 + "') end")()
+        st = decode.decode(h.strip_image(lua))
+        assert st.message and len(st.message.encode("utf-8")) <= 230
+        assert set(st.message) == {ch}, f"half character left for {ch!r}"
+        shown = " ".join(str(x) for x in lua.eval("DEFAULT_CHAT_FRAME.__log").values())
+        assert "shortened" in shown or "gekuerzt" in shown  # the player is told
+
+
+def _deliver_env(monkeypatch, tmp_path, fresh_state):
+    from wowclaude import bridge
+    monkeypatch.setattr(bridge.time, "sleep", lambda s: None)
+    ticks = iter(range(0, 100000))
+    monkeypatch.setattr(bridge.time, "time", lambda: next(ticks))
+    monkeypatch.setattr(bridge.slots, "publish", lambda *a, **k: None)
+    silenced = []
+    monkeypatch.setattr(bridge.slots, "reset_marker", lambda root, idx: silenced.append(idx))
+    monkeypatch.setattr(bridge, "_safe_read_state", lambda: fresh_state)
+
+    class St:
+        def __init__(self, seq, ack):
+            self.message_seq, self.ack_seq, self.message_idx, self.slot_next = seq, ack, 4, 5
+    return bridge, St, silenced
+
+
+def test_marker_silenced_when_next_message_arrives(monkeypatch, tmp_path):
+    bridge, St, silenced = _deliver_env(monkeypatch, tmp_path, None)
+    monkeypatch.setattr(bridge, "_safe_read_state", lambda: St(9, 6))
+    assert bridge.deliver(tmp_path, St(7, 6), "hi") is True
+    assert silenced == [4]
+
+
+def test_marker_silenced_when_never_confirmed(monkeypatch, tmp_path):
+    bridge, St, silenced = _deliver_env(monkeypatch, tmp_path, None)
+    monkeypatch.setattr(bridge, "_safe_read_state", lambda: St(7, 6))
+    assert bridge.deliver(tmp_path, St(7, 6), "hi") is False
+    assert silenced == [4]
+
+
+def test_backends_use_hard_limit_exec_and_short_api_timeout(monkeypatch, tmp_path):
+    import sys
+    from wowclaude import backends, claude, config
+    config.save({"backend": "command", "command": [sys.executable, "-c", "print(1)"]})
+    seen = []
+    monkeypatch.setattr(claude, "_exec", lambda cmd, prompt, timeout=None: (seen.append(cmd) or (0, "answer", "")))
+    assert backends.ask("sys", [], "q", None) == "answer" and seen
+    monkeypatch.setattr(backends.shutil, "which", lambda n: "codex")
+    config.save({"backend": "codex"})
+
+    def fake(cmd, prompt, timeout=None):
+        out = cmd[cmd.index("-o") + 1]
+        Path(out).write_text("from codex", encoding="utf-8")
+        seen.append(cmd)
+        return 0, "", ""
+    monkeypatch.setattr(claude, "_exec", fake)
+    assert backends.ask("sys", [], "q", None) == "from codex" and len(seen) == 2
+    src = Path(backends.__file__).read_text(encoding="utf-8")
+    assert "timeout=180" not in src and "timeout=170" not in src and "subprocess.run" not in src
+
+
+def test_retry_needs_enough_budget_and_each_stale_pattern_works(monkeypatch):
+    from wowclaude import backends, claude
+    monkeypatch.setattr(claude, "claude_path", lambda: "claude")
+    monkeypatch.setattr(backends, "name", lambda: "claude")
+    for text in ("No conversation found with session ID x", "Session ID abc is already in use",
+                 "session not found", "invalid session", "unknown session"):
+        calls = []
+
+        def fake(cmd, prompt, timeout=None, text=text):
+            calls.append(timeout)
+            return (0, "fine", "") if len(calls) == 1 else (1, "", text)
+        monkeypatch.setattr(claude, "_exec", fake)
+        s = claude.Session()
+        s.ask("one")
+        calls.clear()
+        monkeypatch.setattr(claude, "_exec", lambda c, p, timeout=None, text=text: (calls.append(timeout) or (1, "", text)))
+        try:
+            s.ask("two"); assert False
+        except RuntimeError:
+            pass
+        assert len(calls) == 2, text
+    monkeypatch.setattr(claude, "TIMEOUT", 10)  # budget below the 20 s guard: never retry
+    calls.clear()
+    s = claude.Session(); s.started = True
+    try:
+        s.ask("three"); assert False
+    except RuntimeError:
+        pass
+    assert len(calls) == 1
+
+
+def test_timeout_message_names_the_real_limit():
+    import sys
+    from wowclaude import claude
+    try:
+        claude._exec([sys.executable, "-c", "import time; time.sleep(30)"], "x", 2)
+        assert False
+    except claude.AskTimeout as exc:
+        assert "2 seconds" in str(exc)
+
+
+def test_exec_timeout_kills_grandchildren(tmp_path):
+    import sys
+    import time
+    from wowclaude import claude
+    if sys.platform != "win32":
+        return
+    pidfile = tmp_path / "pid.txt"
+    code = ("import subprocess, sys, time; "
+            f"p = subprocess.Popen([sys.executable, '-c', 'import time; time.sleep(60)']); "
+            f"open(r'{pidfile}', 'w').write(str(p.pid)); time.sleep(60)")
+    try:
+        claude._exec([sys.executable, "-c", code], "x", 3)
+    except claude.AskTimeout:
+        pass
+    pid = int(pidfile.read_text())
+    time.sleep(1)
+    import subprocess
+    out = subprocess.run(["tasklist", "/FI", f"PID eq {pid}"], capture_output=True, text=True, encoding="utf-8", errors="replace").stdout or ""
+    assert str(pid) not in out, "grandchild still running"
+
+
+def test_check_login_empty_answer_is_not_ok(monkeypatch):
+    from wowclaude import backends, claude
+    monkeypatch.setattr(backends, "name", lambda: "claude")
+    monkeypatch.setattr(claude, "claude_path", lambda: "claude")
+    monkeypatch.setattr(claude, "_exec", lambda *a, **k: (0, "", ""))
+    assert claude.check_login()[0] is False
