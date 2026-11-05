@@ -39,7 +39,7 @@ put into a copy of the repo, the whole test suite must fail. Result of the run o
 | M32 | misses are never counted | KILLED (1 failed, 61 passed) |
 | M33 | protected frames are measured without protection | KILLED (1 failed, 63 passed) |
 | M34 | Claude runs inside the user's profile folder | KILLED (1 failed, 62 passed) |
-| M35 | `--setting-sources ""` removed | KILLED (1 failed, 6 passed) |
+| M35 | `--setting-sources ""` removed | KILLED (1 failed, 62 passed) |
 | M36 | page is no longer put above the game (z-order guard is a no-op) | KILLED (1 failed, 72 passed) |
 
 ## Live check of the browser overlay
