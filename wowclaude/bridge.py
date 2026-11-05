@@ -64,11 +64,12 @@ def deliver(root: Path, state: decode.GameState, reply: str) -> bool:
         except Exception as exc:  # noqa: BLE001 - never lose the text because of a picture
             print(f"images failed: {exc}", flush=True)
     parts = claude.split_reply(reply or "...")
-    parts[0] = claude.persona()[0] + ": " + parts[0]
+    ai_name = claude.persona()[0]
+    parts[0] = ai_name + ": " + parts[0]
     slot_next = state.slot_next
     for attempt in range(3):  # no confirmation: the addon may have been reloaded, so look at its slot counter again
         try:
-            slots.publish(root, state.message_seq, state.message_idx or 1, parts, overlay, macros, slot_next)
+            slots.publish(root, state.message_seq, state.message_idx or 1, parts, overlay, macros, slot_next, ai_name)
         except OSError as exc:  # game or a scanner holds a file: wait a moment, try again
             print(f"could not write the reply ({exc}), retrying ...", flush=True)
             time.sleep(1.0)

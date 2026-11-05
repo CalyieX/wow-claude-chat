@@ -193,13 +193,31 @@ local function applyVisible()
   elseif not want and stripOn then stripOn = false; host:SetAlpha(0) end
 end
 
+-- The name of the AI (set on the AI setup page) arrives with every answer and is the name of the chat tab.
+local function aiName()
+  local n = KKMapDB and KKMapDB.aiName
+  if type(n) == "string" and n ~= "" then return n end
+  return "Claude"
+end
+local function renameTab(frame, new)
+  if not frame or frame == DEFAULT_CHAT_FRAME then return end
+  pcall(function()
+    if FCF_SetWindowName then FCF_SetWindowName(frame, new) end
+    local tab = _G[frame:GetName() .. "Tab"]
+    if tab and tab.SetText then tab:SetText(new) end
+  end)
+end
 local function claudeFrame()
   if chatFrame then return chatFrame end
   for i = 1, NUM_CHAT_WINDOWS do
     local name = GetChatWindowInfo(i)
-    if name == "Claude" then chatFrame = _G["ChatFrame" .. i]; return chatFrame end
+    if name == aiName() then chatFrame = _G["ChatFrame" .. i]; return chatFrame end
   end
-  local ok, f = pcall(FCF_OpenNewWindow, "Claude")
+  for i = 1, NUM_CHAT_WINDOWS do  -- the tab still has the old name (the AI was renamed while the game was closed)
+    local name = GetChatWindowInfo(i)
+    if name == "Claude" then chatFrame = _G["ChatFrame" .. i]; renameTab(chatFrame, aiName()); return chatFrame end
+  end
+  local ok, f = pcall(FCF_OpenNewWindow, aiName())
   chatFrame = (ok and f) or DEFAULT_CHAT_FRAME
   if chatFrame ~= DEFAULT_CHAT_FRAME and FCF_SetChatWindowFontSize then pcall(FCF_SetChatWindowFontSize, nil, chatFrame, 16) end
   return chatFrame
@@ -539,6 +557,16 @@ local function deliver()
   nextSlot = nextSlot + 1
   KKSlotNext = nextSlot
   if d and pending and d.seq == pending.seq then
+    if type(d.name) == "string" and d.name ~= "" and d.name ~= aiName() then  -- renamed on the setup page
+      local old = aiName()
+      KKMapDB.aiName = d.name
+      local cf = claudeFrame()
+      if cf and GetChatWindowInfo then
+        for i = 1, NUM_CHAT_WINDOWS do
+          if _G["ChatFrame" .. i] == cf and GetChatWindowInfo(i) == old then renameTab(cf, d.name) end
+        end
+      end
+    end
     for _, part in ipairs(d.parts or {}) do say(part) end
     if d.overlay then KKShowOverlay(d.overlay) end
     for _, m in ipairs(d.macros or {}) do createMacro(m.name, m.body, m.char) end
@@ -569,7 +597,7 @@ local function poll(dt)
     deliver()
   end
   if pending and GetTime() - pending.t0 > 120 then  -- also when the marker plays but no slot could be loaded: never "think" forever
-    say(L("Claude antwortet nicht (Zeitueberschreitung). Laeuft die Bruecke?", "Claude did not answer (timeout). Is the bridge running?"), 1, 0.4, 0.4)
+    say(L(aiName() .. " antwortet nicht (Zeitueberschreitung). Laeuft die Bruecke?", aiName() .. " did not answer (timeout). Is the bridge running?"), 1, 0.4, 0.4)
     pending = nil
   end
 end
@@ -596,7 +624,7 @@ local function hookEditBoxes()
                 if r.GetObjectType and r:GetObjectType() == "FontString" then h = r; break end
               end
             end
-            if h and h.SetText then h:SetText("Claude: "); self:SetTextInsets(h:GetStringWidth() + 18, 13, 0, 0) end
+            if h and h.SetText then h:SetText(aiName() .. ": "); self:SetTextInsets(h:GetStringWidth() + 18, 13, 0, 0) end
           end
           pcall(fix)
           if C_Timer and C_Timer.After then C_Timer.After(0, function() pcall(fix) end); C_Timer.After(0.1, function() pcall(fix) end) end
@@ -630,7 +658,7 @@ if hooksecurefunc and ChatEdit_UpdateHeader then
       if isClaudeBox(eb) then
         local h = _G[eb:GetName() .. "Header"]
         if h then
-          h:SetText("Claude: ")
+          h:SetText(aiName() .. ": ")
           eb:SetTextInsets(h:GetWidth() + 13, 13, 0, 0)
         end
       end
@@ -643,7 +671,7 @@ local function relabel(eb)
   if not isClaudeBox(eb) then return end
   local function fix()
     local h = _G[eb:GetName() .. "Header"]
-    if h and h.SetText then h:SetText("Claude: "); eb:SetTextInsets(h:GetStringWidth() + 18, 13, 0, 0) end
+    if h and h.SetText then h:SetText(aiName() .. ": "); eb:SetTextInsets(h:GetStringWidth() + 18, 13, 0, 0) end
   end
   pcall(fix)
   if C_Timer and C_Timer.After then
@@ -664,8 +692,8 @@ if C_Timer and C_Timer.NewTicker then
     local eb = cf and _G[cf:GetName() .. "EditBox"]
     if not eb or not eb:IsShown() then return end
     local h = _G[eb:GetName() .. "Header"]
-    if h and h:GetText() ~= "Claude" then
-      h:SetText("Claude")
+    if h and h:GetText() ~= aiName() then
+      h:SetText(aiName())
       local suf = _G[eb:GetName() .. "HeaderSuffix"]
       eb:SetTextInsets(h:GetStringWidth() + ((suf and suf:GetStringWidth()) or 8) + 13, 13, 0, 0)
     end

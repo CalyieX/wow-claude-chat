@@ -35,9 +35,18 @@ CHUNK = 380
 MAX_CHUNKS = 6
 
 
+def clean_name(raw) -> str:
+    """The AI's name as shown in the tab and before answers: one short line, no control or separator characters."""
+    return re.sub(r"[\x00-\x1f|\\]", "", str(raw or "")).strip()[:20]
+
+
 def persona() -> tuple[str, str]:
-    """(reply prefix, system prompt). persona.txt: first line = prefix, the rest is added to the prompt."""
+    """(name shown in the chat, system prompt). The name comes from config.json "name" (AI setup page); persona.txt is
+    then all extra instructions. Old style without a name in config.json: the first line of persona.txt is the name."""
     base = DEFAULT_SYSTEM
+    name = clean_name(config.load().get("name"))
+    if name:
+        base += f"\nYour name is {name}. Answer as {name}."
     try:
         base += "\n\n" + (Path(__file__).parent / "macro_skill.md").read_text(encoding="utf-8")
     except OSError:
@@ -47,11 +56,13 @@ def persona() -> tuple[str, str]:
         base += "\n\n" + vinput.SKILL
     try:
         lines = config.PERSONA.read_text(encoding="utf-8").splitlines()
-        if lines and lines[0].strip():
-            return lines[0].strip(), base + "\n\n" + "\n".join(lines[1:]).strip()
+        if name:
+            return name, base + "\n\n" + "\n".join(lines).strip()
+        if lines and clean_name(lines[0]):
+            return clean_name(lines[0]), base + "\n\n" + "\n".join(lines[1:]).strip()
     except OSError:
         pass
-    return "Claude", base
+    return name or "Claude", base
 
 
 REMINDER = (

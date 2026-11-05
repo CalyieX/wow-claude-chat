@@ -53,9 +53,10 @@ def lua_string(text: str) -> str:
     return '"' + "".join(out) + '"'
 
 
-def reply_lua(seq: int, parts: list[str], overlay: dict | None = None, macros: list[dict] | None = None) -> str:
+def reply_lua(seq: int, parts: list[str], overlay: dict | None = None, macros: list[dict] | None = None,
+              name: str = "") -> str:
     body = ", ".join(lua_string(p) for p in parts)
-    extra = ""
+    extra = f", name = {lua_string(name)}" if name else ""  # the addon renames the chat tab to it
     if macros:
         items = ", ".join("{ name = %s, body = %s }" % (lua_string(m["name"]), lua_string(m["body"].replace("\n", "\\n")))
                           for m in macros)
@@ -149,10 +150,10 @@ def uninstall(root: Path) -> dict:
 
 
 def publish(root: Path, seq: int, idx: int, parts: list[str], overlay: dict | None = None,
-            macros: list[dict] | None = None, slot_next: int | None = None) -> None:
+            macros: list[dict] | None = None, slot_next: int | None = None, name: str = "") -> None:
     """Write the reply into the slots the addon loads next, then flip the silent-sound marker ``idx`` to playable."""
     addons = _addons(root)
-    content = reply_lua(seq, parts, overlay, macros).encode("utf-8")
+    content = reply_lua(seq, parts, overlay, macros, name).encode("utf-8")
     def write(i: int) -> None:
         target = addons / f"KKR{i:03d}" / "Reply.lua"
         tmp = target.with_suffix(".tmp")

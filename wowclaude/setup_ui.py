@@ -38,7 +38,9 @@ small{color:#8c7b4d;display:block;margin-top:2px}
 <div id="keyrow"><label>API key <span id="keystate"></span></label><input id="api_key" type="password" autocomplete="off"
  placeholder="leave empty to keep the saved key"><small>Stored only in ~/.wowclaude/config.json on this computer.</small></div>
 <div id="cmdrow"><label>Command (reads the prompt on stdin)</label><input id="command" placeholder="ollama run llama3.1"></div>
-<label>Persona (first line = name shown before answers, the rest is added to the instructions)</label>
+<label>Name of the AI (shown as the chat tab and before every answer)</label><input id="ainame" maxlength="20" placeholder="Claude">
+<small>The tab is renamed with the next answer (or after /reload).</small>
+<label>Extra instructions (optional, e.g. how it should talk)</label>
 <textarea id="persona"></textarea>
 <button id="save">Save and test</button><div id="msg"></div>
 <script>
@@ -54,29 +56,32 @@ function show(){const b=$("backend").value,isApi=!["claude","codex","command"].i
 (async()=>{const s=await api("/state");const sel=$("backend");
  for(const b of s.backends){const o=document.createElement("option");o.value=o.textContent=b;sel.appendChild(o)}
  sel.value=s.backend;$("model").value=s.model||"";$("base_url").value=s.base_url||"";$("command").value=s.command||"";
- $("persona").value=s.persona||"";$("keystate").textContent=s.has_key?"(saved)":"";show();sel.onchange=show;
+ $("persona").value=s.persona||"";$("ainame").value=s.name||"";$("keystate").textContent=s.has_key?"(saved)":"";show();sel.onchange=show;
  recheck()})();
 async function recheck(){$("msg").textContent="Checking the AI ...";$("msg").className="";
  try{const r=await api("/check");$("msg").textContent=r.status;$("msg").className=r.ok?"ok":"bad"}catch(e){$("msg").textContent="Check failed: "+e;$("msg").className="bad"}}
 $("save").onclick=async()=>{$("msg").textContent="Saving ...";$("msg").className="";
  const r=await api("/save",{backend:$("backend").value,model:$("model").value,base_url:$("base_url").value,
-  api_key:$("api_key").value,command:$("command").value,persona:$("persona").value});
+  api_key:$("api_key").value,command:$("command").value,name:$("ainame").value,persona:$("persona").value});
  $("msg").textContent=r.status;$("msg").className=r.ok?"ok":"bad";if(r.has_key)$("keystate").textContent="(saved)";$("api_key").value="";await recheck()};
 </script></body></html>"""
 
 
 def _state() -> dict:
     cfg = config.load()
-    prefix, rest = "", ""
+    name, rest = claude.clean_name(cfg.get("name")), ""
     try:
         lines = config.PERSONA.read_text(encoding="utf-8").splitlines()
-        prefix, rest = (lines[0] if lines else ""), "\n".join(lines[1:])
+        if name:
+            rest = "\n".join(lines)
+        else:  # old style: the first line of persona.txt was the name
+            name, rest = claude.clean_name(lines[0] if lines else ""), "\n".join(lines[1:])
     except OSError:
         pass
     return {"backends": ["claude", "codex", "command", "openai-compatible", *backends.PRESETS],
             "backend": backends.name(), "model": cfg.get("model", ""), "base_url": cfg.get("base_url", ""),
             "command": cfg.get("command", ""), "has_key": bool(cfg.get("api_key")),
-            "persona": (prefix + "\n" + rest).strip("\n") if prefix else rest}
+            "name": name, "persona": rest.strip("\n")}
 
 
 def _check() -> dict:
@@ -98,13 +103,20 @@ def apply(data: dict) -> dict:
             cfg[k] = v
         else:
             cfg.pop(k, None)
+    name = claude.clean_name(data.get("name"))
+    if name:
+        cfg["name"] = name
+    else:
+        cfg.pop("name", None)
     key = str(data.get("api_key", "")).strip()
     if key:
         cfg["api_key"] = key
     config.save(cfg)
     persona = str(data.get("persona", "")).strip("\n")
     config.HOME.mkdir(parents=True, exist_ok=True)
-    if persona:
+    if persona and not name:  # no name set: persona() reads the first line as the name, so keep "Claude" there
+        config.PERSONA.write_text("Claude\n" + persona + "\n", encoding="utf-8")
+    elif persona:
         config.PERSONA.write_text(persona + "\n", encoding="utf-8")
     elif config.PERSONA.exists():
         config.PERSONA.unlink()

@@ -220,12 +220,13 @@ def test_setup_ui_apply_and_state(tmp_path, monkeypatch):
     monkeypatch.setattr(config, "CONFIG", tmp_path / "config.json")
     monkeypatch.setattr(config, "PERSONA", tmp_path / "persona.txt")
     monkeypatch.delenv("WOWCLAUDE_BACKEND", raising=False)
-    out = setup_ui.apply({"backend": "openrouter", "model": "x/y", "api_key": "sk-test", "persona": "Gorel\nBe brief."})
+    out = setup_ui.apply({"backend": "openrouter", "model": "x/y", "api_key": "sk-test", "name": "Gorel", "persona": "Be brief."})
     assert out["ok"] and out["has_key"]
     cfg = config.load()
     assert cfg["backend"] == "openrouter" and cfg["model"] == "x/y" and cfg["api_key"] == "sk-test"
-    assert (tmp_path / "persona.txt").read_text(encoding="utf-8").startswith("Gorel")
+    assert cfg["name"] == "Gorel" and (tmp_path / "persona.txt").read_text(encoding="utf-8").strip() == "Be brief."
     st = setup_ui._state()
+    assert st["name"] == "Gorel" and st["persona"] == "Be brief."
     assert st["backend"] == "openrouter" and st["has_key"] and "api_key" not in st
     assert setup_ui.apply({"backend": "nope"})["ok"] is False
     # empty key keeps the saved one, empty persona removes the file
@@ -306,7 +307,7 @@ def test_deliver_retries_when_files_are_locked(monkeypatch):
     from wowclaude import bridge, decode
     calls = []
 
-    def fake_publish(root, seq, idx, parts, overlay=None, macros=None, slot_next=None):
+    def fake_publish(root, seq, idx, parts, overlay=None, macros=None, slot_next=None, name=""):
         calls.append(slot_next)
         if len(calls) == 1:
             raise PermissionError("locked")

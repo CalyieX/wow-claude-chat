@@ -64,7 +64,7 @@ same file names in `~/.wowclaude/art/` take priority. Put `FRIZQT__.TTF` into `~
 ## Choosing the AI (no files to edit)
 
 `/wac` -> **AI Setup** opens a page in the browser window: pick the backend (Claude, Codex, OpenRouter, DeepSeek,
-OpenAI, Groq, local models such as Ollama ...), the model, paste an API key if needed, set a persona. Without the game:
+OpenAI, Groq, local models such as Ollama ...), the model, paste an API key if needed, name the AI, set a persona. Without the game:
 `wowclaude config`. The page runs on 127.0.0.1 only, protected by a one-time token. An API key you enter is stored in
 plain text in `~/.wowclaude/config.json` on your computer.
 
@@ -91,8 +91,8 @@ With every question the AI gets your character's name, level, class, zone, XP, m
 Nothing else leaves the game. Other players' chat is never read. With the Claude backend the AI runs **without tools**
 (it cannot read or change files on your PC); every other backend sends the text to that provider, so check their terms.
 Using a Claude subscription through a third-party program may be restricted by Anthropic's terms: if in doubt use an
-API key backend. Your own style: `~/.wowclaude/persona.txt` (first line = name shown before answers, the rest is added
-to the instructions).
+API key backend. Give the AI a name on the AI Setup page (`/wac` > AI Setup): the chat tab and every answer then show that name instead of
+"Claude" (the tab is renamed with the next answer). Your own style: `~/.wowclaude/persona.txt` (extra instructions).
 
 ## Fair-play note
 
