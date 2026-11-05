@@ -16,6 +16,7 @@ import base64
 import shutil
 import socket
 import subprocess
+import sys
 import time
 import urllib.parse
 import urllib.request
@@ -31,7 +32,24 @@ WS_EX_LAYERED, WS_EX_TRANSPARENT, WS_EX_TOOLWINDOW = 0x80000, 0x20, 0x80
 HWND_TOPMOST = -1
 SWP_NOACTIVATE, SWP_SHOWWINDOW = 0x10, 0x40
 LWA_ALPHA = 0x2
-CHROME_BAR = 34  # height of Chrome's own app-window title bar (hidden behind the WoW frame)
+
+
+def dpi_scale() -> float:
+    """Display scale as a factor (1.0 = 100 %, 1.5 = 150 %). Makes this process DPI-aware first so the answer is real."""
+    if sys.platform != "win32":
+        return 1.0
+    try:
+        ctypes.windll.shcore.SetProcessDpiAwareness(2)
+    except (OSError, AttributeError):
+        pass
+    try:
+        return max(1.0, min(4.0, ctypes.windll.user32.GetDpiForSystem() / 96))
+    except (OSError, AttributeError):
+        return 1.0
+
+
+SCALE = dpi_scale()
+CHROME_BAR = round(34 * SCALE)  # height of Chrome's own app-window title bar (hidden behind the WoW frame); grows with the display scale
 
 CANDIDATES = [
     r"C:\Program Files\Google\Chrome\Application\chrome.exe",
@@ -399,7 +417,7 @@ def run(url: str | None = None, corner: str | None = None, size: str | None = No
 EDGE_SIZE, INSET, MARGIN = 24, 6, 9
 KEY_RGB, KEY = (1, 2, 3), "#010203"  # border art size, backdrop inset, visible border thickness (content margin)
 EDGE = MARGIN  # frame thickness left/right/bottom
-TOP = 40  # top strip with the address bar and buttons; Chrome draws its first 7 rows over the frame edge, so they must lie under the opaque part (TOP >= CHROME_BAR + 5)
+TOP = max(40, CHROME_BAR + 6)  # top strip with the address bar and buttons; Chrome draws its first 7 rows over the frame edge, so they must lie under the opaque part (TOP >= CHROME_BAR + 5)
 
 
 _art_cache: dict = {}

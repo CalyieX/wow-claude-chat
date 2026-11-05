@@ -433,3 +433,32 @@ def test_play_reports_why_the_browser_did_not_open(monkeypatch, tmp_path):
     assert bridge.handle_command("!browser").startswith("Browser did not open: No Chrome")
     monkeypatch.setattr(overlay, "play", lambda url, size=None: "")
     assert bridge.handle_command("!browser") == "Browser opened."
+
+
+def test_claude_gets_system_prompt_as_file(monkeypatch, tmp_path):
+    """Multi-line system prompts must not travel as a command-line argument (.cmd wrappers cut at the first newline)."""
+    from wowclaude import claude, config
+    monkeypatch.setattr(config, "HOME", tmp_path)
+    seen = {}
+
+    def fake_run(cmd, **kw):
+        seen["cmd"] = cmd
+        class R:
+            returncode, stdout, stderr = 0, "ok", ""
+        return R()
+    monkeypatch.setattr(claude.subprocess, "run", fake_run)
+    s = claude.Session.__new__(claude.Session)
+    s.history, s.id, s.started = [], "id-1", False
+    assert s._run("claude", "hi", None) == "ok"
+    cmd = seen["cmd"]
+    assert "--append-system-prompt-file" in cmd and "--append-system-prompt" not in cmd
+    assert (tmp_path / "system_prompt.txt").read_text(encoding="utf-8").count("\n") > 3
+
+
+def test_overlay_chrome_bar_follows_display_scale():
+    import sys
+    if sys.platform != "win32":
+        return
+    from wowclaude import overlay
+    assert overlay.CHROME_BAR == round(34 * overlay.SCALE)
+    assert overlay.TOP >= overlay.CHROME_BAR + 5

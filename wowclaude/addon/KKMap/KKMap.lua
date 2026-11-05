@@ -547,6 +547,8 @@ local function hookEditBoxes()
           if C_Timer and C_Timer.After then C_Timer.After(0, function() pcall(fix) end); C_Timer.After(0.1, function() pcall(fix) end) end
         end
       end)
+      -- the handler only acts when the box currently belongs to the Claude tab (isClaudeBox); otherwise it
+      -- calls the original handler unchanged. Kept on every box because some clients share one box between tabs.
       local orig = eb:GetScript("OnEnterPressed")
       eb:SetScript("OnEnterPressed", function(self, ...)
         local text = self:GetText() or ""

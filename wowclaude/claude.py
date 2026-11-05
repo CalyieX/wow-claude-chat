@@ -115,6 +115,10 @@ def claude_path() -> str | None:
     custom = os.environ.get("WOWCLAUDE_CLAUDE") or config.load().get("claude")
     if custom and (os.path.exists(custom) or shutil.which(custom)):
         return custom
+    if os.name == "nt":  # prefer the native claude.exe: a .cmd wrapper cuts arguments at the first line break
+        native = Path.home() / ".local" / "bin" / "claude.exe"
+        if native.exists():
+            return str(native)
     return shutil.which("claude")
 
 
@@ -177,7 +181,11 @@ class Session:
 
     def _run(self, exe: str, prompt: str, model: str | None) -> str:
         prompt = prompt + reminder()
-        cmd = [exe, "-p", "--output-format", "text", "--tools", "", "--append-system-prompt", persona()[1]]
+        # system prompt via a file: multi-line arguments are mangled by Windows .cmd wrappers
+        sysfile = config.HOME / "system_prompt.txt"
+        config.HOME.mkdir(parents=True, exist_ok=True)
+        sysfile.write_text(persona()[1], encoding="utf-8")
+        cmd = [exe, "-p", "--output-format", "text", "--tools", "", "--append-system-prompt-file", str(sysfile)]
         cmd += ["--resume" if self.started else "--session-id", self.id]
         if model:
             cmd += ["--model", model]

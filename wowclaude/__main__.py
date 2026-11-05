@@ -84,8 +84,11 @@ def cmd_doctor(args) -> int:
     except ImportError:
         print("tkinter       : MISSING (needed for the browser window; reinstall Python with tcl/tk)")
     print("claude command:", claude.claude_path() or "NOT FOUND")
-    ok, msg = claude.check_login()
-    print("AI backend    :", "OK - " + msg if ok else "PROBLEM - " + msg)
+    if getattr(args, "deep", False):
+        ok, msg = claude.check_login()  # a real question to the AI: can take a minute
+        print("AI backend    :", "OK - " + msg if ok else "PROBLEM - " + msg)
+    else:
+        print("AI backend    : not asked (add --deep to send one test question)")
     running = screen.game_running()
     print("game running  :", running)
     if running:
@@ -125,6 +128,8 @@ def main(argv=None) -> int:
                             ("uninstall", cmd_uninstall, "remove the addon and all reply slots from the game folder")):
         p = sub.add_parser(name, help=help_)
         p.add_argument("--root", help="game folder (the one containing Wow.exe), only if it is not found automatically")
+        if name == "doctor":
+            p.add_argument("--deep", action="store_true", help="also send one real test question to the AI (slow)")
         p.set_defaults(fn=fn)
     pc = sub.add_parser("config", help="open the AI setup page (backend, model, key, persona) in the WoW browser window")
     pc.set_defaults(fn=lambda a: __import__("wowclaude.setup_ui", fromlist=["serve"]).serve())

@@ -80,13 +80,14 @@ def deliver(root: Path, state: decode.GameState, reply: str) -> bool:
             if fresh is not None:
                 if fresh.ack_seq == state.message_seq:
                     return True
+                if fresh.message_seq != state.message_seq:
+                    return True  # the player already wrote the next message: the answer is out, do not block the loop
                 slot_next = fresh.slot_next
     return False
 
 
 def run(root: Path, poll: float = 0.6) -> None:
     session = claude.Session()
-    model = config.load().get("model")
     last_seq: int | None = None
     print(f"wowclaude is running (game folder: {root}). Press Ctrl+C to stop.", flush=True)
     while True:
@@ -112,7 +113,7 @@ def run(root: Path, poll: float = 0.6) -> None:
             slots.reset_marker(root, state.message_idx or 1)
             try:
                 cmd_reply = handle_command(state.message) if state.message.lstrip().startswith("!") else None
-                reply = cmd_reply if cmd_reply is not None else session.ask(question, model)
+                reply = cmd_reply if cmd_reply is not None else session.ask(question, config.load().get("model"))
             except Exception as exc:  # noqa: BLE001 - tell the player, keep running
                 reply = f"No AI answered yet - open /wac and press AI Setup. ({exc})"
             print(f"< {reply}", flush=True)
