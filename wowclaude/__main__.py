@@ -24,10 +24,8 @@ def cmd_setup(args) -> int:
     cfg["wow_root"] = str(root)
     config.save(cfg)
     print(f"Addon installed ({res['slots_created']} reply slots created).")
-    if claude.claude_path():
-        print("Claude Code found.")
-    else:
-        print("WARNING: the 'claude' command was not found. Install Claude Code (https://claude.com/claude-code), log in once, then run again.")
+    ok, msg = claude.check_login()
+    print(("OK: " if ok else "WARNING: ") + msg)
     print("\nNext steps:\n"
           "  1. Close the game completely and start it again (new addons need a full restart).\n"
           "  2. In the game: a chat tab called 'Claude' appears. Use it with the game window in windowed or borderless mode.\n"
@@ -37,7 +35,11 @@ def cmd_setup(args) -> int:
 
 
 def cmd_run(args) -> int:
-    from . import bridge
+    from . import bridge, claude
+    ok, msg = claude.check_login()
+    if not ok:
+        print("Cannot start: " + msg)
+        return 2
     try:
         bridge.run(_root(args))
     except KeyboardInterrupt:
@@ -51,6 +53,8 @@ def cmd_doctor(args) -> int:
     print("game folder   :", root or "NOT FOUND")
     print("addon present :", bool(root and (root / "Interface" / "AddOns" / "KKMap" / "KKMap.lua").exists()))
     print("claude command:", claude.claude_path() or "NOT FOUND")
+    ok, msg = claude.check_login()
+    print("claude login  :", "OK" if ok else "PROBLEM - " + msg)
     print("game running  :", screen.game_running())
     if screen.game_running():
         from . import bridge

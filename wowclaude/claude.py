@@ -66,7 +66,30 @@ def split_reply(text: str, chunk: int = CHUNK) -> list[str]:
 
 
 def claude_path() -> str | None:
+    """WOWCLAUDE_CLAUDE or config.json "claude" (full path to the executable) > `claude` on PATH."""
+    custom = os.environ.get("WOWCLAUDE_CLAUDE") or config.load().get("claude")
+    if custom and (os.path.exists(custom) or shutil.which(custom)):
+        return custom
     return shutil.which("claude")
+
+
+def check_login() -> tuple[bool, str]:
+    """Run one tiny question to see whether Claude Code is installed AND logged in."""
+    exe = claude_path()
+    if not exe:
+        return False, ("The 'claude' command was not found. Install Claude Code "
+                       "(https://claude.com/claude-code), then run `claude` once in a terminal and log in.")
+    try:
+        done = subprocess.run([exe, "-p", "--output-format", "text", "--tools", ""], input="Reply with the word ok.",
+                              capture_output=True, text=True, encoding="utf-8", timeout=90,
+                              creationflags=0x08000000 if os.name == "nt" else 0)
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        return False, f"Could not run Claude Code: {exc}"
+    out = (done.stdout or "").strip()
+    if done.returncode == 0 and out:
+        return True, "Claude Code works."
+    return False, ("Claude Code is installed but not logged in (or has no access): " + (out or done.stderr or "no answer").strip()[:160]
+                   + "\nFix: open a terminal, run `claude`, log in once, then try again.")
 
 
 class Session:
