@@ -421,12 +421,12 @@ def slot_sprite(state: str = ""):
 
 
 CB = (6, 7, 25, 25)  # the red button inside the 32x32 UIPanelCloseButton texture (19x18)
-BW, BH, BY = CB[2] - CB[0], CB[3] - CB[1], 8
+BW, BH, BY = CB[2] - CB[0], CB[3] - CB[1], 10
 
 
 def buttons(fw: int) -> dict:
     """Top-right buttons (x, y, w, h): close, minimize (green), ghost; the address bar ends left of them."""
-    close = fw - 8 - BW
+    close = fw - 16 - BW  # same gap to the right border as the label has to the left one
     mini = close - 4 - BW
     ghost = mini - 4 - BW
     return {n: (x, BY, BW, BH) for n, x in (("close", close), ("min", mini), ("ghost", ghost))}
