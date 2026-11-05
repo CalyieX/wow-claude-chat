@@ -40,6 +40,23 @@ Check problems any time with `py -3 -m wowclaude doctor`.
 - Own style: create `%USERPROFILE%\.wowclaude\persona.txt`. First line = name shown before answers, the rest is added
   to Claude's instructions. `config.json` in the same folder can hold `"model"` and `"wow_root"`.
 
+## Other AIs (local models, DeepSeek, ChatGPT ...)
+
+Claude Code is the default, but any of these work. Put the choice into `%USERPROFILE%\.wowclaude\config.json`:
+
+| You want | config.json | Extra |
+|---|---|---|
+| Local model (Ollama) | `{"backend": "ollama", "model": "llama3.1"}` | `ollama pull llama3.1` first, no key |
+| LM Studio (local) | `{"backend": "lmstudio"}` | start its local server |
+| DeepSeek | `{"backend": "deepseek"}` | environment variable `DEEPSEEK_API_KEY` |
+| OpenAI / OpenRouter / Groq / Mistral / Gemini | `{"backend": "openai"}` (or `openrouter`, `groq`, `mistral`, `gemini`) | key in `OPENAI_API_KEY` etc. |
+| Any OpenAI-compatible server | `{"backend": "openai-compatible", "base_url": "http://host:port/v1", "model": "name", "api_key_env": "MY_KEY"}` | |
+| OpenAI Codex CLI | `{"backend": "codex"}` | run `codex` once to log in |
+| Any program (stdin in, answer out) | `{"backend": "command", "command": "my-tool --flag"}` | |
+
+Keep API keys in environment variables, not in files you share. `py -3 -m wowclaude doctor` tells you what is missing.
+Small local models follow the macro and window instructions less reliably than Claude.
+
 ## Fair-play note
 
 This tool reads your own screen and writes only into addon files; it presses no keys and sends no commands to the game.

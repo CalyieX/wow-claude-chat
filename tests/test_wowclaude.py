@@ -95,6 +95,49 @@ def test_command_backend(monkeypatch, tmp_path):
     assert session.history == [("hello there", answer)]
 
 
+def test_openai_compatible_backend(monkeypatch, tmp_path):
+    import json
+    import threading
+    from http.server import BaseHTTPRequestHandler, HTTPServer
+    from wowclaude import backends, config
+    seen = {}
+
+    class H(BaseHTTPRequestHandler):
+        def do_POST(self):
+            seen["path"] = self.path
+            seen["auth"] = self.headers.get("Authorization")
+            seen["body"] = json.loads(self.rfile.read(int(self.headers["Content-Length"])))
+            out = json.dumps({"choices": [{"message": {"content": " Pong "}}]}).encode()
+            self.send_response(200)
+            self.send_header("Content-Length", str(len(out)))
+            self.end_headers()
+            self.wfile.write(out)
+
+        def log_message(self, *a):
+            pass
+
+    srv = HTTPServer(("127.0.0.1", 0), H)
+    threading.Thread(target=srv.serve_forever, daemon=True).start()
+    monkeypatch.setattr(config, "HOME", tmp_path)
+    monkeypatch.setattr(config, "CONFIG", tmp_path / "config.json")
+    config.save({"backend": "deepseek", "base_url": f"http://127.0.0.1:{srv.server_port}/v1", "api_key": "k123"})
+    assert backends.check()[0]
+    session = claude.Session()
+    assert session.ask("ping") == "Pong"
+    assert seen["path"] == "/v1/chat/completions" and seen["auth"] == "Bearer k123"
+    assert seen["body"]["model"] == "deepseek-chat" and seen["body"]["messages"][-1]["content"] == "ping"
+    srv.shutdown()
+
+
+def test_api_backend_needs_key(monkeypatch, tmp_path):
+    from wowclaude import backends, config
+    monkeypatch.setattr(config, "CONFIG", tmp_path / "config.json")
+    monkeypatch.delenv("DEEPSEEK_API_KEY", raising=False)
+    config.save({"backend": "deepseek"})
+    ok, msg = backends.check()
+    assert not ok and "DEEPSEEK_API_KEY" in msg
+
+
 def test_unknown_backend_reports(monkeypatch, tmp_path):
     from wowclaude import backends, config
     monkeypatch.setattr(config, "CONFIG", tmp_path / "config.json")
