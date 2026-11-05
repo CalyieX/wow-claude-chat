@@ -252,7 +252,10 @@ end
 local function sendToClaude(msg, shown)
   msg = strtrim(msg or "")
   if msg == "" then say(L("Benutzung: einfach schreiben (im Tab Claude) oder /c Frage", "Usage: just type in the Claude tab, or /c question")); return end
-  if nextSlot >= NSLOTS - 2 and not InCombatLockdown() and ReloadUI then  -- slots nearly used up: reload first (resets them), ask again afterwards
+  -- slots nearly used up: reload first (resets them), ask again afterwards. A menu command ("!browser") still finds
+  -- one of the last two slots for its short answer, so it never interrupts the player with a reload before they are gone
+  local limit = (msg:sub(1, 1) == "!") and (NSLOTS + 1) or (NSLOTS - 2)
+  if nextSlot >= limit and not InCombatLockdown() and ReloadUI then
     KKMapDB.resend = { msg = msg, shown = shown }
     ReloadUI()
     return

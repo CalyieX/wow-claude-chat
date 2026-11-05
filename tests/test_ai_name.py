@@ -62,3 +62,24 @@ def test_lua_addon_takes_over_the_ai_name_from_the_reply(tmp_path):
     slots.publish(tmp_path, st.message_seq, st.message_idx, ["Gorel: Hi!"], None, None, 1, "Gorel")
     lua.eval("function() __update(1.0) end")()
     assert lua.eval("function() return KKMapDB.aiName end")() == "Gorel"
+
+
+def test_lua_menu_command_does_not_reload_while_a_slot_is_left():
+    import sys
+    import pytest
+    pytest.importorskip("lupa")
+    sys.path.insert(0, str(Path(__file__).parent))
+    import lua_harness as h
+    lua = h.run_addon(Path(slots.ADDON_SRC) / "KKMap.lua")
+    lua.execute("reloads = 0; function ReloadUI() reloads = reloads + 1 end; timers = {}; "
+                "C_Timer = { After = function(s, fn) table.insert(timers, fn) end }")
+    lua.globals().__play = lambda path: True
+    lua.execute("""__load = function(name) KKReplyData = { seq = KKMapState.seq, parts = { "ok" } }; return true end""")
+    asked = 0
+    for _ in range(slots.SLOTS + 2):
+        lua.eval("function() SlashCmdList['KKBROWSER']('') end")()
+        if lua.eval("reloads") > 0:
+            break
+        asked += 1
+        lua.eval("function() __update(8.0) end")()
+    assert asked == slots.SLOTS  # a normal question reloads two slots earlier; a menu command uses every slot first
