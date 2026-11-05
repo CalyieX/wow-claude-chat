@@ -1,4 +1,4 @@
-# wowclaude: chat with Claude inside World of Warcraft
+# K&K WoW AI Chat (wowclaude): chat with Claude inside World of Warcraft
 
 Write in a chat tab called **Claude** and the answer appears in the same tab, right in the game. Longer answers
 open a small window (text, coloured lines, progress bars). It works with **WoW Forever** and the Classic clients.
