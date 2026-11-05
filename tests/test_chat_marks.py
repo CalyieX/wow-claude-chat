@@ -45,7 +45,7 @@ def test_render_size_wrap_and_speed():
     img = cm.render(entries, (400, 220))
     assert (time.perf_counter() - t) < 0.02
     assert img.size == (400, 220)
-    assert img.getbbox() and img.getpixel((0, 0)) == (12, 12, 16)
+    assert img.getbbox() and img.getpixel((0, 0)) == (12, 12, 16, 255)
 
 
 def test_scroll_changes_picture():

@@ -27,4 +27,4 @@ def test_ring_buffer():
 def test_paint_keeps_marks_visible():
     img = cf.paint([("ai", "x")], (300, 120))
     assert img.getpixel((2, 2))[3] == 0 and img.getpixel((297, 2))[3] == 0 and img.getpixel((2, 117))[3] == 0
-    assert img.getpixel((150, 60))[3] > 0
+    assert img.getchannel("A").getbbox() is not None  # the text is there

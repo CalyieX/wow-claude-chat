@@ -60,8 +60,8 @@ def apply_events(entries: list[tuple[str, str]], events: list[dict]) -> list[tup
 
 
 def paint(entries: list[tuple[str, str]], size: tuple[int, int], scroll: int = 0) -> Image.Image:
-    img = chat_marks.render(entries, size, scroll=scroll).convert("RGBA")
-    img.putalpha(255)
+    # no background of its own: the real tab's see-through background shows, like a normal chat tab
+    img = chat_marks.render(entries, size, scroll=scroll, bg=(0, 0, 0, 0), shadow=True)
     d = ImageDraw.Draw(img)
     d.rectangle((0, 0, MARK_HOLE - 1, MARK_HOLE - 1), fill=(0, 0, 0, 0))
     d.rectangle((size[0] - MARK_HOLE, 0, size[0] - 1, MARK_HOLE - 1), fill=(0, 0, 0, 0))

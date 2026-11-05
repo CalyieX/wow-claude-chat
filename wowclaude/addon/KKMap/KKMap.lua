@@ -244,7 +244,7 @@ local function claudeFrame()
 end
 local function say(text, r, g, b, nohist)
   r, g, b = r or 0.6, g or 0.85, b or 1
-  claudeFrame():AddMessage(text, r, g, b)
+  if not (KKMapDB and KKMapDB.fakeChat) then claudeFrame():AddMessage(text, r, g, b) end  -- fake chat: the overlay paints it
   if not nohist then  -- keep the conversation across /reload and restarts (last 100 lines)
     KKMapDB.hist = KKMapDB.hist or {}
     table.insert(KKMapDB.hist, { text, r, g, b })
@@ -306,6 +306,21 @@ SLASH_KKCHAT2 = "/claude"
 SlashCmdList["KKCHAT"] = function(m) sendToClaude(m) end
 
 -- Commands for the bridge ("!browser ..." is handled by wowclaude, not sent to the AI)
+SLASH_KKFAKE1 = "/fakechat"
+SlashCmdList["KKFAKE"] = function(msg)
+  KKMapDB.fakeChat = (msg or ""):lower():match("^%s*on") ~= nil
+  print("KKMap: fake chat " .. (KKMapDB.fakeChat and "ON (answers are painted by the overlay program)" or "OFF (answers appear in the tab)"))
+end
+SLASH_KKTAB1 = "/claudetab"
+SlashCmdList["KKTAB"] = function()  -- bring the AI tab to the front (used by tools that cannot click)
+  local f = claudeFrame()
+  if not f or f == DEFAULT_CHAT_FRAME then return end
+  local ok = FCF_SelectDockFrame and pcall(FCF_SelectDockFrame, f)
+  if not ok then
+    local tab = _G[f:GetName() .. "Tab"]
+    if tab and FCF_Tab_OnClick then pcall(FCF_Tab_OnClick, tab, "LeftButton") end
+  end
+end
 SLASH_KKCHATWIN1 = "/chat"
 SlashCmdList["KKCHATWIN"] = function() sendToClaude("!chat", "Opening chat window ...") end
 SLASH_KKBROWSER1 = "/browser"
@@ -796,7 +811,7 @@ ev:RegisterEvent("PLAYER_LOGIN")
 ev:SetScript("OnEvent", function()
   KKMapDB.dbg = false
   local cf = claudeFrame()
-  for _, h in ipairs(KKMapDB.hist or {}) do cf:AddMessage(h[1], h[2], h[3], h[4]) end
+  for _, h in ipairs(KKMapDB.fakeChat and {} or KKMapDB.hist or {}) do cf:AddMessage(h[1], h[2], h[3], h[4]) end
   hookEditBoxes()
   if KKMapDB.off then host:Hide() else render() end
   local r = KKMapDB.resend

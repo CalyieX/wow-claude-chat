@@ -85,20 +85,29 @@ _FONT = None
 
 
 def default_font():
+    """The game's own chat font where it exists (Arial Narrow on German clients), else Pillow's default."""
     global _FONT
     if _FONT is None:
-        _FONT = ImageFont.load_default(size=14)
+        for path in (r"C:\Windows\Fonts\ARIALN.TTF", r"C:\Windows\Fontsrial.ttf"):
+            try:
+                _FONT = ImageFont.truetype(path, 17)
+                break
+            except OSError:
+                continue
+        else:
+            _FONT = ImageFont.load_default(size=15)
     return _FONT
 
 
 COLOURS = {"user": (255, 255, 153), "ai": (153, 217, 255), "sys": (170, 170, 170), "think": (200, 200, 120)}
 
 
-def render(entries: list[tuple[str, str]], size: tuple[int, int], font=None, scroll: int = 0) -> Image.Image:
+def render(entries: list[tuple[str, str]], size: tuple[int, int], font=None, scroll: int = 0,
+           bg: tuple = (12, 12, 16, 255), shadow: bool = False) -> Image.Image:
     """Dark box ``size`` with the newest entries at the bottom. ``entries`` = [(kind, text)]; ``scroll`` = lines up."""
     font = font or default_font()
-    img = Image.new("RGB", size, (12, 12, 16))
-    draw = ImageDraw.Draw(img)
+    img = Image.new("RGBA", size, bg)
+    draw = ImageDraw.Draw(img, "RGBA")
     lh = int(font.size * 1.3) if hasattr(font, "size") else 16
     rows: list[tuple[str, str]] = []
     for kind, text in entries:
@@ -108,5 +117,7 @@ def render(entries: list[tuple[str, str]], size: tuple[int, int], font=None, scr
     shown = rows[max(0, end - fit):max(0, end)]
     top = size[1] - 4 - len(shown) * lh  # newest line at the bottom, like a chat
     for i, (kind, ln) in enumerate(shown):
-        draw.text((6, top + i * lh), ln, fill=COLOURS.get(kind, (255, 255, 255)), font=font)
+        if shadow:
+            draw.text((7, top + i * lh + 1), ln, fill=(0, 0, 0, 255), font=font)
+        draw.text((6, top + i * lh), ln, fill=COLOURS.get(kind, (255, 255, 255)) + (255,), font=font)
     return img
