@@ -285,7 +285,7 @@ def run(url: str | None = None, corner: str | None = None, size: str | None = No
         before = set(_windows())
         subprocess.Popen([exe, f"--app={url}", f"--user-data-dir={profile}", f"--window-size={w},{h + CHROME_BAR}",
                           f"--window-position={x},{y - CHROME_BAR}", "--autoplay-policy=no-user-gesture-required",
-                          "--no-first-run", "--disable-features=Translate", f"--remote-debugging-port={port}",
+                          "--no-first-run", "--disable-features=Translate,CalculateNativeWinOcclusion", "--disable-backgrounding-occluded-windows", "--disable-renderer-backgrounding", f"--remote-debugging-port={port}",
                           "--remote-allow-origins=*"],
                          creationflags=0x08000000)
         hwnd = 0

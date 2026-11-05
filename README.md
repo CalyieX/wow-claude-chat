@@ -1,5 +1,7 @@
 # K&K WoW AI Chat (wowclaude): chat with Claude inside World of Warcraft
 
+> **Alpha - work in progress.** This project is under active development: things can break, change or be missing. Feedback and bug reports are welcome.
+
 Write in a chat tab called **Claude** and the answer appears in the same tab, right in the game. Longer answers
 open a small window (text, coloured lines, progress bars). It works with **WoW Forever** and the Classic clients.
 
