@@ -968,3 +968,20 @@ def test_every_helper_process_is_started_hidden():
             if "subprocess.Popen(" in ln or "subprocess.run(" in ln:
                 block = " ".join(lines[i:i + 8])
                 assert "hidden()" in block or "creationflags" in block, f"{f.name}:{i + 1} starts a visible process"
+
+
+def test_lua_secret_text_does_not_raise():
+    """Secret string values (protected frames) make comparisons error out: the scan must skip them."""
+    h, lua = _lua_addon()
+    lua.execute("""
+        function issecretvalue(v) return v == "SECRET" end
+        local b = CreateFrame("Button", "SecretBtn")
+        b.IsVisible = function() return true end
+        b.GetText = function() return "SECRET" end
+        function EnumerateFrames(f) if f == nil then return b end return nil end
+    """)
+    lua.eval("function() SlashCmdList['KKCHAT']('hi') end")()
+    st = decode.decode(h.strip_image(lua))
+    assert st is not None and st.message == "hi"
+    shown = [str(x) for x in lua.eval("DEFAULT_CHAT_FRAME.__log").values()]
+    assert not any("Fehler" in x for x in shown)

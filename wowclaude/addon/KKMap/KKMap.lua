@@ -51,14 +51,22 @@ end
 
 local STRATA = { WORLD = 1, BACKGROUND = 2, LOW = 3, MEDIUM = 4, HIGH = 5, DIALOG = 6, FULLSCREEN = 7, FULLSCREEN_DIALOG = 8, TOOLTIP = 9 }
 
+-- Secret values (restricted text of protected frames) cannot be compared or used: skip them instead of raising errors
+local function usableText(t)
+  if t == nil then return false end
+  if issecretvalue and issecretvalue(t) then return false end
+  local ok, res = pcall(function() return type(t) == "string" and t ~= "" end)
+  return ok and res
+end
+
 local function labelOf(f)
-  local text = f.GetText and f:GetText()
-  if text and text ~= "" then return text end
+  local ok, text = pcall(function() return f.GetText and f:GetText() end)
+  if ok and usableText(text) then return text end
   if f.GetRegions then
     for _, r in ipairs({ f:GetRegions() }) do
       if r.GetObjectType and r:GetObjectType() == "FontString" then
-        local t = r:GetText()
-        if t and t ~= "" then return t end
+        local okr, t = pcall(r.GetText, r)
+        if okr and usableText(t) then return t end
       end
     end
   end
