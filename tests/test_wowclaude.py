@@ -823,3 +823,24 @@ def test_check_login_empty_answer_is_not_ok(monkeypatch):
     monkeypatch.setattr(claude, "claude_path", lambda: "claude")
     monkeypatch.setattr(claude, "_exec", lambda *a, **k: (0, "", ""))
     assert claude.check_login()[0] is False
+
+
+def test_reply_is_limited_to_six_chunks():
+    assert claude.MAX_CHUNKS == 6
+    parts = claude.split_reply("wort " * 2000)
+    assert len(parts) == 6 and all(len(p) <= claude.CHUNK for p in parts) and parts[-1].endswith("(...)")
+
+
+def test_doctor_saves_a_strip_sample(monkeypatch, tmp_path, capsys):
+    from wowclaude import __main__ as cli, config, screen
+    h, lua = _lua_addon()
+    img = h.strip_image(lua)
+    monkeypatch.setattr(screen, "game_running", lambda: True)
+    monkeypatch.setattr(screen, "grab_strip_area", lambda: img)
+    monkeypatch.setattr(config, "client_root", lambda root=None: tmp_path)
+
+    class A:
+        root, deep = None, False
+    cli.cmd_doctor(A())
+    assert (config.HOME / "strip-sample.png").stat().st_size > 0
+    assert "strip sample" in capsys.readouterr().out
