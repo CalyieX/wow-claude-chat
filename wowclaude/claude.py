@@ -5,6 +5,7 @@ import os
 import re
 import shutil
 import subprocess
+import time
 import uuid
 from pathlib import Path
 
@@ -136,27 +137,27 @@ def check_login() -> tuple[bool, str]:
     if not exe:
         return False, ("The 'claude' command was not found. Install Claude Code "
                        "(https://claude.com/claude-code), then run `claude` once in a terminal and log in.")
+    config.HOME.mkdir(parents=True, exist_ok=True)
     try:
-        done = subprocess.run([exe, "-p", "--output-format", "text", "--tools", ""], input="Reply with the word ok.",
-                              capture_output=True, text=True, encoding="utf-8", timeout=90,
-                              creationflags=CREATE_NO_WINDOW if os.name == "nt" else 0)
-    except (OSError, subprocess.TimeoutExpired) as exc:
+        code, out, err = _exec([exe, "-p", "--output-format", "text", "--tools", "", "--strict-mcp-config",
+                                "--no-session-persistence"], "Reply with the word ok.", 90)
+    except (OSError, AskTimeout) as exc:
         return False, f"Could not run Claude Code: {exc}"
-    out = (done.stdout or "").strip()
-    if done.returncode == 0 and out:
+    out = (out or "").strip()
+    if code == 0 and out:
         return True, "Claude Code works."
-    return False, ("Claude Code is installed but not logged in (or has no access): " + (out or done.stderr or "no answer").strip()[:160]
-                   + "\nFix: open a terminal, run `claude`, log in once, then try again.")
+    return False, ("Claude Code is installed but not logged in (or has no access): " + (out or err or "no answer").strip()[:160]
+                   + chr(10) + "Fix: open a terminal, run `claude`, log in once, then try again.")
 
 
-def _exec(cmd: list, prompt: str) -> tuple:
+def _exec(cmd: list, prompt: str, timeout: float | None = None) -> tuple:
     """Run the command with a hard time limit. On timeout the whole process tree is killed (a .cmd wrapper would
     otherwise keep running) and AskTimeout is raised. Returns (exit code, stdout, stderr)."""
     proc = subprocess.Popen(cmd, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
                             text=True, encoding="utf-8", errors="replace", cwd=str(config.HOME),
                             creationflags=CREATE_NO_WINDOW if os.name == "nt" else 0)
     try:
-        out, err = proc.communicate(prompt, timeout=TIMEOUT)
+        out, err = proc.communicate(prompt, timeout=timeout or TIMEOUT)
     except subprocess.TimeoutExpired as exc:
         if os.name == "nt":
             subprocess.run(["taskkill", "/F", "/T", "/PID", str(proc.pid)], capture_output=True,
@@ -197,24 +198,25 @@ class Session:
         exe = claude_path()
         if not exe:
             raise RuntimeError("the 'claude' command was not found (install Claude Code and log in)")
+        t_end = time.time() + TIMEOUT  # one shared budget for the run and a possible retry: the addon gives up at 120 s
         try:
-            return self._run(exe, prompt, model)
-        except AskTimeout:
-            if not self.started:
-                self._new()  # the aborted run may have claimed the session id ("already in use" next time)
-            raise
-        except RuntimeError as exc:
-            low = str(exc).lower()
-            if not self.started:
-                self._new()  # a half-created session id must not be reused ("already in use")
-            if "expired" in low or "log in" in low or "login" in low:
-                raise RuntimeError("Claude login expired: run `claude` once in a terminal and log in again.") from exc
-            if not self.started:
+            try:
+                return self._run(exe, prompt, model, t_end)
+            except AskTimeout:
                 raise
-            self._new()  # stale or unknown session: start a fresh one once
-            return self._run(exe, prompt, model)
+            except RuntimeError as exc:
+                low = str(exc).lower()
+                if "expired" in low or "log in" in low or "login" in low or "authenticate" in low:
+                    raise RuntimeError("Claude login expired: run `claude` once in a terminal and log in again.") from exc
+                if not (self.started and ("session" in low or "conversation" in low)):
+                    raise  # only a stale/unknown session is worth a second run
+                self._new()
+                return self._run(exe, prompt, model, t_end)
+        finally:
+            if not self.started:
+                self._new()  # an aborted first run may have claimed the id ("Session ID already in use" next time)
 
-    def _run(self, exe: str, prompt: str, model: str | None) -> str:
+    def _run(self, exe: str, prompt: str, model: str | None, t_end: float | None = None) -> str:
         prompt = prompt + reminder()
         # system prompt via a file: multi-line arguments are mangled by Windows .cmd wrappers
         sysfile = config.HOME / "system_prompt.txt"
@@ -225,7 +227,8 @@ class Session:
         cmd += ["--resume" if self.started else "--session-id", self.id]
         if model:
             cmd += ["--model", model]
-        code, out, err = _exec(cmd, prompt)
+        left = max(5.0, t_end - time.time()) if t_end else TIMEOUT
+        code, out, err = _exec(cmd, prompt, left)
         out = (out or "").strip()
         if code != 0 or not out:
             raise RuntimeError((err or out or "claude failed").strip()[:200])

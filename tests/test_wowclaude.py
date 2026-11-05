@@ -442,7 +442,7 @@ def test_claude_gets_system_prompt_as_file(monkeypatch, tmp_path):
     monkeypatch.setattr(config, "HOME", tmp_path)
     seen = {}
 
-    def fake_run(cmd, prompt):
+    def fake_run(cmd, prompt, timeout=None):
         seen["cmd"] = cmd
         return 0, "ok", ""
     monkeypatch.setattr(claude, "_exec", fake_run)
@@ -553,3 +553,29 @@ def test_marker_silenced_after_ack(monkeypatch, tmp_path):
     monkeypatch.setattr(bridge, "_safe_read_state", lambda: St(7, 7))
     assert bridge.deliver(tmp_path, St(7, 6), "hi") is True
     assert silenced == [3]
+
+
+def test_failed_retry_never_keeps_a_burnt_session_id(monkeypatch):
+    from wowclaude import backends, claude, config
+    monkeypatch.setattr(claude, "claude_path", lambda: "claude")
+    monkeypatch.setattr(backends, "name", lambda: "claude")
+    calls = []
+
+    def fake(cmd, prompt, timeout=None):
+        calls.append(cmd)
+        if len(calls) == 1:
+            return 0, "fine", ""                       # first question works, session is started
+        raise claude.AskTimeout("too slow")           # later: timeout
+    monkeypatch.setattr(claude, "_exec", fake)
+    s = claude.Session()
+    assert s.ask("one") == "fine" and s.started
+    monkeypatch.setattr(claude, "_exec", lambda *a, **k: (1, "", "No conversation found with session ID"))
+    seen = []
+    orig_new = s._new
+    monkeypatch.setattr(s, "_new", lambda: (seen.append(1), orig_new())[1])
+    try:
+        s.ask("two")
+        assert False, "should raise"
+    except RuntimeError:
+        pass
+    assert seen and not s.started and s.id  # fresh id after a failed retry, never the burnt one
