@@ -41,6 +41,13 @@ def persona() -> tuple[str, str]:
     return "Claude", base
 
 
+REMINDER = (
+    "\n\n[wowclaude format reminder, not from the player: if the player wants a macro, do NOT explain how to type it. "
+    "Reply with one short sentence plus a block exactly like [[macro Name]]first command line\nsecond command line[[/macro]] "
+    "(use the player's game language for spell names). The addon creates the macro for the player. "
+    "For lists or plans use [[overlay Title]]lines[[/overlay]].]"
+)
+
 MACRO_RE = re.compile(r"\[\[macro ([^\]\n]{1,40})\]\]\s*(.*?)\s*\[\[/macro\]\]", re.S)
 
 
@@ -145,6 +152,7 @@ class Session:
             return self._run(exe, prompt, model)
 
     def _run(self, exe: str, prompt: str, model: str | None) -> str:
+        prompt = prompt + REMINDER
         cmd = [exe, "-p", "--output-format", "text", "--tools", "", "--append-system-prompt", persona()[1]]
         cmd += ["--resume" if self.started else "--session-id", self.id]
         if model:
