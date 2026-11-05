@@ -192,7 +192,7 @@ local function claudeFrame()
 end
 local function say(text, r, g, b) claudeFrame():AddMessage(text, r or 0.6, g or 0.85, b or 1) end
 
-local function sendToClaude(msg)
+local function sendToClaude(msg, shown)
   msg = strtrim(msg or "")
   if msg == "" then say(L("Benutzung: einfach schreiben (im Tab Claude) oder /c Frage", "Usage: just type in the Claude tab, or /c question")); return end
   local clean = msg:gsub("[|\n\r]", " "):sub(1, 230)
@@ -202,7 +202,7 @@ local function sendToClaude(msg)
   local idx = ((KKMapDB.n - 1) % 200) + 1
   KKMapState.seq, KKMapState.out, KKMapState.idx = seq, clean, idx
   pending = { seq = seq, idx = idx, t0 = GetTime() }
-  say(L("Du: ", "You: ") .. msg, 1, 1, 0.6)
+  say(L("Du: ", "You: ") .. (shown or msg), 1, 1, 0.6)
   say(L("Claude denkt ...", "Claude is thinking ..."), 0.6, 0.6, 0.6)
   stripOn = true; host:SetAlpha(1)
   render()
@@ -210,7 +210,74 @@ end
 
 SLASH_KKCHAT1 = "/c"
 SLASH_KKCHAT2 = "/claude"
-SlashCmdList["KKCHAT"] = sendToClaude
+SlashCmdList["KKCHAT"] = function(m) sendToClaude(m) end
+
+-- Commands for the bridge ("!browser ..." is handled by wowclaude, not sent to the AI)
+SLASH_KKBROWSER1 = "/browser"
+SLASH_KKBROWSER2 = "/wb"
+SlashCmdList["KKBROWSER"] = function(msg)
+  msg = strtrim(msg or "")
+  if msg == "off" or msg == "close" then sendToClaude("!browser off", "Closing browser ...")
+  else sendToClaude(("!browser " .. msg):gsub("%s+$", ""), "Opening browser ...") end
+end
+
+-- Small addon menu (/kk or /kkmenu)
+local menu
+local function buildMenu()
+  if menu then return menu end
+  local f = CreateFrame("Frame", "KKMenuFrame", UIParent, "BackdropTemplate")
+  f:SetSize(220, 230)
+  f:SetPoint("CENTER", UIParent, "CENTER", -260, 60)
+  f:SetFrameStrata("DIALOG")
+  f:SetMovable(true); f:EnableMouse(true); f:RegisterForDrag("LeftButton")
+  f:SetScript("OnDragStart", f.StartMoving)
+  f:SetScript("OnDragStop", f.StopMovingOrSizing)
+  f:SetClampedToScreen(true)
+  f:SetBackdrop({
+    bgFile = "Interface\\DialogFrame\\UI-DialogBox-Background",
+    edgeFile = "Interface\\DialogFrame\\UI-DialogBox-Border",
+    tile = true, tileSize = 32, edgeSize = 24,
+    insets = { left = 6, right = 6, top = 6, bottom = 6 },
+  })
+  local title = f:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
+  title:SetPoint("TOPLEFT", 18, -16)
+  title:SetText("Claude Chat")
+  local close = CreateFrame("Button", nil, f, "UIPanelCloseButton")
+  close:SetPoint("TOPRIGHT", -4, -4)
+  local y = -48
+  local function button(text, onClick)
+    local bt = CreateFrame("Button", nil, f, "UIPanelButtonTemplate")
+    bt:SetSize(184, 26)
+    bt:SetPoint("TOP", f, "TOP", 0, y)
+    bt:SetText(text)
+    bt:SetScript("OnClick", onClick)
+    y = y - 32
+    return bt
+  end
+  button("Open Browser", function() sendToClaude("!browser", "Opening browser ...") end)
+  button("Close Browser", function() sendToClaude("!browser off", "Closing browser ...") end)
+  local strip
+  local function stripText() return KKMapDB.always and "Strip: always visible" or "Strip: only when needed" end
+  strip = button(stripText(), function()
+    KKMapDB.always = not KKMapDB.always
+    strip:SetText(stripText())
+    if applyVisible then applyVisible() end
+  end)
+  button("Show Overlay Window", function() if SlashCmdList["KKOVERLAY"] then SlashCmdList["KKOVERLAY"]("") end end)
+  button("Help", function()
+    say("Type in the Claude tab to chat. /browser [url] opens the browser, /browser off closes it, /kk opens this menu.")
+    say("Ask for macros, lists, or pages (the AI can create macros and open videos for you).")
+  end)
+  f:Hide()
+  menu = f
+  return f
+end
+SLASH_KKMENU1 = "/kk"
+SLASH_KKMENU2 = "/kkmenu"
+SlashCmdList["KKMENU"] = function()
+  local f = buildMenu()
+  if f:IsShown() then f:Hide() else f:Show() end
+end
 
 -- Rueckweg ohne Tasten: stiller Sound-Marker meldet "Antwort liegt bereit", dann naechsten Slot laden
 local function loadAddon(name)

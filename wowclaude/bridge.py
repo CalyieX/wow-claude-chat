@@ -12,6 +12,17 @@ def read_state() -> decode.GameState | None:
     return decode.decode(img) if img is not None else None
 
 
+def handle_command(text: str) -> str | None:
+    """In-game slash commands that the addon sends as "!name args" (never forwarded to the AI)."""
+    parts = text.strip().split(None, 1)
+    cmd, arg = parts[0].lower(), (parts[1].strip() if len(parts) > 1 else "")
+    if cmd == "!browser":
+        from . import overlay
+        overlay.play("off" if arg in ("off", "close") else arg)
+        return "Browser closed." if arg in ("off", "close") else "Browser opened."
+    return None
+
+
 def deliver(root: Path, state: decode.GameState, reply: str) -> bool:
     reply, macros = claude.extract_macros(reply)
     reply, overlay = claude.extract_overlay(reply)
@@ -73,7 +84,8 @@ def run(root: Path, poll: float = 0.6) -> None:
             print(f"> {state.message.strip()}", flush=True)
             slots.reset_marker(root, state.message_idx or 1)
             try:
-                reply = session.ask(question, model)
+                cmd_reply = handle_command(state.message) if state.message.lstrip().startswith("!") else None
+                reply = cmd_reply if cmd_reply is not None else session.ask(question, model)
             except Exception as exc:  # noqa: BLE001 - tell the player, keep running
                 reply = f"Error: {exc}"
             print(f"< {reply}", flush=True)

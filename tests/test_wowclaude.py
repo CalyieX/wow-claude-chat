@@ -196,3 +196,14 @@ def test_overlay_compose_is_transparent_in_the_middle():
     assert im.getpixel((150, 120))[3] == 0          # browser area: see-through
     assert im.getpixel((150, 3))[3] > 0             # border is drawn
     assert overlay.label_width() > 40
+
+
+def test_bridge_command_browser(monkeypatch):
+    from wowclaude import bridge, overlay
+    seen = []
+    monkeypatch.setattr(overlay, "play", lambda a: seen.append(a))
+    assert bridge.handle_command("!browser") == "Browser opened."
+    assert bridge.handle_command("!browser https://x.y") == "Browser opened."
+    assert bridge.handle_command("!browser off") == "Browser closed."
+    assert seen == ["", "https://x.y", "off"]
+    assert bridge.handle_command("!unknown") is None

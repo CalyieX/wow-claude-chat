@@ -683,22 +683,14 @@ def frame_loop(hwnd: int, x: int, y: int, w: int, h: int, opacity: int, click_th
 
 
 def play(url: str) -> None:
-    """Called by the bridge for [[play URL]]: start the overlay in the background, or close it for ``off``."""
+    """Called by the bridge for [[play URL]] / "/browser": start the overlay in the background ("" = last page),
+    or close it for ``off``."""
     if url == "off":
-        for hwnd, title in _windows().items():
-            if (config.HOME / "overlay-profile").exists() and hwnd in _ours:
-                user32.PostMessageW(hwnd, 0x0010, 0, 0)  # WM_CLOSE
-        _ours.clear()
+        _kill_profile_browsers(config.HOME / "overlay-profile")
         return
     import sys
-    before = set(_windows())
-    subprocess.Popen([sys.executable, "-m", "wowclaude", "overlay", url], creationflags=0x08000000)
-    for _ in range(40):
-        time.sleep(0.5)
-        new = set(_windows()) - before
-        if new:
-            _ours.update(new)
-            break
+    args = [sys.executable, "-m", "wowclaude", "overlay"] + ([url] if url else [])
+    subprocess.Popen(args, creationflags=0x08000000)
 
 
 _ours: set[int] = set()
