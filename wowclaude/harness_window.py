@@ -35,20 +35,11 @@ def run(tab: str = "wow") -> None:
     bar.pack(side="right", fill="y")
     text.pack(side="left", fill="both", expand=True)
     text.bind("<Button-1>", lambda e: (win.focus(), text.focus_set()))
-    info = tk.Text(own, bg="#15130e", fg="#f0e6c8", font=("Consolas", 9), wrap="word", bd=1, relief="solid", height=6)
-    info.pack(side="top", fill="x")
-    tk.Label(own, text="Extra text (optional; only needed if your AI has no config folder of its own). Load fills it, Save own text keeps it:", bg="#15130e", fg=gold,
-             anchor="w").pack(side="top", fill="x", pady=(4, 0))
-    obox = tk.Frame(own, bg="#15130e")
-    obox.pack(side="top", fill="both", expand=True)
-    otext = tk.Text(obox, bg="#15130e", fg="#f0e6c8", insertbackground=gold, font=("Consolas", 10), wrap="word", bd=1,
-                    relief="solid", undo=True)
-    obar = WowScrollbar(obox, otext.yview)
-    otext.configure(yscrollcommand=obar.set)
-    obar.pack(side="right", fill="y")
-    otext.pack(side="left", fill="both", expand=True)
-    otext.bind("<Button-1>", lambda e: (win.focus(), otext.focus_set()))
-    otext.insert("1.0", claude.own_text())
+    info = tk.Text(own, bg="#15130e", fg="#f0e6c8", font=("Consolas", 10), wrap="word", bd=1, relief="solid")
+    ibar = WowScrollbar(own, info.yview)
+    info.configure(yscrollcommand=ibar.set)
+    ibar.pack(side="right", fill="y")
+    info.pack(side="left", fill="both", expand=True)
     shown = {"tab": "wow"}
 
     def show(tab: str) -> None:
@@ -74,21 +65,6 @@ def run(tab: str = "wow") -> None:
 
     def do_save() -> None:
         msg.config(text=save(text.get("1.0", "end")))
-
-    def do_import(src) -> None:
-        otext.delete("1.0", "end")
-        otext.insert("1.0", harness_import.render(src, ""))
-        msg.config(text="Loaded - " + harness_import.summary(src) + ". Click Save own text to use it.", fg="#7fd17f")
-
-    def save_own() -> None:
-        body = otext.get("1.0", "end").strip()
-        if body:
-            config.HOME.mkdir(parents=True, exist_ok=True)
-            config.OWN_HARNESS.write_text(body + "\n", encoding="utf-8")
-            msg.config(text="Own AI text saved. Used from the next question on when the switch is on Own.", fg="#7fd17f")
-        else:
-            config.OWN_HARNESS.unlink(missing_ok=True)
-            msg.config(text="Own AI text removed: Own uses only your AI's normal folder.", fg="#7fd17f")
 
     def do_reset() -> None:
         config.HARNESS.unlink(missing_ok=True)
@@ -130,9 +106,7 @@ def run(tab: str = "wow") -> None:
         if shown["tab"] == "wow":
             buttons = [("Save", do_save), ("Reset to built-in", do_reset), ("Close", win.close)]
         else:
-            buttons = [("Save own text", save_own), ("Search", do_search), ("Pick folder...", pick)]
-            buttons += [(f"Load {s.label}", (lambda s=s: do_import(s))) for s in found]
-            buttons.append(("Close", win.close))
+            buttons = [("Search", do_search), ("Pick folder...", pick), ("Close", win.close)]
         for label, cmd in buttons:
             tk.Button(row, text=label, command=cmd, bg="#5c1a10", fg=gold, activebackground="#7d2417", activeforeground=gold,
                       relief="solid", bd=1, padx=12).pack(side="left", padx=(0, 8))

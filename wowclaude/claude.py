@@ -159,14 +159,6 @@ def custom_harness() -> str | None:
     return text or None
 
 
-def own_text() -> str:
-    """The text saved on the Own AI tab of the harness editor (empty: none). Used when a switch is on Own."""
-    try:
-        return config.OWN_HARNESS.read_text(encoding="utf-8").strip()
-    except (OSError, ValueError):
-        return ""
-
-
 def persona_name_in_file() -> bool:
     """True if persona.txt (old style) carries the AI's name in its first line."""
     try:
@@ -507,9 +499,6 @@ class Session:
         sysfile.write_text(persona()[1], encoding="utf-8")
         if own_harness("wow"):  # the AI's own setup: its memory files, settings and tools; only the answer format is ours
             cmd = [exe, "-p", "--output-format", "stream-json", "--verbose", "--permission-mode", "acceptEdits"]
-            if own_text():  # the text of the Own AI tab, kept apart from the WoW AI text
-                sysfile.write_text(own_text(), encoding="utf-8")
-                cmd += ["--append-system-prompt-file", str(sysfile)]
         else:
             tools = run_tools()
             cmd = [exe, "-p", "--output-format", "stream-json", "--verbose", "--tools", tools, "--allowedTools", tools, "--strict-mcp-config",

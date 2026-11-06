@@ -9,7 +9,6 @@ from pathlib import Path
 HOME = Path.home() / ".wowclaude"
 CONFIG = HOME / "config.json"
 PERSONA = HOME / "persona.txt"
-OWN_HARNESS = HOME / "own_harness.txt"  # the text of the own AI (Own AI tab); separate from the WoW AI text
 HARNESS = HOME / "harness.txt"  # optional: replaces the built-in instructions (edited on the AI setup page)
 SESSION = HOME / "session.txt"
 
