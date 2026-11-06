@@ -91,7 +91,8 @@ class CliMode:
         self.screen = pyte.Screen(cols, rows)
         self.stream = pyte.Stream(self.screen)
         cwd = str(Path.home()) if claude.computer_access() else claude.neutral_cwd()
-        env = claude._clean_env()
+        from . import login
+        env = login.no_browser_env()  # a /login inside the tool must not open the normal browser
         self.proc = winpty.PtyProcess.spawn(cmd, dimensions=(rows, cols), cwd=cwd, env=env)
         self.stop_flag = False
         threading.Thread(target=self._read, daemon=True).start()
@@ -171,7 +172,9 @@ class CliMode:
         why = self.start() if not self.running() else ""
         if why:
             return why
-        self.proc.write(text + "\r")
+        self.proc.write(text)
+        time.sleep(0.4)  # Enter as its own write: sent together with the text, the tool takes it for pasted text
+        self.proc.write("\r")
         self.dirty.set()
         return ""
 

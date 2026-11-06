@@ -35,6 +35,17 @@ def command() -> list[str] | None:
     return None
 
 
+def no_browser_env() -> dict:
+    """The login must open ONLY in the game browser: the tool is told to use a do-nothing 'browser' (BROWSER variable)."""
+    noop = config.HOME / "nobrowser.cmd"
+    if not noop.exists():
+        config.HOME.mkdir(parents=True, exist_ok=True)
+        noop.write_text("@echo off" + chr(13) + chr(10) + "exit /b 0" + chr(13) + chr(10), encoding="ascii")
+    env = claude._clean_env()
+    env["BROWSER"] = str(noop)
+    return env
+
+
 def start() -> str:
     """Start the login and open its page in the overlay browser. Returns the sentence for the chat."""
     cmd = command()
@@ -43,7 +54,7 @@ def start() -> str:
     if _running and _running[0].poll() is None:
         return "The login is already running: finish it in the browser window."
     proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, stdin=subprocess.PIPE, text=True,
-                            encoding="utf-8", errors="replace", cwd=claude.neutral_cwd(), env=claude._clean_env(), **hidden())
+                            encoding="utf-8", errors="replace", cwd=claude.neutral_cwd(), env=no_browser_env(), **hidden())
     _running[:] = [proc]
     found = threading.Event()
 
