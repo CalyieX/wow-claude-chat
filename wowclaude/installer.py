@@ -46,8 +46,14 @@ def write_state(root: Path | None = None) -> None:
             "true" if cfg.get("own_harness_wow") else "false", "true" if cfg.get("own_harness_cli") else "false",
             "true" if cfg.get("own_harness_win") else "false"), encoding="utf-8")
         from . import claude
-        if not claude.clean_name(cfg.get("name")):  # no name chosen: the tab name follows the harness (WoW AI / Own AI)
-            write_name(root, claude.persona()[0])
+        try:
+            old = (folder / "Name.lua").read_text(encoding="utf-8")
+        except OSError:
+            old = ""
+        chosen = old.split('"')[1] if old.count('"') >= 2 else ""
+        default_only = chosen in ("", "WoW AI", "Own AI")
+        if default_only and not claude.clean_name(cfg.get("name")) and not claude.persona_name_in_file():
+            (folder / "Name.lua").write_text("KKAiName = nil\n", encoding="utf-8")  # no own name: the addon names itself by the harness
 
 
 def remove_old_slots(root: Path) -> int:

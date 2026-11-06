@@ -219,11 +219,13 @@ local function applyVisible()
 end
 
 -- The tab is always called TABNAME. The AI's own name (AI setup page, stored in Name.lua) is only who writes in it.
+local stateOf  -- defined further down (menu state)
 local TABNAME = "WoW AI"
 local function aiName()
   local n = KKMapDB.aiName or KKAiName  -- renamed in the menu (instant) or Name.lua from the AI setup page (after /reload)
   if type(n) == "string" and n ~= "" then return n end
-  return "WoW AI"
+  -- no own name: the tab follows the harness switch live (State.lua value or the menu click)
+  return stateOf(stateOf("cli") and "ownCli" or "ownWow") and "Own AI" or "WoW AI"
 end
 local function renameTab(frame, new)
   if not frame or frame == DEFAULT_CHAT_FRAME then return end
@@ -414,7 +416,7 @@ SlashCmdList["KKSCROLL"] = function(msg) sendToClaude((("!scroll " .. (msg or ""
 SLASH_KKAIMODE1 = "/aimode"
 local refreshLabels = function() end  -- replaced when the menu is built
 local stateSeeded = {}
-local function stateOf(name)
+stateOf = function(name)
   if KKMapDB and not stateSeeded[name] then  -- once per load: the AI program's settings (State.lua) win over what was saved here
     stateSeeded[name] = true
     if KKMapState and KKMapState[name] ~= nil then KKMapDB[name] = KKMapState[name] and true or false

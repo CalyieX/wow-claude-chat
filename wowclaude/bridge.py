@@ -85,10 +85,11 @@ def handle_command(text: str) -> str | None:
             installer.write_state()
         except Exception:  # noqa: BLE001
             pass
+        from . import cli_mode
+        cli_mode.restart_for_harness(mode)  # a running CLI session starts again with the new harness right away
         what = {"wow": "WoW chat", "cli": "CLI chat", "win": "CLI window"}[mode]
         return (f"{what}: " + ("your AI's own harness (its own memory files and settings)" if own else "the WoW AI harness") +
-                (". Applies to the next question." if mode == "wow" else ". Applies when CLI mode starts again (/aimode chat, then /aimode cli)."
-                 if mode == "cli" else ". Applies the next time the CLI window opens."))
+                (". Applies to the next question." if mode == "wow" else ". The session started again with it."))
     if cmd == "!ol":
         from . import panel_window
         panel_window.open_empty()

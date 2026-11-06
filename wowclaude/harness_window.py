@@ -5,7 +5,7 @@ Save writes ~/.wowclaude/harness.txt; a text equal to the built-in one (or empty
 """
 from __future__ import annotations
 
-from . import claude, config
+from . import claude, config, harness_import
 
 
 def save(text: str) -> str:
@@ -44,12 +44,23 @@ def run() -> None:
     def do_save() -> None:
         msg.config(text=save(text.get("1.0", "end")))
 
+    def do_import(src) -> None:
+        text.delete("1.0", "end")
+        text.insert("1.0", harness_import.render(src, claude.builtin_harness()))
+        msg.config(text="Imported - " + harness_import.summary(src) + ". Click Save to use it.")
+
     def do_reset() -> None:
         config.HARNESS.unlink(missing_ok=True)
         load(False)
         msg.config(text="Back to the built-in harness.")
 
-    for label, cmd in (("Save", do_save), ("Reset to built-in", do_reset), ("Close", win.close)):
+    buttons = [("Save", do_save)]
+    found = harness_import.sources()
+    buttons += [(f"Import {s.label}", (lambda s=s: do_import(s))) for s in found]
+    if not found:
+        buttons.append(("Import (nothing found)", lambda: msg.config(text="No Claude Code or Codex setup found in the normal folders.")))
+    buttons += [("Reset to built-in", do_reset), ("Close", win.close)]
+    for label, cmd in buttons:
         tk.Button(row, text=label, command=cmd, bg="#5c1a10", fg=gold, activebackground="#7d2417", activeforeground=gold,
                   relief="solid", bd=1, padx=12).pack(side="left", padx=(0, 8))
     msg.pack(fill="x", padx=6, side="bottom")

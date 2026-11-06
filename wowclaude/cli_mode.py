@@ -150,6 +150,7 @@ class CliMode:
         self.dirty = threading.Event()
         self.lock = threading.Lock()
         self.stop_flag = False
+        self.gen = 0  # one number per start(): the loops of an earlier start end by themselves
 
     # -- lifecycle ---------------------------------------------------------------------------------------------
     def running(self) -> bool:
@@ -181,11 +182,13 @@ class CliMode:
         env = login.no_browser_env()  # a /login inside the tool must not open the normal browser
         self.proc = winpty.PtyProcess.spawn(cmd, dimensions=(rows, cols), cwd=cwd, env=env)
         self.stop_flag = False
-        threading.Thread(target=self._read, daemon=True).start()
+        self.gen += 1
+        gen = self.gen
+        threading.Thread(target=self._read, args=(gen,), daemon=True).start()
         self.started = time.time()
-        threading.Thread(target=self._paint_loop, daemon=True).start()
+        threading.Thread(target=self._paint_loop, args=(gen,), daemon=True).start()
         if self.window:
-            threading.Thread(target=self._input_loop, daemon=True).start()
+            threading.Thread(target=self._input_loop, args=(gen,), daemon=True).start()
         return ""
 
     def stop(self) -> None:
@@ -200,9 +203,9 @@ class CliMode:
             self._post(None)
 
     # -- terminal -> screen -------------------------------------------------------------------------------------
-    def _read(self) -> None:
+    def _read(self, gen: int) -> None:
         proc = self.proc
-        while not self.stop_flag and proc is not None:
+        while not self.stop_flag and proc is not None and self.gen == gen:
             try:
                 data = proc.read(4096)
             except EOFError:
@@ -247,11 +250,11 @@ class CliMode:
         except OSError:
             pass
 
-    def _input_loop(self) -> None:
+    def _input_loop(self, gen: int) -> None:
         """Keys typed in the CLI window go straight into the tool."""
         path = config.HOME / "win_in.jsonl"
         pos = path.stat().st_size if path.exists() else 0
-        while not self.stop_flag and self.running():
+        while not self.stop_flag and self.gen == gen and self.running():
             time.sleep(0.05)
             try:
                 size = path.stat().st_size
@@ -290,10 +293,10 @@ class CliMode:
         self.dirty.set()
         return ""
 
-    def _window_loop(self) -> None:
+    def _window_loop(self, gen: int) -> None:
         """The CLI window's own session: feed its screen file; end the tool when the window is gone."""
         seen = False
-        while not self.stop_flag:
+        while not self.stop_flag and self.gen == gen:
             self.dirty.wait(0.5)
             self.dirty.clear()
             self._resize_if_needed()
@@ -308,11 +311,11 @@ class CliMode:
                 break
             time.sleep(0.1)
 
-    def _paint_loop(self) -> None:
+    def _paint_loop(self, gen: int) -> None:
         if self.window:
-            return self._window_loop()
+            return self._window_loop(gen)
         last = ""
-        while not self.stop_flag:
+        while not self.stop_flag and self.gen == gen:
             self.dirty.wait(0.5)
             self.dirty.clear()
             self._resize_if_needed()
@@ -374,6 +377,18 @@ class CliMode:
 
 _cli = CliMode()
 _win = CliMode(window=True)
+
+
+def restart_for_harness(which: str) -> str:
+    """The harness of a running CLI session changed: end it and start it again with the new one (applied now)."""
+    from . import term_window
+    if which == "cli" and active() and _cli.running():
+        _cli.stop()
+        return _cli.start() or ""
+    if which == "win" and term_window.alive() and _win.running():
+        _win.stop()
+        return _win.start() or ""
+    return ""
 
 
 def open_window() -> str:

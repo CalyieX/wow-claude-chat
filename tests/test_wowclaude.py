@@ -827,13 +827,13 @@ def test_installer_copies_addon_removes_old_slots_and_keeps_the_name(tmp_path):
     lst = root / "WTF" / "Account" / "A" / "R" / "C" / "AddOns.txt"
     lst.parent.mkdir(parents=True)
     lst.write_text("KKMap: enabled\nKKR001: enabled\nKKR300: enabled\nOther: enabled\n", encoding="utf-8")
-    res = installer.install(root, "WoW AI")
+    res = installer.install(root, "Mira")
     assert res["old_slots_removed"] == 3
     assert not list(addons.glob("KKR*")) and not (addons / "KKMap" / "sig").exists()
     assert lst.read_text(encoding="utf-8").splitlines() == ["KKMap: enabled", "Other: enabled"]
-    assert 'KKAiName = "WoW AI"' in (addons / "KKMap" / "Name.lua").read_text(encoding="utf-8")
+    assert 'KKAiName = "Mira"' in (addons / "KKMap" / "Name.lua").read_text(encoding="utf-8")
     installer.install(root)  # again, without a name: the chosen name stays
-    assert 'KKAiName = "WoW AI"' in (addons / "KKMap" / "Name.lua").read_text(encoding="utf-8")
+    assert 'KKAiName = "Mira"' in (addons / "KKMap" / "Name.lua").read_text(encoding="utf-8")
     assert (addons / "KKMap" / "KKMap.lua").exists() and "Name.lua" in (addons / "KKMap" / "KKMap.toc").read_text(encoding="utf-8")
 
 

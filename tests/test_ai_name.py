@@ -450,3 +450,26 @@ def test_cli_gets_game_state_once_and_on_change(monkeypatch):
     assert first.startswith("[Game state: Gorel, Warrior, Classic Era]") and first.endswith("hi")
     assert cli_mode.with_state("again", "Gorel, Warrior, Classic Era") == "again"
     assert "Mage" in cli_mode.with_state("x", "Lia, Mage, Classic Era")
+
+
+def test_harness_import_reads_claude_and_codex_setups(tmp_path, monkeypatch):
+    from wowclaude import harness_import as hi
+    monkeypatch.delenv("CLAUDE_CONFIG_DIR", raising=False)
+    monkeypatch.delenv("CODEX_HOME", raising=False)
+    home = tmp_path / "home"
+    cfg = home / ".claude"
+    slug = hi.re.sub(r"[^A-Za-z0-9]", "-", str(home))
+    (cfg / "projects" / slug / "memory").mkdir(parents=True)
+    (cfg / "CLAUDE.md").write_text("# Mira\nYou are Mira.", encoding="utf-8")
+    (cfg / "projects" / slug / "memory" / "MEMORY.md").write_text("- [Note](note.md) - a thing", encoding="utf-8")
+    (cfg / "skills" / "demo").mkdir(parents=True)
+    (cfg / "skills" / "demo" / "SKILL.md").write_text("---\nname: demo\ndescription: Does a demo\n---\nbody", encoding="utf-8")
+    (home / ".codex").mkdir()
+    (home / ".codex" / "AGENTS.md").write_text("Codex rules", encoding="utf-8")
+    found = {s.kind: s for s in hi.sources(home)}
+    assert set(found) == {"claude", "codex"}
+    text = hi.render(found["claude"], "GAME PART")
+    assert text.index("You are Mira.") < text.index("Your own memory") < text.index("Your own skills") < text.index(hi.MARK)
+    assert "demo: Does a demo" in text and text.endswith("GAME PART")
+    assert "Codex rules" in hi.render(found["codex"], "G")
+    assert hi.sources(tmp_path / "empty") == [] and hi.render(hi.Source("claude", "x"), "G") == "G"
