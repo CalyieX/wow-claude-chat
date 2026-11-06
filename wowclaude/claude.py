@@ -285,6 +285,8 @@ def _clean_env() -> dict:
     env = dict(os.environ)
     env["CLAUDE_CODE_DISABLE_CLAUDE_MDS"] = "1"
     env["CLAUDE_CODE_DISABLE_AUTO_MEMORY"] = "1"
+    for var in ("CLAUDE_CODE_OAUTH_TOKEN", "ANTHROPIC_API_KEY", "ANTHROPIC_AUTH_TOKEN"):
+        env.pop(var, None)  # one login for chat and CLI mode: stray tokens/keys in the environment must not answer for it
     home = config.load().get("claude_home")  # optional own login folder: other Claude apps cannot overwrite this login
     if home:
         env["CLAUDE_CONFIG_DIR"] = str(home)
