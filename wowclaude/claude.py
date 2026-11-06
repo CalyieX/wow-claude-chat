@@ -221,7 +221,12 @@ def reminder() -> str:
     from . import vinput
     extra = ("\n[You also have background input: [[click X Y]] / [[keys TEXT]] act in the game window without interrupting the player.]"
              if vinput.available() else "")
-    return REMINDER + extra
+    base = REMINDER
+    if own_harness("cli" if config.load().get("ai_mode") == "cli" else "wow"):
+        base = base.replace("[wowclaude reminder, not from the player: WoW Forever is NOT Classic.",
+                            "[addon note, not from the player: the player talks to you from inside World of Warcraft; stay yourself, the player's own AI. "
+                            "WoW Forever is NOT Classic.")
+    return base + extra
 
 
 MACRO_RE = re.compile(r"\[\[macro ([^\]\n]{1,40})\]\]\s*(.*?)\s*\[\[/macro\]\]", re.S)
@@ -335,48 +340,9 @@ def _clean_env(mode: str = "wow") -> dict:
     if token:
         env["CLAUDE_CODE_OAUTH_TOKEN"] = str(token)
     home = config.load().get("claude_home")  # optional own login folder: other Claude apps cannot overwrite this login
-    if home:
-        if own_harness(mode):  # the AI's own setup: the login stays in this folder, the player's own files are linked in
-            _link_own_setup(Path(str(home)), Path(os.environ.get("CLAUDE_CONFIG_DIR") or (Path.home() / ".claude")))
+    if home and not own_harness(mode):  # the own harness is the AI exactly as the player has it: its normal config folder and login
         env["CLAUDE_CONFIG_DIR"] = str(home)
     return env
-
-
-OWN_FILES = ("CLAUDE.md", "settings.json", "settings.local.json")
-OWN_DIRS = ("skills", "plugins", "projects", "agents", "commands", "hooks", "rules")
-
-
-def _link_own_setup(home: Path, normal: Path) -> None:
-    """The AI program's own login lives in `home` (the normal config folder may not be signed in). For the own harness the player's
-    normal files (CLAUDE.md, settings, skills, plugins, memory ...) are copied / linked in, so the AI works with its own setup."""
-    import shutil
-    if not normal.is_dir() or normal.resolve() == home.resolve():
-        return
-    home.mkdir(parents=True, exist_ok=True)
-    for name in OWN_FILES:
-        src = normal / name
-        try:
-            if src.is_file():
-                shutil.copyfile(src, home / name)
-        except OSError:
-            pass
-    slug = re.sub(r"[^A-Za-z0-9]", "-", str(Path.home()))  # the folder the AI works in (own harness: the player's home) names its memory folder
-    memory = normal / "projects" / slug / "memory"
-    if memory.is_dir():
-        (home / "projects" / slug).mkdir(parents=True, exist_ok=True)
-        if not (home / "projects" / slug / "memory").exists():
-            try:
-                subprocess.run(["cmd", "/c", "mklink", "/J", str(home / "projects" / slug / "memory"), str(memory)], capture_output=True, **hidden())
-            except OSError:
-                pass
-    for name in OWN_DIRS:
-        src, dst = normal / name, home / name
-        if not src.is_dir() or dst.exists():
-            continue
-        try:
-            subprocess.run(["cmd", "/c", "mklink", "/J", str(dst), str(src)], capture_output=True, **hidden())  # a junction needs no admin rights
-        except OSError:
-            pass
 
 
 def _exec(cmd: list, prompt: str, timeout: float | None = None) -> tuple:

@@ -263,7 +263,8 @@ def run(root: Path, poll: float = 0.6) -> None:
             if state.context:
                 _last_context[0] = state.context
                 from . import memory as _mem
-                question = _mem.prompt_block(state.context) + question
+                if not claude.own_harness("wow"):  # the own AI has its own memory: no WoW AI memos in front of the question
+                    question = _mem.prompt_block(state.context) + question
                 ver = claude.flavor(state.context)
                 question = "[Game state: " + state.context + (" | Game version: " + ver if ver else "") + "]\n" + question
             from . import vinput
