@@ -192,6 +192,23 @@ def _log(text: str) -> None:
         pass
 
 
+def click_screen(x: int, y: int) -> None:
+    """A real left click at a screen position, then the mouse pointer goes back. (The game takes the click position from the
+    real pointer, not from posted window messages.)"""
+    import ctypes
+    from ctypes import wintypes
+    u = ctypes.windll.user32
+    old = wintypes.POINT()
+    u.GetCursorPos(ctypes.byref(old))
+    u.SetCursorPos(x, y)
+    time.sleep(0.12)
+    u.mouse_event(0x0002, 0, 0, 0, 0)  # left down
+    time.sleep(0.06)
+    u.mouse_event(0x0004, 0, 0, 0, 0)  # left up
+    time.sleep(0.08)
+    u.SetCursorPos(old.x, old.y)
+
+
 class Dock:
     """The always-on WAC button: shown whenever the browser window is not running, click opens it, drag moves it.
     (While the browser window runs it draws its own frame / minimized button, using the same remembered spot.)"""
@@ -320,8 +337,7 @@ class Dock:
             g = overlay.game_rect()
             if g:  # a click into the addon's invisible field in the bottom left corner of the game opens the menu
                 import threading
-                from . import vinput
-                threading.Thread(target=lambda: vinput.run(f"click 6 {g[3] - g[1] - 6}"), daemon=True).start()
+                threading.Thread(target=lambda: click_screen(g[0] + 8, g[3] - 8), daemon=True).start()
         elif not moved and time.time() - self.busy > 45:  # the browser needs a while to start: no second click starts a second one
             self.busy = time.time()
             import threading
