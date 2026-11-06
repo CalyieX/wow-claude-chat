@@ -72,13 +72,61 @@ def apply_events(entries: list[tuple[str, str]], events: list[dict]) -> list[tup
     entries = list(entries)
     for ev in events:
         kind, text = ev.get("kind", "sys"), str(ev.get("text", ""))
+        if kind == "cli":  # the screen of the command line tool: one entry that is replaced on every update
+            entries = [e for e in entries if e[0] != "cli"]
+            if text:
+                entries.append(("cli", text))
+            continue
         if kind != "think" and entries and entries[-1][0] == "think":
             entries.pop()  # the answer replaces "thinking ..."
         entries.append((kind, text))
     return entries[-MAX_ENTRIES:]
 
 
+def mono_font(fsize: int):
+    from PIL import ImageFont
+    for path in (r"C:\Windows\Fonts\consola.ttf", r"C:\Windows\Fonts\cour.ttf"):
+        try:
+            return ImageFont.truetype(path, max(9, fsize - 4))
+        except OSError:
+            continue
+    return ImageFont.load_default(size=max(9, fsize - 4))
+
+
+def cell_size(fsize: int) -> tuple[int, int]:
+    font = mono_font(fsize)
+    return max(1, int(font.getlength("M"))), int(font.size * 1.25)
+
+
+def report_tab_size(size: tuple[int, int], fsize: int) -> None:
+    """Columns and rows that fit into the tab: CLI mode starts the command line tool with exactly this size."""
+    cw, ch = cell_size(fsize)
+    data = {"cols": max(20, (size[0] - 12) // cw), "rows": max(5, (size[1] - 8) // ch)}
+    try:
+        (config.HOME / "tabsize.json").write_text(json.dumps(data), encoding="utf-8")
+    except OSError:
+        pass
+
+
+def paint_cli(text: str, size: tuple[int, int], fsize: int) -> Image.Image:
+    font = mono_font(fsize)
+    cw, ch = cell_size(fsize)
+    img = Image.new("RGBA", size, (0, 0, 0, 120))  # a darker, see-through background: the tool draws a lot of text
+    d = ImageDraw.Draw(img)
+    for i, line in enumerate(text.split("\n")[: max(1, (size[1] - 8) // ch)]):
+        d.text((7, 5 + i * ch), line, fill=(0, 0, 0, 255), font=font)
+        d.text((6, 4 + i * ch), line, fill=(235, 235, 235, 255), font=font)
+    return img
+
+
 def paint(entries: list[tuple[str, str]], size: tuple[int, int], scroll: int = 0, fsize: int = 17) -> Image.Image:
+    if entries and entries[-1][0] == "cli":
+        img = paint_cli(entries[-1][1], size, fsize)
+        d = ImageDraw.Draw(img)
+        d.rectangle((0, 0, MARK_HOLE - 1, MARK_HOLE - 1), fill=(0, 0, 0, 0))
+        d.rectangle((size[0] - MARK_HOLE, 0, size[0] - 1, MARK_HOLE - 1), fill=(0, 0, 0, 0))
+        d.rectangle((0, size[1] - MARK_HOLE, fsize + MARK_HOLE, size[1] - 1), fill=(0, 0, 0, 0))
+        return img
     # no background of its own: the real tab's see-through background shows, like a normal chat tab
     img = chat_marks.render(entries, size, scroll=scroll, bg=(0, 0, 0, 0), shadow=True, font_size=fsize)
     d = ImageDraw.Draw(img)
@@ -309,6 +357,7 @@ def run(poll: float = 0.25, find_every: float = 0.5) -> None:
         if key != shown_key or not visible:
             shown_key = key
             w, h = frame[2] - frame[0], frame[3] - frame[1]
+            report_tab_size((w, h), fs)
             print(f'paint {frame} entries={len(entries)}', flush=True)
             overlay.update_layered(hwnd, paint(entries, (w, h), fsize=fs), frame[0], frame[1])
             visible = True

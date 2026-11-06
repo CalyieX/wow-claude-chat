@@ -269,3 +269,40 @@ def test_claude_command_line_keeps_the_tool_limits(monkeypatch):
     seen.clear()
     claude.Session()._run("claude", "hi", None)
     assert "Bash" in seen["cmd"][seen["cmd"].index("--tools") + 1]
+
+
+def test_cli_mode_screen_events_replace_each_other_and_paint():
+    from wowclaude import chat_fake
+    e = chat_fake.apply_events([("user", "hi"), ("ai", "yo")], [{"kind": "cli", "text": "line one\nline two"}])
+    e = chat_fake.apply_events(e, [{"kind": "cli", "text": "line one\nline three"}])
+    assert [k for k, _ in e].count("cli") == 1 and e[-1] == ("cli", "line one\nline three")
+    img = chat_fake.paint(e, (400, 200), fsize=17)
+    assert img.size == (400, 200)
+    e = chat_fake.apply_events(e, [{"kind": "cli", "text": ""}])  # leaving CLI mode removes the screen
+    assert all(k != "cli" for k, _ in e)
+
+
+def test_cli_mode_tab_size_and_keys(monkeypatch, tmp_path):
+    from wowclaude import cli_mode, chat_fake, config
+    assert cli_mode.tab_size() == cli_mode.DEFAULT_SIZE
+    chat_fake.report_tab_size((500, 300), 17)
+    cols, rows = cli_mode.tab_size()
+    assert 20 <= cols <= 200 and 5 <= rows <= 60
+    assert cli_mode.KEYS["up"] == "\x1b[A" and cli_mode.KEYS["enter"] == "\r"
+
+
+def test_cli_mode_needs_a_command_line_login_and_is_off_by_default(monkeypatch):
+    from wowclaude import cli_mode, backends, config
+    assert not cli_mode.active()
+    monkeypatch.setattr(backends, "name", lambda: "openrouter")
+    assert cli_mode.command() is None
+    monkeypatch.setattr(cli_mode, "available", lambda: (True, ""))
+    assert "Claude Code or Codex" in cli_mode.set_mode("cli") and not cli_mode.active()
+
+
+def test_cli_mode_bridge_commands(monkeypatch):
+    from wowclaude import bridge, cli_mode
+    monkeypatch.setattr(cli_mode, "set_mode", lambda m: "mode " + m)
+    assert bridge.handle_command("!aimode cli") == "mode cli"
+    assert bridge.handle_command("!aimode chat") == "mode chat"
+    assert "off" in bridge.handle_command("!k up")

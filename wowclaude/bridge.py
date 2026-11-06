@@ -48,6 +48,12 @@ def handle_command(text: str) -> str | None:
         if problem:
             return "Browser did not open: " + problem
         return "Browser closed." if closing else "Browser opened."
+    if cmd == "!aimode":
+        from . import cli_mode
+        want = arg.lower() if arg else ("chat" if cli_mode.active() else "cli")
+        return cli_mode.set_mode("cli" if want == "cli" else "chat")
+    if cmd == "!k":
+        return "CLI mode is off. Type /aimode cli to start it."
     if cmd == "!access":
         cfg = config.load()
         want = arg.lower() in ("on", "1", "yes") if arg else not cfg.get("computer_access")
@@ -128,6 +134,7 @@ def deliver(state: decode.GameState, reply: str) -> None:
     _post("ai", claude.persona()[0] + ": " + text.strip())
 
 
+CLI_BYPASS = ("!aimode", "!access", "!setup", "!browser", "!login", "!name", "!me")  # still handled by the bridge in CLI mode
 LOCK_PORT = 47831
 _lock_socket = None
 
@@ -187,6 +194,16 @@ def run(root: Path, poll: float = 0.6) -> None:
             from . import vinput
             if vinput.available() and state.frames:
                 question = vinput.frames_hint(state.frames) + question
+            from . import cli_mode
+            if cli_mode.active() and not state.message.lstrip().lower().startswith(CLI_BYPASS):
+                try:  # CLI mode: the original command line tool answers in the tab by itself
+                    note = cli_mode.handle(state.message.strip())
+                except Exception as exc:  # noqa: BLE001
+                    note = "CLI mode: " + str(exc)[:100]
+                if note:
+                    _post("sys", note)
+                time.sleep(poll)
+                continue
             print(f"> {state.message.strip()}", flush=True)
             _post("user", "You: " + state.message.strip())
             _post("think", "thinking ...")

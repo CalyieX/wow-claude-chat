@@ -390,6 +390,11 @@ SlashCmdList["KKTAB"] = function()  -- bring the AI tab to the front (used by to
     if tab and FCF_Tab_OnClick then pcall(FCF_Tab_OnClick, tab, "LeftButton") end
   end
 end
+SLASH_KKAIMODE1 = "/aimode"
+SlashCmdList["KKAIMODE"] = function(msg) sendToClaude((("!aimode " .. (msg or "")):gsub("%s+$", ""))) end
+SLASH_KKKEY1 = "/k"
+SlashCmdList["KKKEY"] = function(msg) sendToClaude((("!k " .. (msg or "")):gsub("%s+$", ""))) end
+
 SLASH_KKACCESS1 = "/access"
 SlashCmdList["KKACCESS"] = function(msg) sendToClaude((("!access " .. (msg or "")):gsub("%s+$", ""))) end
 
@@ -457,6 +462,8 @@ local COMMANDS = {
   "/nameai name  -  rename the AI (empty = WoW AI)",
   "/nameme name  -  what the AI calls you (empty = no name)",
   "/browser [url]  -  open the browser  (/browser off = close)",
+  "/aimode [chat|cli]  -  CLI mode: the tab shows the original Claude/Codex CLI",
+  "/k up|down|enter|esc|tab|ctrl-c  -  send a key to the CLI",
   "/access [on|off]  -  let the AI use this computer (default: off)",
   "/login [code]  -  renew the AI login (page opens in the browser)",
   "/wm Name~Line1\nLine2  -  create a macro",
@@ -526,6 +533,8 @@ local TOOLS = {
   "Mouse and keyboard  -  the AI clicks and types for you",
   "    (switch on: AI setup page, Mouse and keyboard)",
   "Web research  -  looks facts up before it answers",
+  "CLI mode  -  the tab runs the original Claude Code / Codex CLI",
+  "    (/aimode cli; keys: /k up|down|enter|esc|tab|ctrl-c)",
   "Login helper  -  /login renews an expired AI login",
   "Computer access  -  YOUR choice (menu: AI access): the AI may",
   "    read/change files and run commands, like the original CLI",
@@ -559,7 +568,7 @@ local menu
 local function buildMenu()
   if menu then return menu end
   local f = CreateFrame("Frame", "KKMenuFrame", UIParent, "BackdropTemplate")
-  f:SetSize(220, 336)
+  f:SetSize(220, 368)
   f:SetPoint("CENTER", UIParent, "CENTER", -260, 60)
   f:SetFrameStrata("DIALOG")
   f:SetMovable(true); f:EnableMouse(true); f:RegisterForDrag("LeftButton")
@@ -600,6 +609,7 @@ local function buildMenu()
     stripBtn:SetText(stripLabel())
     if applyVisible then applyVisible() end
   end)
+  button("AI mode (chat/CLI)", function() sendToClaude("!aimode") end)
   button("AI access (on/off)", function() sendToClaude("!access") end)
   button("Tools", function() if KKToolsFrame:IsShown() then KKToolsFrame:Hide() else KKToolsFrame:Show() end end)
   button("Tips", function() if KKTipFrame:IsShown() then KKTipFrame:Hide() else KKTipFrame:Show() end end)

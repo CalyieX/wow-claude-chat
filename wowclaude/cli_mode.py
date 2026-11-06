@@ -1,0 +1,220 @@
+"""CLI mode: the AI tab shows the ORIGINAL command line tool (Claude Code or Codex), running in a hidden terminal.
+
+The tool runs in a pseudo terminal (ConPTY via the optional package pywinpty); its screen is read with pyte and painted
+into the AI tab by the chat overlay (event kind "cli"). What you type in the AI tab goes into the tool; keys that cannot
+be typed in the game chat (arrows, Esc, Tab, Ctrl+C ...) are sent with  /k up|down|left|right|enter|esc|tab|space|ctrl-c|<char>.
+
+Off by default (menu: AI mode). The tool keeps its own login and its own permission questions. Without computer access
+(menu: AI access) Claude Code is started with web tools only.
+"""
+from __future__ import annotations
+
+import json
+import shutil
+import threading
+import time
+
+from . import claude, config
+
+DEFAULT_SIZE = (60, 14)  # columns, rows until the overlay reports the real size of the tab
+SIZE_FILE = config.HOME / "tabsize.json"
+KEYS = {"up": "\x1b[A", "down": "\x1b[B", "right": "\x1b[C", "left": "\x1b[D", "enter": "\r", "esc": "\x1b", "tab": "\t",
+        "space": " ", "ctrl-c": "\x03", "ctrl-d": "\x04", "backspace": "\x7f", "shift-tab": "\x1b[Z", "pgup": "\x1b[5~", "pgdn": "\x1b[6~"}
+MISSING = ("CLI mode needs two small helper packages. Close the game's AI program and run once:  py -3 -m pip install pywinpty pyte  "
+           "(then switch AI mode on again).")
+
+
+def available() -> tuple[bool, str]:
+    try:
+        import pyte  # noqa: F401
+        import winpty  # noqa: F401
+    except ImportError:
+        return False, MISSING
+    return True, ""
+
+
+def tab_size() -> tuple[int, int]:
+    """Columns and rows that fit into the AI tab (written by the chat overlay), else a small default."""
+    try:
+        d = json.loads(SIZE_FILE.read_text(encoding="utf-8"))
+        return max(20, min(200, int(d["cols"]))), max(5, min(60, int(d["rows"])))
+    except (OSError, ValueError, KeyError):
+        return DEFAULT_SIZE
+
+
+def command() -> list[str] | None:
+    """The command line of the tool in use (None: this backend has no command line tool)."""
+    from . import backends
+    b = backends.name()
+    if b == "claude":
+        exe = claude.claude_path()
+        if not exe:
+            return None
+        cmd = [exe]
+        if not claude.computer_access():
+            cmd += ["--tools", claude.WEB_TOOLS, "--allowedTools", claude.WEB_TOOLS]
+        return cmd
+    if b == "codex":
+        exe = shutil.which("codex")
+        return [exe, "--search"] + ([] if claude.computer_access() else ["-s", "read-only"]) if exe else None
+    return None
+
+
+class CliMode:
+    def __init__(self) -> None:
+        self.proc = None
+        self.screen = None
+        self.stream = None
+        self.size = DEFAULT_SIZE
+        self.dirty = threading.Event()
+        self.lock = threading.Lock()
+        self.stop_flag = False
+
+    # -- lifecycle ---------------------------------------------------------------------------------------------
+    def running(self) -> bool:
+        return bool(self.proc is not None and self.proc.isalive())
+
+    def start(self) -> str:
+        ok, why = available()
+        if not ok:
+            return why
+        cmd = command()
+        if not cmd:
+            return "CLI mode needs the Claude Code or Codex login (Connect AI). Other AIs have no command line tool."
+        if self.running():
+            return ""
+        import pyte
+        import winpty
+        from pathlib import Path
+        cols, rows = tab_size()
+        self.size = (cols, rows)
+        self.screen = pyte.Screen(cols, rows)
+        self.stream = pyte.Stream(self.screen)
+        cwd = str(Path.home()) if claude.computer_access() else claude.neutral_cwd()
+        env = claude._clean_env()
+        self.proc = winpty.PtyProcess.spawn(cmd, dimensions=(rows, cols), cwd=cwd, env=env)
+        self.stop_flag = False
+        threading.Thread(target=self._read, daemon=True).start()
+        threading.Thread(target=self._paint_loop, daemon=True).start()
+        return ""
+
+    def stop(self) -> None:
+        self.stop_flag = True
+        try:
+            if self.proc is not None:
+                self.proc.terminate(force=True)
+        except Exception:  # noqa: BLE001 - already gone
+            pass
+        self.proc = None
+        self._post(None)
+
+    # -- terminal -> screen -------------------------------------------------------------------------------------
+    def _read(self) -> None:
+        proc = self.proc
+        while not self.stop_flag and proc is not None:
+            try:
+                data = proc.read(4096)
+            except EOFError:
+                break
+            except Exception:  # noqa: BLE001
+                break
+            if data:
+                with self.lock:
+                    self.stream.feed(data)
+                self.dirty.set()
+        self.dirty.set()
+
+    def _lines(self) -> str:
+        with self.lock:
+            lines = [ln.rstrip() for ln in self.screen.display]
+        while lines and not lines[-1]:
+            lines.pop()
+        return "\n".join(lines)
+
+    def _paint_loop(self) -> None:
+        last = ""
+        while not self.stop_flag:
+            self.dirty.wait(0.5)
+            self.dirty.clear()
+            self._resize_if_needed()
+            text = self._lines()
+            if not self.running():
+                text += "\n[the command line tool ended - type anything to start it again, /aimode chat to leave]"
+            if text != last:
+                last = text
+                self._post(text)
+            time.sleep(0.25)  # at most four repaints a second
+            if not self.running():
+                break
+
+    def _resize_if_needed(self) -> None:
+        cols, rows = tab_size()
+        if (cols, rows) != self.size and self.running():
+            self.size = (cols, rows)
+            try:
+                self.proc.setwinsize(rows, cols)
+                with self.lock:
+                    self.screen.resize(rows, cols)
+            except Exception:  # noqa: BLE001 - a failed resize keeps the old size
+                pass
+
+    @staticmethod
+    def _post(text: str | None) -> None:
+        try:
+            from . import chat_fake
+            chat_fake.post("cli", text or "")
+        except Exception:  # noqa: BLE001 - no overlay, nothing to show
+            pass
+
+    # -- player -> terminal -------------------------------------------------------------------------------------
+    def send_line(self, text: str) -> str:
+        why = self.start() if not self.running() else ""
+        if why:
+            return why
+        self.proc.write(text + "\r")
+        self.dirty.set()
+        return ""
+
+    def send_key(self, name: str) -> str:
+        why = self.start() if not self.running() else ""
+        if why:
+            return why
+        key = KEYS.get(name.strip().lower(), name if len(name) == 1 else "")
+        if not key:
+            return "Unknown key. Use: " + ", ".join(sorted(KEYS)) + " or a single character."
+        self.proc.write(key)
+        self.dirty.set()
+        return ""
+
+
+_cli = CliMode()
+
+
+def active() -> bool:
+    return config.load().get("ai_mode") == "cli"
+
+
+def set_mode(mode: str) -> str:
+    cfg = config.load()
+    if mode == "cli":
+        ok, why = available()
+        if not ok:
+            return why
+        if not command():
+            return "CLI mode needs the Claude Code or Codex login (Connect AI)."
+        cfg["ai_mode"] = "cli"
+        config.save(cfg)
+        why = _cli.start()
+        return why or "CLI mode on: this tab now shows the command line tool. Type to talk to it, /k up|down|enter|esc for keys, /aimode chat to leave."
+    cfg.pop("ai_mode", None)
+    config.save(cfg)
+    _cli.stop()
+    return "Chat mode on."
+
+
+def handle(text: str) -> str | None:
+    """A message from the game while CLI mode is on. Returns a short note for the chat, or None (it went to the tool)."""
+    t = text.strip()
+    if t.lower().startswith("!k "):
+        return _cli.send_key(t[3:].strip()) or None
+    return _cli.send_line(t) or None
