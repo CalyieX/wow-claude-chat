@@ -488,3 +488,12 @@ def test_harness_import_from_picked_folder(tmp_path):
     assert src.found() and src.memory_dir == mem and [s[0] for s in src.skills] == ["demo"]
     assert "I am Mira." in hi.render(src, "GAME")
     assert not hi.from_folder(tmp_path / "nothing").found()
+
+
+def test_own_uses_the_chosen_claude_folder(monkeypatch):
+    from wowclaude import claude, config
+    cfg = {"own_harness_wow": True, "own_config_dir": "X:/claude-work"}
+    monkeypatch.setattr(config, "load", lambda: cfg)
+    assert claude._clean_env("wow")["CLAUDE_CONFIG_DIR"] == "X:/claude-work"
+    cfg["own_harness_wow"] = False
+    assert claude._clean_env("wow").get("CLAUDE_CONFIG_DIR") != "X:/claude-work"

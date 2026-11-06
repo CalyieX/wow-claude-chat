@@ -342,6 +342,9 @@ def _clean_env(mode: str = "wow") -> dict:
     home = config.load().get("claude_home")  # optional own login folder: other Claude apps cannot overwrite this login
     if home and not own_harness(mode):  # the own harness is the AI exactly as the player has it: its normal config folder and login
         env["CLAUDE_CONFIG_DIR"] = str(home)
+    own_dir = config.load().get("own_config_dir")  # the Claude folder chosen on the Own AI tab (only when there are several)
+    if own_dir and own_harness(mode):
+        env["CLAUDE_CONFIG_DIR"] = str(own_dir)
     return env
 
 

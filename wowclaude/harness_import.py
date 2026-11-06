@@ -32,6 +32,7 @@ class Source:
     memory_index: Path | None = None
     memory_dir: Path | None = None
     skills: list[tuple[str, str, Path]] = field(default_factory=list)  # (name, one line, SKILL.md)
+    folder: Path | None = None  # the config folder this setup was read from
 
     def found(self) -> bool:
         return bool(self.instructions_file or self.memory_index or self.skills)
@@ -79,7 +80,7 @@ def claude_source(home: Path | None = None) -> Source:
     cfg = Path(os.environ.get("CLAUDE_CONFIG_DIR") or (home / ".claude"))
     slug = re.sub(r"[^A-Za-z0-9]", "-", str(home))  # Claude Code names the memory folder of a working folder like this
     mem = cfg / "projects" / slug / "memory"
-    src = Source("claude", "Claude Code")
+    src = Source("claude", "Claude Code", folder=cfg)
     if (cfg / "CLAUDE.md").is_file():
         src.instructions_file = cfg / "CLAUDE.md"
     if (mem / "MEMORY.md").is_file():
@@ -91,7 +92,7 @@ def claude_source(home: Path | None = None) -> Source:
 def codex_source(home: Path | None = None) -> Source:
     home = home or Path.home()
     cfg = Path(os.environ.get("CODEX_HOME") or (home / ".codex"))
-    src = Source("codex", "Codex")
+    src = Source("codex", "Codex", folder=cfg)
     if (cfg / "AGENTS.md").is_file():
         src.instructions_file = cfg / "AGENTS.md"
     if (cfg / "MEMORY.md").is_file():
@@ -108,7 +109,7 @@ def from_folder(folder: Path) -> Source:
     and skills (skills/*/SKILL.md, also in .agents/skills).
     """
     folder = Path(folder)
-    src = Source("folder", folder.name or str(folder))
+    src = Source("folder", folder.name or str(folder), folder=folder)
     for name in ("CLAUDE.md", "AGENTS.md", "GEMINI.md"):
         if (folder / name).is_file():
             src.instructions_file = folder / name

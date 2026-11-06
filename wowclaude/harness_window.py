@@ -39,6 +39,8 @@ def run(tab: str = "wow") -> None:
     choice = tk.Frame(own, bg="#15130e")
     choice.pack(side="top", fill="x", pady=(0, 6))
     pick_var = tk.StringVar(value=backends.name())
+    dir_var = tk.StringVar(value=str(config.load().get("own_config_dir") or ""))
+    dirs = tk.Frame(own, bg="#15130e")
     info = tk.Text(own, bg="#15130e", fg="#f0e6c8", font=("Consolas", 10), wrap="word", bd=1, relief="solid")
     ibar = WowScrollbar(own, info.yview)
     info.configure(yscrollcommand=ibar.set)
@@ -102,7 +104,28 @@ def run(tab: str = "wow") -> None:
         config.save(cfg)
         msg.config(text=f"AI: {pick_var.get()}. Used from the next question on.", fg="#7fd17f")
 
+    def choose_dir() -> None:
+        cfg = config.load()
+        if dir_var.get():
+            cfg["own_config_dir"] = dir_var.get()
+        else:
+            cfg.pop("own_config_dir", None)
+        config.save(cfg)
+        msg.config(text="Claude folder: " + (dir_var.get() or "default") + ". Used from the next question on.", fg="#7fd17f")
+
     def refresh() -> None:
+        for w in dirs.winfo_children():
+            w.destroy()
+        claude_dirs = [s for s in found if s.kind == "claude" or s.label.startswith("Claude Code")]
+        if len(claude_dirs) > 1:
+            tk.Label(dirs, text="Which Claude folder (several found):", bg="#15130e", fg=gold, anchor="w").pack(side="top", fill="x")
+            for s in claude_dirs:
+                tk.Radiobutton(dirs, text=f"{s.label}  -  {s.folder}", value=str(s.folder), variable=dir_var, command=choose_dir,
+                               anchor="w", bg="#15130e", fg="#f0e6c8", selectcolor="#3a2a10", activebackground="#15130e",
+                               activeforeground=gold).pack(side="top", fill="x")
+            dirs.pack(side="top", fill="x", pady=(0, 6), after=choice)
+        else:
+            dirs.pack_forget()
         for w in choice.winfo_children():
             w.destroy()
         for b in backends.detect():
