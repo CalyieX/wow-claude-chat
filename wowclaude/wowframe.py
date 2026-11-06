@@ -196,8 +196,8 @@ def scroll_image(w: int, h: int, first: float, last: float):
     bd = (w - 4) * S  # button diameter, 2 px of track around it
     for cy in (w * S // 2, H2 - w * S // 2):
         x0, y0 = (W2 - bd) // 2, cy - bd // 2
-        d.ellipse((x0, y0, x0 + bd - 1, y0 + bd - 1), fill=(128, 24, 16, 255), outline=(201, 162, 39, 255), width=S // 2)
-        d.ellipse((x0 + S, y0 + S, x0 + bd - 1 - S, y0 + bd // 2), outline=None, fill=(160, 40, 28, 255))  # upper sheen
+        d.ellipse((x0, y0, x0 + bd - 1, y0 + bd - 1), fill=(82, 2, 0, 255), outline=(201, 162, 39, 255), width=S // 2)
+        d.ellipse((x0 + S, y0 + S, x0 + bd - 1 - S, y0 + bd // 2), outline=None, fill=(112, 4, 0, 255))  # upper sheen
     s = bd // 5
     cx = W2 // 2
     cy1, cy2 = w * S // 2, H2 - w * S // 2
@@ -220,18 +220,18 @@ def scroll_image(w: int, h: int, first: float, last: float):
             if THUMB == "gold":
                 col = (int(110 + 145 * k), int(78 + 131 * k), int(0 + 10 * k), 255)
             else:  # red, shaded like the frame's red buttons: dark at the edges, bright in the middle
-                col = (int(70 + 150 * k), int(10 + 38 * k), int(6 + 28 * k), 255)
+                col = (int(40 + 100 * k), int(0 + 2 * k), 0, 255)  # the frame buttons' red: (82,2,0) .. (140,0,0)
             for y in range(th):
                 px[x, y] = col
         td = ImageDraw.Draw(thumb)
         hx = int(tw * 0.3)
-        td.line((hx, tw // 2, hx, th - tw // 2), fill=(255, 245, 190, 255) if THUMB == "gold" else (255, 170, 150, 255), width=max(2, S))  # reflection
+        td.line((hx, tw // 2, hx, th - tw // 2), fill=(255, 245, 190, 255) if THUMB == "gold" else (205, 70, 55, 255), width=max(2, S))  # reflection
         mask = Image.new("L", (tw, th), 0)
         ImageDraw.Draw(mask).rounded_rectangle((0, 0, tw - 1, th - 1), radius=tw // 2, fill=255)
         edge = Image.new("L", (tw, th), 0)
         ImageDraw.Draw(edge).rounded_rectangle((0, 0, tw - 1, th - 1), radius=tw // 2, outline=255, width=S)
         im.paste(thumb, (x0, y0 * S), mask)
-        im.paste(Image.new("RGBA", (tw, th), (58, 40, 0, 255) if THUMB == "gold" else (45, 5, 3, 255)), (x0, y0 * S), edge)
+        im.paste(Image.new("RGBA", (tw, th), (58, 40, 0, 255) if THUMB == "gold" else (22, 0, 0, 255)), (x0, y0 * S), edge)
     return im.resize((w, h), Image.LANCZOS)
 
 
