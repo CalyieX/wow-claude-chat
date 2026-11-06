@@ -431,3 +431,12 @@ def test_show_tag_and_media_pages(tmp_path, monkeypatch):
     html = m.page(str(f))
     assert "<h1>Titel</h1>" in html and "<li><b>b</b></li>" in html and "<th>x</th>" in html
     assert "<video" in m.page("https://x.org/v.mp4") and m.page("https://x.org/notes.md") is None
+
+
+def test_prepare_config_uses_the_tools_own_config_folder(tmp_path, monkeypatch):
+    import json
+    from wowclaude import claude, cli_mode
+    monkeypatch.setattr(claude, "_clean_env", lambda mode="wow": {"CLAUDE_CONFIG_DIR": str(tmp_path)})
+    cli_mode.prepare_config(r"D:\work\proj")
+    data = json.loads((tmp_path / ".claude.json").read_text(encoding="utf-8"))
+    assert data["hasCompletedOnboarding"] and data["projects"]["D:/work/proj"]["hasTrustDialogAccepted"]

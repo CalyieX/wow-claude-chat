@@ -99,7 +99,7 @@ def prepare_config(cwd: str) -> None:
     neutral working folder (it holds nothing). The folder of the player's own files (computer access) stays a real question."""
     import os
     from pathlib import Path
-    home = os.environ.get("CLAUDE_CONFIG_DIR") or ""
+    home = claude._clean_env("cli").get("CLAUDE_CONFIG_DIR") or ""  # the same folder the tool will use (config "claude_home")
     path = (Path(home) / ".claude.json") if home else (Path.home() / ".claude.json")
     try:
         data = json.loads(path.read_text(encoding="utf-8")) if path.exists() else {}
@@ -277,6 +277,8 @@ class CliMode:
             self._resize_if_needed()
             self._dump()
             text = self._lines()
+            if "Enter to confirm" in text or "Esc to cancel" in text:  # the tool waits for an answer
+                text += chr(10) + "[It asks a question: open the CLI window (/term) or use /k up|down|enter]"
             if "Not logged in" in text or "/login" in text:
                 text += chr(10) + "[Not logged in: type  /login  in the game chat - the sign-in page opens in the game browser]"
             if not self.running():
@@ -370,7 +372,14 @@ def set_mode(mode: str) -> str:
         config.save(cfg)
         _write_state()
         why = _cli.start()
-        return why or "CLI mode on: this tab now shows the command line tool. Type to talk to it, /k up|down|enter|esc for keys, /aimode chat to leave."
+        if why:
+            return why
+        try:  # the tool asks things (trust this folder? ...) that need arrow keys and scrolling: the real window does that
+            open_window()
+        except Exception:  # noqa: BLE001 - the tab still works with /k
+            pass
+        return ("CLI mode on. The CLI window opened: answer questions there (arrow keys, Enter, scroll, copy, paste). "
+                "/aimode chat leaves CLI mode.")
     cfg.pop("ai_mode", None)
     config.save(cfg)
     _write_state()
