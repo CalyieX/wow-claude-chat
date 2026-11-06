@@ -745,7 +745,7 @@ local function buildMenu()
     y = y - 32
     return bt
   end
-  button("Connect AI", function() sendToClaude("!setup") end, "Opens the setup page: choose your AI (Claude, Codex, ChatGPT ...), sign in, pick the model and the persona.")
+  button("Connect AI", function() sendToClaude("!setup") end, "Opens the setup window: choose your AI (Claude, Codex, ChatGPT ...), sign in, pick the model and the persona.")
   button("Browser", function() sendToClaude("!browser") end, "Opens the game browser window (web pages, YouTube ...) over the game. Yours to use; the AI may use it too.")
   button("CLI window", function() sendToClaude("!term") end, "Opens a real terminal window with its own AI session: arrow keys, scrolling, copy and paste. Its harness is set under Harness.")
   button("AI name", function() StaticPopup_Show("KKAINAME") end, "The name your AI uses in the chat.")

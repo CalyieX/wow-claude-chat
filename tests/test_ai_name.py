@@ -551,3 +551,16 @@ def test_claude_model_dialog_is_parsed():
     rows = models.parse_claude_picker(lines)
     assert [r[0] for r in rows] == ["Default (recommended)", "Opus", "More models"]
     assert rows[0][2] and not rows[1][2]
+
+
+def test_setup_window_deep_search_and_command(monkeypatch):
+    from wowclaude import backends, setup_window, bridge
+    monkeypatch.setattr(backends, "detect", lambda: [])
+    monkeypatch.setattr(backends, "_port_open", lambda p, t=0.3: p == 8080)
+    monkeypatch.setattr("shutil.which", lambda n: None)
+    found = setup_window.deep_search()
+    assert any(f["backend"] == "openai-compatible" and f["base_url"].endswith(":8080/v1") for f in found)
+    launched = []
+    monkeypatch.setattr("subprocess.Popen", lambda cmd, **kw: launched.append(cmd))
+    assert "own window" in bridge.handle_command("!setup")
+    assert launched and launched[0][-1] == "setup-window"

@@ -139,12 +139,12 @@ def handle_command(text: str) -> str | None:
         from . import login
         return login.submit(arg) if arg else login.start()
     if cmd == "!setup":
-        from . import overlay, setup_ui
-        url = setup_ui.start_background()
-        problem = overlay.play(url, "640x520")
-        if problem:
-            return f"Could not open the window ({problem}). Open this address in any browser: {url}"
-        return "AI setup opened in the browser window."
+        import subprocess
+        import sys
+        from pathlib import Path
+        exe = Path(sys.executable).with_name("pythonw.exe")
+        subprocess.Popen([str(exe if exe.exists() else sys.executable), "-m", "wowclaude", "setup-window"], creationflags=0x08000000)
+        return "AI setup opened in its own window over the game."
     if cmd == "!me":
         cfg = config.load()
         who = claude.clean_name(arg)
