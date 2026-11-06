@@ -55,6 +55,19 @@ def handle_command(text: str) -> str | None:
         if problem:
             return f"Could not open the window ({problem}). Open this address in any browser: {url}"
         return "AI setup opened in the browser window."
+    if cmd == "!name":
+        from . import installer
+        name = claude.clean_name(arg)
+        cfg = config.load()
+        if name:
+            cfg["name"] = name
+        else:
+            cfg.pop("name", None)
+        config.save(cfg)
+        root = config.client_root()
+        if root:
+            installer.write_name(root, name)
+        return "Name: " + (name or claude.DEFAULT_NAME)
     return None
 
 

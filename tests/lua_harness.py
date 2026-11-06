@@ -83,6 +83,10 @@ function UnitAffectingCombat() return false end
 C_Timer = { After = function(sec, fn) end }
 SlashCmdList = {}
 C_AddOns = nil
+StaticPopupDialogs = {}
+StaticPopup_Show = function() end
+ACCEPT = "OK"
+CANCEL = "Cancel"
 strtrim = function(s) return (s:gsub("^%s+", ""):gsub("%s+$", "")) end
 tinsert = table.insert
 wipe = function(t) for k in pairs(t) do t[k] = nil end return t end

@@ -190,7 +190,7 @@ end
 -- The tab is always called TABNAME. The AI's own name (AI setup page, stored in Name.lua) is only who writes in it.
 local TABNAME = "WoW AI"
 local function aiName()
-  local n = KKAiName  -- Name.lua, written by the AI setup page (applies after /reload)
+  local n = KKMapDB.aiName or KKAiName  -- renamed in the menu (instant) or Name.lua from the AI setup page (after /reload)
   if type(n) == "string" and n ~= "" then return n end
   return "WoW AI"
 end
@@ -376,12 +376,57 @@ local function restorePos(f, key)
   if p then f:ClearAllPoints(); f:SetPoint(p[1], UIParent, p[2], p[3], p[4]) end
 end
 
+-- Rename the AI at any time: instant in the game, and the bridge learns it through "!name" (the answers carry it).
+local function setAiName(n)
+  n = strtrim(tostring(n or "")):gsub("[|\\\"]", ""):sub(1, 20)
+  KKMapDB.aiName = (n ~= "") and n or nil
+  sendToClaude("!name " .. n)
+  say(L("KI-Name: ", "AI name: ") .. aiName(), 1, 0.82, 0)
+end
+StaticPopupDialogs["KKAINAME"] = {
+  text = "Name der KI (leer = WoW AI):", button1 = ACCEPT, button2 = CANCEL, hasEditBox = 1, maxLetters = 20,
+  OnShow = function(self) local eb = self.editBox or self.EditBox; if eb then eb:SetText(KKMapDB.aiName or ""); eb:SetFocus() end end,
+  OnAccept = function(self) local eb = self.editBox or self.EditBox; if eb then setAiName(eb:GetText()) end end,
+  EditBoxOnEnterPressed = function(eb) setAiName(eb:GetText()); eb:GetParent():Hide() end,
+  EditBoxOnEscapePressed = function(eb) eb:GetParent():Hide() end,
+  timeout = 0, whileDead = 1, hideOnEscape = 1,
+}
+SLASH_KKNAME1 = "/kkname"
+SlashCmdList["KKNAME"] = function(m) setAiName(m) end
+
+-- List of all commands (button "Befehle" in the menu)
+local COMMANDS = {
+  "/wac  -  Menue",
+  "/c Text  oder  /claude Text  -  die KI fragen",
+  "/kkname Name  -  KI umbenennen (leer = WoW AI)",
+  "/browser [url]  -  Browser oeffnen  (/browser off = zu)",
+  "/wm Name~Zeile1\\nZeile2  -  Makro anlegen",
+  "/strip always|auto|off  -  Farbstreifen",
+  "/claudetab  -  KI-Tab anzeigen",
+  "Im KI-Tab: einfach schreiben, ohne /",
+}
+local cmdFrame = CreateFrame("Frame", "KKCmdFrame", UIParent, "BackdropTemplate")
+cmdFrame:SetSize(420, 40 + #COMMANDS * 18)
+cmdFrame:SetPoint("CENTER", UIParent, "CENTER", 0, 120)
+cmdFrame:SetFrameStrata("DIALOG"); cmdFrame:SetMovable(true); cmdFrame:EnableMouse(true)
+cmdFrame:RegisterForDrag("LeftButton"); cmdFrame:SetScript("OnDragStart", cmdFrame.StartMoving)
+cmdFrame:SetScript("OnDragStop", cmdFrame.StopMovingOrSizing); cmdFrame:SetClampedToScreen(true)
+cmdFrame:SetBackdrop({ bgFile = "Interface\\DialogFrame\\UI-DialogBox-Background", edgeFile = "Interface\\DialogFrame\\UI-DialogBox-Border",
+  tile = true, tileSize = 32, edgeSize = 24, insets = { left = 6, right = 6, top = 6, bottom = 6 } })
+local ct = cmdFrame:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge"); ct:SetPoint("TOPLEFT", 18, -14); ct:SetText("Befehle")
+for i, line in ipairs(COMMANDS) do
+  local fs = cmdFrame:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+  fs:SetPoint("TOPLEFT", 20, -34 - (i - 1) * 18); fs:SetJustifyH("LEFT"); fs:SetText(line)
+end
+local cc = CreateFrame("Button", nil, cmdFrame, "UIPanelCloseButton"); cc:SetPoint("TOPRIGHT", -4, -4)
+cmdFrame:Hide()
+
 -- Small addon menu (/wac)
 local menu
 local function buildMenu()
   if menu then return menu end
   local f = CreateFrame("Frame", "KKMenuFrame", UIParent, "BackdropTemplate")
-  f:SetSize(220, 140)
+  f:SetSize(220, 176)
   f:SetPoint("CENTER", UIParent, "CENTER", -260, 60)
   f:SetFrameStrata("DIALOG")
   f:SetMovable(true); f:EnableMouse(true); f:RegisterForDrag("LeftButton")
@@ -412,9 +457,8 @@ local function buildMenu()
   end
   button("KI verbinden", function() sendToClaude("!setup") end)
   button("Browser", function() sendToClaude("!browser") end)
-  button("Hilfe", function()
-    say("Schreib im WoW-AI-Tab einfach los. /wac = dieses Menü, /browser [url] = Browser, /c Text = fragen.")
-  end)
+  button("KI-Name", function() StaticPopup_Show("KKAINAME") end)
+  button("Befehle", function() if KKCmdFrame:IsShown() then KKCmdFrame:Hide() else KKCmdFrame:Show() end end)
   f:Hide()
   menu = f
   return f

@@ -90,12 +90,15 @@ $("save").onclick=async()=>{$("msg").textContent="Saving ...";$("msg").className
 
 def ai_prompt() -> str:
     """Text the user can hand to their own AI agent so that it configures this program."""
-    return (f"Please set up the WoW AI chat program for me. Edit the JSON file {config.CONFIG} (create it if missing, keep "
+    return ("Please set up the WoW AI chat program for me. Edit the JSON file ~/.wowclaude/config.json in my home folder (create it if missing, keep "
             "other keys). Set \"backend\" to one of: claude (Claude Code login), codex (ChatGPT login), ollama, lmstudio, "
             "openrouter, openai, anthropic, gemini, groq, deepseek, mistral, xai, together, perplexity, cerebras, or "
             "\"openai-compatible\" (then also set \"base_url\"), or \"command\" (then set \"command\" to a shell command "
             "that reads the prompt on stdin and prints the answer). Optional keys: \"model\". For API backends put the key "
             "in the environment variable named for the service (e.g. OPENROUTER_API_KEY) rather than in the file. "
+            "Tip: set up a long-lived login so it does not expire every few weeks - for Claude Code run `claude setup-token` "
+            "(a login valid for a year) and store the token it prints in the environment variable CLAUDE_CODE_OAUTH_TOKEN; "
+            "for other services create a long-lived API key. "
             "Afterwards run: py -3 -m wowclaude doctor --deep  and tell me whether the AI answered.")
 
 

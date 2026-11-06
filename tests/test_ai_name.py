@@ -73,3 +73,15 @@ def test_no_name_chosen_the_ai_writes_as_wow_ai_and_a_chosen_name_wins(monkeypat
     assert claude.persona()[0] == "Gandalf"
     config.save({"backend": "codex"})  # name removed again: back to WoW AI
     assert claude.persona()[0] == "WoW AI"
+
+
+def test_prompt_for_own_ai_has_no_private_paths():
+    from pathlib import Path
+    from wowclaude import setup_ui
+    p = setup_ui.ai_prompt()
+    assert str(Path.home()) not in p and "Users" not in p and "~/.wowclaude/config.json" in p
+
+
+def test_prompt_tells_the_ai_to_make_a_long_lived_login():
+    from wowclaude import setup_ui
+    assert "setup-token" in setup_ui.ai_prompt() and "year" in setup_ui.ai_prompt()
