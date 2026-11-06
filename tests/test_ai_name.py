@@ -592,3 +592,18 @@ def test_window_title_has_the_prefix_only_once():
     assert _real_title("AI setup") == "WoW AI - AI setup"
     assert _real_title("WoW AI - CLI") == "WoW AI - CLI"
     assert _real_title("Own AI - CLI") == "Own AI - CLI"
+
+
+def test_deep_search_ignores_open_ports_that_are_not_openai_servers(monkeypatch):
+    from wowclaude import backends, setup_window
+    monkeypatch.setattr(backends, "detect", lambda: [])
+    monkeypatch.setattr(backends, "_port_open", lambda p, timeout=0.3: p in (1337, 8080))
+    monkeypatch.setattr(setup_window, "_speaks_openai", lambda p: p == 8080)
+    found = [f["label"] for f in setup_window.deep_search()]
+    assert any("8080" in l for l in found) and not any("1337" in l for l in found)
+
+
+def test_provider_requests_send_a_custom_user_agent():
+    import inspect
+    from wowclaude import backends
+    assert "User-Agent" in inspect.getsource(backends)

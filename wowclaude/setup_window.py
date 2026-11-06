@@ -15,6 +15,16 @@ EXTRA_PORTS = ((8080, "llama.cpp server"), (1337, "Jan"), (4891, "GPT4All"), (50
                (8000, "local OpenAI-style server (vLLM etc.)"), (11435, "local OpenAI-style server"))
 
 
+def _speaks_openai(port: int) -> bool:
+    """An open port is not enough (it may be any other server): it must answer the OpenAI-style model list."""
+    import urllib.request
+    try:
+        with urllib.request.urlopen(f"http://127.0.0.1:{port}/v1/models", timeout=2) as r:
+            return r.status == 200
+    except Exception:  # noqa: BLE001
+        return False
+
+
 def deep_search() -> list[dict]:
     """detect() plus a broader scan: programs that are installed but not on PATH, and more local server ports.
     Each entry: {backend, label, base_url?, command?}."""
@@ -32,7 +42,7 @@ def deep_search() -> list[dict]:
                 found.append({"backend": "codex", "label": f"Codex ({c})", "codex_path": str(c)})
                 break
     for port, label in EXTRA_PORTS:
-        if backends._port_open(port):
+        if backends._port_open(port) and _speaks_openai(port):
             found.append({"backend": "openai-compatible", "label": f"{label} (port {port})", "base_url": f"http://127.0.0.1:{port}/v1"})
     for exe, label in (("gemini", "Gemini CLI"), ("aider", "Aider"), ("ollama", "Ollama (installed, not running: start it)")):
         if shutil.which(exe) and not (exe == "ollama" and "ollama" in have):
