@@ -46,6 +46,20 @@ def no_browser_env() -> dict:
     return env
 
 
+def logged_in() -> bool:
+    """True unless the tool says it is not logged in (Claude only: `claude auth status`; unknown counts as logged in)."""
+    import json
+    exe = claude.claude_path()
+    if not exe or backends.name() != "claude":
+        return True
+    try:
+        out = subprocess.run([exe, "auth", "status"], capture_output=True, text=True, encoding="utf-8", errors="replace",
+                             timeout=20, cwd=claude.neutral_cwd(), env=claude._clean_env(), **hidden()).stdout
+        return bool(json.loads(out).get("loggedIn", True))
+    except Exception:  # noqa: BLE001 - cannot tell: let the tool itself ask
+        return True
+
+
 def start() -> str:
     """Start the login and open its page in the overlay browser. Returns the sentence for the chat."""
     cmd = command()

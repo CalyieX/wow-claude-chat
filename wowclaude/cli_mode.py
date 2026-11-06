@@ -83,6 +83,9 @@ class CliMode:
             return "CLI mode needs the Claude Code or Codex login (Connect AI). Other AIs have no command line tool."
         if self.running():
             return ""
+        from . import login
+        if not login.logged_in():  # sign in through the game browser first, then the tool starts logged in
+            return login.start()
         import pyte
         import winpty
         from pathlib import Path
