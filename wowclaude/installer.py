@@ -11,7 +11,7 @@ import shutil
 from pathlib import Path
 
 ADDON_SRC = Path(__file__).parent / "addon" / "KKMap"
-FILES = ("KKMap.lua", "KKMap.toc", "Name.lua", "State.lua")
+FILES = ("KKMap.lua", "KKMap.toc", "Name.lua", "State.lua", "wac.tga", "wac_hover.tga", "wac_down.tga", "wac_gear.tga")
 _OLD_SLOT = re.compile(r"\s*KKR\d{3}\s*:")
 
 
