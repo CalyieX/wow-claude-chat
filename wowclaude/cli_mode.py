@@ -139,6 +139,14 @@ def prepare_config(cwd: str) -> None:
             pass
 
 
+def _log(text: str) -> None:
+    try:
+        with open(config.HOME / "cli.log", "a", encoding="utf-8") as f:
+            f.write(time.strftime("%H:%M:%S ") + text + "\n")
+    except OSError:
+        pass
+
+
 class CliMode:
     def __init__(self, window: bool = False) -> None:
         self.window = window  # False: the tab in the game chat; True: its own session in the CLI window
@@ -276,7 +284,8 @@ class CliMode:
             if raw:
                 try:
                     self.proc.write(raw)
-                except Exception:  # noqa: BLE001
+                except Exception as exc:  # noqa: BLE001
+                    _log("input loop ended: " + repr(exc))
                     break
                 self.dirty.set()
 
