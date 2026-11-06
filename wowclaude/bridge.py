@@ -61,6 +61,8 @@ def handle_command(text: str) -> str | None:
         from . import cli_mode
         want = arg.lower() if arg else ("chat" if cli_mode.active() else "cli")
         return cli_mode.set_mode("cli" if want == "cli" else "chat")
+    if cmd == "!term":
+        return "The CLI window is for CLI mode: /aimode cli"
     if cmd == "!scroll":
         return "Scrolling works in CLI mode: /aimode cli"
     if cmd == "!k":

@@ -36,6 +36,12 @@ def available() -> tuple[bool, str]:
 def tab_size() -> tuple[int, int]:
     """Columns and rows that fit into the AI tab (written by the chat overlay), else a small default."""
     try:
+        d = json.loads((config.HOME / "termsize.json").read_text(encoding="utf-8"))
+        if time.time() - float(d["time"]) < 4:  # the CLI window is open: the tool uses its size
+            return max(20, min(200, int(d["cols"]))), max(5, min(60, int(d["rows"])))
+    except (OSError, ValueError, KeyError):
+        pass
+    try:
         d = json.loads(SIZE_FILE.read_text(encoding="utf-8"))
         return max(20, min(200, int(d["cols"]))), max(5, min(60, int(d["rows"])))
     except (OSError, ValueError, KeyError):
@@ -155,6 +161,7 @@ class CliMode:
         self.stop_flag = False
         threading.Thread(target=self._read, daemon=True).start()
         threading.Thread(target=self._paint_loop, daemon=True).start()
+        threading.Thread(target=self._input_loop, daemon=True).start()
         return ""
 
     def stop(self) -> None:
@@ -201,6 +208,46 @@ class CliMode:
             lines.append("[scrolled back: /scroll down or /scroll end]")
         return "\n".join(lines)
 
+    def _dump(self) -> None:
+        """Everything incl. scrollback for the CLI window (term_window.py)."""
+        with self.lock:
+            cols = self.screen.columns
+            hist = ["".join(line[x].data for x in range(cols)).rstrip() for line in self.screen.history.top]
+            disp = [ln.rstrip() for ln in self.screen.display]
+        while disp and not disp[-1]:
+            disp.pop()
+        try:
+            (config.HOME / "cli_screen.json").write_text(json.dumps({"text": "\n".join(hist + disp), "time": time.time()}),
+                                                         encoding="utf-8")
+        except OSError:
+            pass
+
+    def _input_loop(self) -> None:
+        """Keys typed in the CLI window go straight into the tool."""
+        path = config.HOME / "cli_in.jsonl"
+        pos = path.stat().st_size if path.exists() else 0
+        while not self.stop_flag and self.running():
+            time.sleep(0.05)
+            try:
+                size = path.stat().st_size
+                if size < pos:
+                    pos = 0
+                if size == pos:
+                    continue
+                with open(path, "rb") as f:
+                    f.seek(pos)
+                    chunk = f.read()
+                pos += len(chunk)
+            except OSError:
+                continue
+            raw = "".join(json.loads(ln).get("raw", "") for ln in chunk.decode("utf-8", "replace").splitlines() if ln.strip())
+            if raw:
+                try:
+                    self.proc.write(raw)
+                except Exception:  # noqa: BLE001
+                    break
+                self.dirty.set()
+
     def scroll(self, how: str) -> str:
         """Look at what scrolled off the top (mouse wheel in the tab, /scroll up|down|end). The tool itself is not touched."""
         how = how.strip().lower()
@@ -224,6 +271,7 @@ class CliMode:
             self.dirty.wait(0.5)
             self.dirty.clear()
             self._resize_if_needed()
+            self._dump()
             text = self._lines()
             if "Not logged in" in text or "/login" in text:
                 text += chr(10) + "[Not logged in: type  /login  in the game chat - the sign-in page opens in the game browser]"
@@ -281,6 +329,19 @@ class CliMode:
 _cli = CliMode()
 
 
+def open_window() -> str:
+    """Open the real CLI window (scroll, select, copy, paste, type). No console window."""
+    import subprocess
+    import sys
+    from pathlib import Path
+    from . import term_window
+    if term_window.alive():
+        return "The CLI window is already open."
+    exe = Path(sys.executable).with_name("pythonw.exe")
+    subprocess.Popen([str(exe if exe.exists() else sys.executable), "-m", "wowclaude", "term"], creationflags=0x08000000)
+    return "CLI window opened. Click into it to type, copy and paste; click the game to play on."
+
+
 def active() -> bool:
     return config.load().get("ai_mode") == "cli"
 
@@ -316,6 +377,8 @@ def set_mode(mode: str) -> str:
 def handle(text: str) -> str | None:
     """A message from the game while CLI mode is on. Returns a short note for the chat, or None (it went to the tool)."""
     t = text.strip()
+    if t.lower().startswith("!term"):
+        return open_window()
     if t.lower().startswith("!scroll"):
         return _cli.scroll(t[7:]) or None
     if t.lower().startswith("!k "):

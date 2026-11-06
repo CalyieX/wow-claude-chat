@@ -393,6 +393,8 @@ end
 SLASH_KKMEMORY1 = "/memos"
 SLASH_KKMEMORY2 = "/memory"
 SlashCmdList["KKMEMORY"] = function(msg) sendToClaude((("!memos " .. (msg or "")):gsub("%s+$", ""))) end
+SLASH_KKTERM1 = "/term"
+SlashCmdList["KKTERM"] = function() sendToClaude("!term") end
 SLASH_KKSCROLL1 = "/scroll"
 SlashCmdList["KKSCROLL"] = function(msg) sendToClaude((("!scroll " .. (msg or "")):gsub("%s+$", ""))) end
 SLASH_KKAIMODE1 = "/aimode"
@@ -503,6 +505,7 @@ local COMMANDS = {
   "/nameme name  -  what the AI calls you (empty = no name)",
   "/browser [url]  -  open the browser  (/browser off = close)",
   "/aimode [chat|cli]  -  CLI mode: the tab shows your AI's own CLI",
+  "/term  -  open the CLI in a real window (scroll, copy, paste)",
   "/scroll up|down|end  -  look back in the CLI (or mouse wheel)",
   "/memos  -  what the AI saved about you  (/memos clear)",
   "/k up|down|enter|esc|tab|ctrl-c  -  send a key to the CLI",
@@ -643,6 +646,7 @@ local function buildMenu()
   end
   button("Connect AI", function() sendToClaude("!setup") end)
   button("Browser", function() sendToClaude("!browser") end)
+  button("CLI window", function() sendToClaude("!term") end)
   button("AI name", function() StaticPopup_Show("KKAINAME") end)
   button("Your name", function() StaticPopup_Show("KKPLAYERNAME") end)
   local stripBtn
