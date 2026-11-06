@@ -387,3 +387,22 @@ def test_codex_cli_mode_trusts_the_neutral_folder(monkeypatch):
     monkeypatch.setattr(claude, "computer_access", lambda: False)
     cmd = cli_mode.command()
     assert any(a.endswith('.trust_level="trusted"') for a in cmd)
+
+
+def test_cli_mode_scrollback():
+    import pyte
+    from wowclaude import cli_mode
+    c = cli_mode.CliMode()
+    c.screen = pyte.HistoryScreen(40, 5, history=100)
+    c.stream = pyte.Stream(c.screen)
+    c.offset = 0
+    c.stream.feed("".join(f"line {i}\r\n" for i in range(1, 21)))
+    live = c._lines()
+    assert "line 20" in live and "line 1\n" not in live
+    assert c.scroll("up") == "" and "scrolled back" in c._lines()
+    c.scroll("up")
+    back = c._lines()
+    assert "line 17" in back and "line 20" not in back and len(back.splitlines()) <= 5
+    c.scroll("end")
+    assert c._lines() == live
+    assert "Use:" in c.scroll("sideways")

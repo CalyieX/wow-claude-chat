@@ -75,8 +75,8 @@ def command() -> list[str] | None:
         if not exe:
             return None
         cmd = [exe, "--search"] + ([] if claude.computer_access() else ["-s", "read-only"])
-        if not claude.computer_access():  # the neutral working folder holds nothing: no "trust this folder?" question
-            cmd += ["-c", "projects." + json.dumps(claude.neutral_cwd()) + '.trust_level="trusted"']
+        folder = str(Path.home()) if claude.computer_access() else claude.neutral_cwd()  # chosen by the "AI access" switch
+        cmd += ["-c", "projects." + json.dumps(folder) + '.trust_level="trusted"']  # no "trust this folder?" question
         text = harness_text()
         if len(text) < 20000:  # Windows command lines are limited: a longer harness is left out rather than breaking the start
             cmd += ["-c", "developer_instructions=" + json.dumps(text)]  # a TOML string accepts the same escapes
@@ -100,7 +100,7 @@ def prepare_config(cwd: str) -> None:
         data["hasCompletedOnboarding"] = True
         data.setdefault("theme", "dark")
         changed = True
-    if cwd == claude.neutral_cwd():
+    if True:  # the folder is either the empty neutral one or the player's home, chosen by switching "AI access" on
         proj = data.setdefault("projects", {}).setdefault(cwd.replace("\\", "/"), {})
         if not proj.get("hasTrustDialogAccepted"):
             proj["hasTrustDialogAccepted"] = True
@@ -144,7 +144,8 @@ class CliMode:
         from pathlib import Path
         cols, rows = tab_size()
         self.size = (cols, rows)
-        self.screen = pyte.Screen(cols, rows)
+        self.screen = pyte.HistoryScreen(cols, rows, history=2000)  # keeps what scrolled off the top
+        self.offset = 0
         self.stream = pyte.Stream(self.screen)
         cwd = str(Path.home()) if claude.computer_access() else claude.neutral_cwd()
         prepare_config(cwd)
@@ -179,15 +180,43 @@ class CliMode:
             if data:
                 with self.lock:
                     self.stream.feed(data)
+                    self.offset = 0  # new output: show the live screen again
                 self.dirty.set()
         self.dirty.set()
 
     def _lines(self) -> str:
         with self.lock:
-            lines = [ln.rstrip() for ln in self.screen.display]
-        while lines and not lines[-1]:
-            lines.pop()
+            cols = self.screen.columns
+            rows = self.screen.lines
+            hist = ["".join(line[x].data for x in range(cols)).rstrip() for line in self.screen.history.top]
+            disp = [ln.rstrip() for ln in self.screen.display]
+            offset = min(self.offset, len(hist))
+        full = hist + disp
+        end = len(full) - offset
+        lines = full[max(0, end - rows + (1 if offset else 0)):end]  # one row less when the hint line is added
+        if offset == 0:
+            while lines and not lines[-1]:
+                lines.pop()
+        else:
+            lines.append("[scrolled back: /scroll down or /scroll end]")
         return "\n".join(lines)
+
+    def scroll(self, how: str) -> str:
+        """Look at what scrolled off the top (mouse wheel in the tab, /scroll up|down|end). The tool itself is not touched."""
+        how = how.strip().lower()
+        with self.lock:
+            step = max(1, self.screen.lines // 2)
+            top = len(self.screen.history.top)
+            if how == "up":
+                self.offset = min(top, self.offset + step)
+            elif how == "down":
+                self.offset = max(0, self.offset - step)
+            elif how in ("end", "bottom", "live"):
+                self.offset = 0
+            else:
+                return "Use: /scroll up, /scroll down or /scroll end"
+        self.dirty.set()
+        return ""
 
     def _paint_loop(self) -> None:
         last = ""
@@ -256,6 +285,14 @@ def active() -> bool:
     return config.load().get("ai_mode") == "cli"
 
 
+def _write_state() -> None:
+    try:
+        from . import installer
+        installer.write_state()
+    except Exception:  # noqa: BLE001 - the menu colours are a convenience
+        pass
+
+
 def set_mode(mode: str) -> str:
     cfg = config.load()
     if mode == "cli":
@@ -266,10 +303,12 @@ def set_mode(mode: str) -> str:
             return "CLI mode needs the Claude Code or Codex login (Connect AI)."
         cfg["ai_mode"] = "cli"
         config.save(cfg)
+        _write_state()
         why = _cli.start()
         return why or "CLI mode on: this tab now shows the command line tool. Type to talk to it, /k up|down|enter|esc for keys, /aimode chat to leave."
     cfg.pop("ai_mode", None)
     config.save(cfg)
+    _write_state()
     _cli.stop()
     return "Chat mode on."
 
@@ -277,6 +316,8 @@ def set_mode(mode: str) -> str:
 def handle(text: str) -> str | None:
     """A message from the game while CLI mode is on. Returns a short note for the chat, or None (it went to the tool)."""
     t = text.strip()
+    if t.lower().startswith("!scroll"):
+        return _cli.scroll(t[7:]) or None
     if t.lower().startswith("!k "):
         return _cli.send_key(t[3:].strip()) or None
     return _cli.send_line(t) or None

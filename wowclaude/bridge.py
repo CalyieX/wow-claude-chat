@@ -61,6 +61,8 @@ def handle_command(text: str) -> str | None:
         from . import cli_mode
         want = arg.lower() if arg else ("chat" if cli_mode.active() else "cli")
         return cli_mode.set_mode("cli" if want == "cli" else "chat")
+    if cmd == "!scroll":
+        return "Scrolling works in CLI mode: /aimode cli"
     if cmd == "!k":
         return "CLI mode is off. Type /aimode cli to start it."
     if cmd == "!access":
@@ -71,6 +73,11 @@ def handle_command(text: str) -> str | None:
         else:
             cfg.pop("computer_access", None)
         config.save(cfg)
+        try:
+            from . import installer
+            installer.write_state()
+        except Exception:  # noqa: BLE001
+            pass
         return ("AI access is ON: the AI may read and change files and run commands on this computer when you ask it. "
                 "Switch it off again in the menu (/wac)." if want else "AI access is OFF: the AI can only search the web.")
     if cmd == "!login":

@@ -11,7 +11,7 @@ import shutil
 from pathlib import Path
 
 ADDON_SRC = Path(__file__).parent / "addon" / "KKMap"
-FILES = ("KKMap.lua", "KKMap.toc", "Name.lua")
+FILES = ("KKMap.lua", "KKMap.toc", "Name.lua", "State.lua")
 _OLD_SLOT = re.compile(r"\s*KKR\d{3}\s*:")
 
 
@@ -30,6 +30,19 @@ def write_name(root: Path, name: str) -> None:
     folder = _addons(root) / "KKMap"
     if folder.is_dir():
         (folder / "Name.lua").write_text('KKAiName = "' + clean.replace("\\", "").replace('"', "") + '"\n', encoding="utf-8")
+
+
+def write_state(root: Path | None = None) -> None:
+    """The switches the menu shows (chat/CLI mode, AI access), read by the addon when the game (re)loads."""
+    from . import config
+    root = root or config.client_root()
+    if not root:
+        return
+    cfg = config.load()
+    folder = _addons(root) / "KKMap"
+    if folder.is_dir():
+        (folder / "State.lua").write_text("KKMapState = { cli = %s, access = %s }\n" % (
+            "true" if cfg.get("ai_mode") == "cli" else "false", "true" if cfg.get("computer_access") else "false"), encoding="utf-8")
 
 
 def remove_old_slots(root: Path) -> int:
@@ -64,6 +77,7 @@ def install(root: Path, name: str = "") -> dict:
         (target / "Name.lua").write_text(keep_name, encoding="utf-8")
     if name:
         write_name(root, name)
+    write_state(root)
     return {"old_slots_removed": remove_old_slots(root)}
 
 

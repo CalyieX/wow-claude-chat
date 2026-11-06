@@ -393,13 +393,50 @@ end
 SLASH_KKMEMORY1 = "/memos"
 SLASH_KKMEMORY2 = "/memory"
 SlashCmdList["KKMEMORY"] = function(msg) sendToClaude((("!memos " .. (msg or "")):gsub("%s+$", ""))) end
+SLASH_KKSCROLL1 = "/scroll"
+SlashCmdList["KKSCROLL"] = function(msg) sendToClaude((("!scroll " .. (msg or "")):gsub("%s+$", ""))) end
 SLASH_KKAIMODE1 = "/aimode"
-SlashCmdList["KKAIMODE"] = function(msg) sendToClaude((("!aimode " .. (msg or "")):gsub("%s+$", ""))) end
+local refreshLabels = function() end  -- replaced when the menu is built
+local function stateOf(name)
+  if KKMapDB and KKMapDB[name] == nil then KKMapDB[name] = (KKMapState and KKMapState[name]) and true or false end
+  return KKMapDB and KKMapDB[name]
+end
+local function setAccessFlag(msg)
+  local m = strtrim(msg or ""):lower()
+  if KKMapDB then
+    if m == "on" or m == "1" or m == "yes" then KKMapDB.access = true
+    elseif m == "off" or m == "0" or m == "no" then KKMapDB.access = false
+    else KKMapDB.access = not stateOf("access") end
+  end
+  refreshLabels()
+end
+local function setCliFlag(msg)
+  local m = strtrim(msg or ""):lower()
+  if KKMapDB then
+    if m == "cli" then KKMapDB.cli = true elseif m == "chat" then KKMapDB.cli = false else KKMapDB.cli = not stateOf("cli") end
+  end
+  refreshLabels()
+end
+SlashCmdList["KKAIMODE"] = function(msg) setCliFlag(msg); sendToClaude((("!aimode " .. (msg or "")):gsub("%s+$", ""))) end
+
+-- Mouse wheel over the AI tab scrolls the terminal history in CLI mode (the game's own chat scrolling goes on as usual).
+local lastWheel = 0
+local function onWheel(self, delta)
+  if not stateOf("cli") or not self or not self.GetID then return end
+  local name = GetChatWindowInfo and GetChatWindowInfo(self:GetID())
+  if not name or not name:lower():find("ai") then return end
+  local now = GetTime()
+  if now - lastWheel < 0.3 then return end
+  lastWheel = now
+  sendToClaude(delta > 0 and "!scroll up" or "!scroll down")
+end
+if FloatingChatFrame_OnMouseScroll then hooksecurefunc("FloatingChatFrame_OnMouseScroll", onWheel) end
+if ChatFrame_OnMouseScroll then hooksecurefunc("ChatFrame_OnMouseScroll", onWheel) end
 SLASH_KKKEY1 = "/k"
 SlashCmdList["KKKEY"] = function(msg) sendToClaude((("!k " .. (msg or "")):gsub("%s+$", ""))) end
 
 SLASH_KKACCESS1 = "/access"
-SlashCmdList["KKACCESS"] = function(msg) sendToClaude((("!access " .. (msg or "")):gsub("%s+$", ""))) end
+SlashCmdList["KKACCESS"] = function(msg) setAccessFlag(msg); sendToClaude((("!access " .. (msg or "")):gsub("%s+$", ""))) end
 
 SLASH_KKLOGIN1 = "/login"
 SlashCmdList["KKLOGIN"] = function(msg) sendToClaude((("!login " .. (msg or "")):gsub("%s+$", ""))) end
@@ -466,6 +503,7 @@ local COMMANDS = {
   "/nameme name  -  what the AI calls you (empty = no name)",
   "/browser [url]  -  open the browser  (/browser off = close)",
   "/aimode [chat|cli]  -  CLI mode: the tab shows the original Claude/Codex CLI",
+  "/scroll up|down|end  -  look back in the CLI (or mouse wheel)",
   "/memos  -  what the AI saved about you  (/memos clear)",
   "/k up|down|enter|esc|tab|ctrl-c  -  send a key to the CLI",
   "/access [on|off]  -  let the AI use this computer (default: off)",
@@ -615,8 +653,15 @@ local function buildMenu()
     stripBtn:SetText(stripLabel())
     if applyVisible then applyVisible() end
   end)
-  button("Chat mode: WoW / CLI", function() sendToClaude("!aimode") end)
-  button("AI access (on/off)", function() sendToClaude("!access") end)
+  local YEL, GREY = "|cffffd100", "|cff808080"
+  local modeBtn = button("", function() setCliFlag(""); sendToClaude("!aimode") end)
+  local accessBtn = button("", function() setAccessFlag(""); sendToClaude("!access") end)
+  refreshLabels = function()
+    local cli, acc = stateOf("cli"), stateOf("access")
+    modeBtn:SetText("Chat mode:  " .. (cli and GREY or YEL) .. "WoW|r / " .. (cli and YEL or GREY) .. "CLI|r")
+    accessBtn:SetText("AI access:  " .. (acc and YEL or GREY) .. "ON|r / " .. (acc and GREY or YEL) .. "OFF|r")
+  end
+  refreshLabels()
   button("Tools", function() if KKToolsFrame:IsShown() then KKToolsFrame:Hide() else KKToolsFrame:Show() end end)
   button("Tips", function() if KKTipFrame:IsShown() then KKTipFrame:Hide() else KKTipFrame:Show() end end)
   button("Commands", function() if KKCmdFrame:IsShown() then KKCmdFrame:Hide() else KKCmdFrame:Show() end end)

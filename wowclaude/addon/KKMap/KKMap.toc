@@ -5,4 +5,5 @@
 ## Category: Chat/Communication
 ## SavedVariables: KKMapDB
 Name.lua
+State.lua
 KKMap.lua

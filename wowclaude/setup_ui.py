@@ -177,6 +177,11 @@ def apply(data: dict) -> dict:
     if key:
         cfg["api_key"] = key
     config.save(cfg)
+    try:
+        from . import installer
+        installer.write_state()
+    except Exception:  # noqa: BLE001
+        pass
     try:  # the AI's name lives in the addon's Name.lua (applies after /reload)
         from . import installer
         root = config.client_root()
