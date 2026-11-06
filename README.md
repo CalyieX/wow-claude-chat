@@ -3,7 +3,7 @@
 > **Alpha - work in progress.** Under active development: things can break, change or be missing. See
 > [Tested on](#tested-on) for what has really been tried. Feedback and bug reports are welcome.
 
-Write in a chat tab called **Claude** and the answer appears in the same tab, right in the game. Longer answers
+Write in a chat tab called **WoW AI** and the answer appears in the same tab, right in the game. Longer answers
 open a small window (text, coloured lines, progress bars). Made for **WoW Forever**; the Classic clients are detected
 too but not verified yet.
 
@@ -35,7 +35,7 @@ If `wowclaude` is not found, use `py -3 -m wowclaude ...`.
 
 ## In the game
 
-- `/wac` opens a small menu: **KI verbinden** (AI setup), **Browser**, **Hilfe**. Other commands: `/browser [url]`,
+- `/wac` opens a small menu: **Connect AI** (AI setup), **Browser**, **AI name**, **Your name**, **AI Bridge**, **AI access**, **Tools**, **Tips**, **Commands**. Other commands: `/browser [url]`, `/login`, `/access on|off`,
   `/c question`, `/wm Name~line one\nline two` (creates a macro and puts it on your cursor), `/strip always|auto|off`.
 - Run the game in **windowed or borderless** mode (exclusive fullscreen does not work) and keep the top-left corner and
   the AI tab uncovered: the program reads them from the screen. The colour strip is only visible while you type in the
@@ -95,9 +95,10 @@ API key backend. Give the AI a name on the AI Setup page (`/wac` > AI Setup): th
 ## Fair-play note
 
 By default this tool only reads your own screen and writes addon files; it presses no keys and sends no commands to
-the game. An **optional input control** (off by default; `"input_control": true`, `"input_script"` and `"input_ahk"` in
-`config.json`, needs AutoHotkey v2 and a helper script you provide) lets the AI click and type into the game window,
-which can include chat and slash commands. Do not enable it where automation is not allowed. It is still third-party
+the game. An **optional mouse and keyboard tool** (off by default; switch it on on the AI setup page, a small helper script
+comes with the program) lets the AI click and type into the game window; destructive slash commands (`/run`, `/script`,
+`/gquit`, `/logout`, ...) are blocked. Separately, **AI access** (off by default; menu or `/access on`) lets a Claude Code or
+Codex login read and change files and run commands on your computer, like the original command line tool. Do not enable it where automation is not allowed. It is still third-party
 software next to a game client: check the rules of the server or client you play on, and use it at your own risk. Not
 affiliated with Blizzard or Anthropic; "World of Warcraft" is a trademark of Blizzard Entertainment.
 

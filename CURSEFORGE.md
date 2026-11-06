@@ -8,7 +8,7 @@ OpenAI-style API. Answers appear right in the tab, no reload, endless conversati
 **Important – this addon needs a free companion program** (WoW addons cannot talk to the internet themselves):
 download it from <GITHUB-LINK einsetzen>, double-click `WoW-AI.bat`, done. It finds your game folder and
 an AI that is already on your PC. Windows only, game in windowed/borderless mode. The program only reads the pixels of the
-game window; it never touches game memory or files other than this addon.
+game window; it never touches game memory. Optional tools (mouse and keyboard, computer access for the AI) are off by default and only switched on by you.
 
 Commands: `/wac` menu, `/browser [url]`, `/c question`.
 License: MIT. Source: the GitHub link above.
