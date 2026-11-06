@@ -127,7 +127,7 @@ def ask(system: str, history: list[tuple[str, str]], prompt: str, model: str | N
         with tempfile.TemporaryDirectory() as tmp:
             out_file = Path(tmp) / "answer.txt"
             from . import claude as _c
-            cmd = [exe, "--search", "exec", "--skip-git-repo-check", "--ephemeral", "--ignore-user-config", "-s", ("workspace-write" if _c.computer_access() else "read-only"),
+            cmd = [exe, "--search", "exec", "--skip-git-repo-check", "--ephemeral", *([] if _c.own_harness("wow") else ["--ignore-user-config"]), "-s", ("workspace-write" if _c.computer_access() else "read-only"),
                    "--color", "never",
                    "-C", (str(Path.home()) if _c.computer_access() else _c.neutral_cwd()), "-o", str(out_file)]
             if model:
