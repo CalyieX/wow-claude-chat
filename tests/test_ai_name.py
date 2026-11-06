@@ -573,3 +573,22 @@ def test_default_name_in_persona_file_is_not_a_chosen_name(monkeypatch, tmp_path
     (tmp_path / "persona.txt").write_text(claude.DEFAULT_NAME + "\nAntworte kurz.\n", encoding="utf-8")
     assert claude.persona()[0] == "Own AI"
     assert not claude.persona_name_in_file()
+
+
+def test_codex_cli_command_builds_in_every_harness_mode(monkeypatch, tmp_path):
+    """Regression: the Codex command line of the CLI chat/window used Path without importing it ("name 'Path' is not defined")."""
+    from wowclaude import cli_mode, config
+    monkeypatch.setattr(config, "load", lambda: {"backend": "codex"})
+    monkeypatch.setattr("shutil.which", lambda n: "codex")
+    for own in (False, True):
+        for window in (False, True):
+            monkeypatch.setattr(config, "load", lambda own=own: {"backend": "codex", "own_harness_cli": own, "own_harness_win": own})
+            cmd = cli_mode.command(window)
+            assert cmd and cmd[0] == "codex"
+
+
+def test_window_title_has_the_prefix_only_once():
+    from wowclaude.wowframe import _real_title
+    assert _real_title("AI setup") == "WoW AI - AI setup"
+    assert _real_title("WoW AI - CLI") == "WoW AI - CLI"
+    assert _real_title("Own AI - CLI") == "Own AI - CLI"

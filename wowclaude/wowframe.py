@@ -38,6 +38,10 @@ MIN_W, MIN_H = 320, 200
 THUMB = "red"  # "red" (like the frame buttons) or "gold" (WoW yellow)
 
 
+def _real_title(title: str) -> str:
+    return title if title.startswith(("WoW AI", "Own AI")) else "WoW AI - " + title
+
+
 class FramedWindow:
     def __init__(self, title: str, w: int = 760, h: int = 520, x: int | None = None, y: int | None = None,
                  on_close: Callable[[], None] | None = None, key: str = "") -> None:
@@ -55,7 +59,7 @@ class FramedWindow:
         self.title, self.w, self.h, self.on_close = title, w, h, on_close
         self.root = tk.Tk()
         r = self.root
-        r.title("WoW AI - " + title)  # a real window title: tools (screen readers, automation) can find the window
+        r.title(_real_title(title))  # a real window title: tools (screen readers, automation) can find the window
         r.overrideredirect(True)
         r.attributes("-topmost", True)
         from . import overlay as _ov
@@ -88,6 +92,7 @@ class FramedWindow:
     def set_title(self, title: str) -> None:
         if title != self.title:
             self.title = title
+            self.root.title(_real_title(title))
             self._draw()
 
     def _follow(self) -> None:
