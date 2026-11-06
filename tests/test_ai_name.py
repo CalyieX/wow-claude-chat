@@ -406,3 +406,12 @@ def test_cli_mode_scrollback():
     c.scroll("end")
     assert c._lines() == live
     assert "Use:" in c.scroll("sideways")
+
+
+def test_panel_parse_line_colors_and_bars():
+    from wowclaude import panel_window as p
+    assert p.parse_line("plain") == ("text", [("plain", None)])
+    kind, parts = p.parse_line("a |cff00ff00green|r b")
+    assert kind == "text" and ("green", "00ff00") in parts and parts[0] == ("a ", None) and parts[-1] == (" b", None)
+    assert p.parse_line("[bar 0.6 FF0000] Mana") == ("bar", (0.6, "ff0000", "Mana"))
+    assert p.parse_line("[bar 5 00ff00] x")[1][0] == 1.0

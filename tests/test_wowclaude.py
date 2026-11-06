@@ -850,8 +850,23 @@ def test_uninstall_removes_the_addon_and_its_entries(tmp_path):
     assert lst.read_text(encoding="utf-8").splitlines() == ["Other: enabled"]
 
 
+def test_deliver_sends_overlay_to_the_panel_window_and_falls_back_to_text(monkeypatch):
+    from wowclaude import bridge, panel_window
+    posted, shown = [], []
+    monkeypatch.setattr(bridge, "_post", lambda kind, text: posted.append((kind, text)))
+    monkeypatch.setattr(claude, "persona", lambda: ("WoW AI", ""))
+    monkeypatch.setattr(panel_window, "show", lambda title, lines: shown.append((title, lines)))
+    state = decode.GameState() if hasattr(decode, "GameState") else None
+    bridge.deliver(state, "Hi\n[[overlay Titel]]\nZeile\n[[/overlay]]")
+    assert shown == [("Titel", ["Zeile"])] and "Zeile" not in posted[-1][1]
+    monkeypatch.setattr(panel_window, "show", lambda *a: (_ for _ in ()).throw(OSError("no window")))
+    bridge.deliver(state, "Hi\n[[overlay Titel]]\nZeile\n[[/overlay]]")
+    assert "Zeile" in posted[-1][1]  # the lines are part of the answer when the panel cannot open
+
+
 def test_deliver_posts_the_answer_with_macro_hint_and_overlay_lines(monkeypatch):
-    from wowclaude import bridge
+    from wowclaude import bridge, panel_window
+    monkeypatch.setattr(panel_window, "show", lambda *a: (_ for _ in ()).throw(OSError("test: no window")))
     posted = []
     monkeypatch.setattr(bridge, "_post", lambda kind, text: posted.append((kind, text)))
     monkeypatch.setattr(claude, "persona", lambda: ("WoW AI", ""))

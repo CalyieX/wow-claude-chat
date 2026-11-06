@@ -170,9 +170,14 @@ def deliver(state: decode.GameState, reply: str) -> None:
         except Exception as exc:  # noqa: BLE001 - the text answer must still arrive
             print(f"overlay failed: {exc}", flush=True)
     text = reply or "..."
-    if overlay:  # the old pop-up window is gone: its lines are part of the answer now
-        lines = [_CODES.sub("", str(x)) for x in overlay.get("lines", []) if not str(x).startswith("[img")]
-        text += "\n" + _CODES.sub("", str(overlay.get("title", ""))) + "\n" + "\n".join(lines)
+    if overlay:  # lists, builds, plans: the panel window over the game (no browser); if it cannot open, the lines join the answer
+        try:
+            from . import panel_window
+            panel_window.show(str(overlay.get("title", "")), overlay.get("lines", []))
+        except Exception as exc:  # noqa: BLE001
+            print(f"panel failed: {exc}", flush=True)
+            lines = [_CODES.sub("", str(x)) for x in overlay.get("lines", []) if not str(x).startswith("[img")]
+            text += "\n" + _CODES.sub("", str(overlay.get("title", ""))) + "\n" + "\n".join(lines)
     for m in macros:
         cmd = f"/kkm {m['name']}~{m['body']}" + ("~char" if m.get("char") else "")
         if vinput.available() and vinput.run("keys {Enter}" + cmd + "{Enter}"):

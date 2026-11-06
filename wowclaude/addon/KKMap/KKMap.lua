@@ -594,7 +594,7 @@ tipFrame:Hide()
 local TOOLS = {
   "TOOLS",
   "Macro maker  -  the AI writes a real macro onto your cursor",
-  "Overlay windows  -  lists, builds and plans in a window",
+  "Overlay window  -  lists, builds and plans in its own small window",
   "Browser over the game  -  video, guide, wiki (ghost mode =",
   "    see-through and click-through; minimize = WAC button)",
   "Mouse and keyboard  -  the AI clicks and types for you",
@@ -612,7 +612,7 @@ local TOOLS = {
   "Character aware  -  notices when you switch characters",
   "Leveling macros, class builds, quest and trainer help",
   "Video guides  -  finds and opens them in the browser window",
-  "Your own harness  -  edit what the AI is told: AI setup page",
+  "Your own harness  -  edit what the AI is told: menu Harness",
 }
 local toolsFrame = CreateFrame("Frame", "KKToolsFrame", UIParent, "BackdropTemplate")
 toolsFrame:SetSize(430, 44 + #TOOLS * 16)
