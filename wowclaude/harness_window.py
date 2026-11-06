@@ -102,6 +102,7 @@ def run(tab: str = "wow") -> None:
         cfg = config.load()
         cfg["backend"] = pick_var.get()
         config.save(cfg)
+        refresh()
         msg.config(text=f"AI: {pick_var.get()}. Used from the next question on.", fg="#7fd17f")
 
     def choose_dir() -> None:
@@ -134,8 +135,12 @@ def run(tab: str = "wow") -> None:
                            activeforeground=gold).pack(side="top", fill="x")
         info.config(state="normal")
         info.delete("1.0", "end")
-        body = ("\n\n".join(harness_import.overview(s) for s in found) if found else
+        active = pick_var.get()
+        ordered = sorted(found, key=lambda s: 0 if s.kind == active else 1)
+        body = ("\n\n".join(harness_import.overview(s) + ("   <== answers now" if s.kind == active else "") for s in ordered) if found else
                 "Nothing found yet. Click Search (all AI programs on this computer) or Pick folder.")
+        if active not in {s.kind for s in found}:
+            body = f"Active AI: {active} (no folder with instructions, memory or skills - it answers as the bare model).\n\n" + body
         info.insert("1.0", head + body)
         info.config(state="disabled")
         rebuild_row()
