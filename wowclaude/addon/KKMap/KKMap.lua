@@ -479,10 +479,11 @@ cmdFrame:Hide()
 
 -- Tips (button "Tips" in the menu)
 local TIPS = {
-  "The AI Bridge (text on top, coloured pixels below) and the three",
-  "colour dots at the AI tab must NEVER be covered: no window,",
-  "browser, map or tooltip on top. Otherwise your question does",
-  "not arrive and the answer disappears.",
+  "NEVER cover these: the AI Bridge (text on top, coloured pixels",
+  "below) and the 3 coloured pixels in the corners of the chat",
+  "window (AI tab). No window, browser, map or tooltip on top of",
+  "them. Otherwise your question does not arrive and the answer",
+  "disappears.",
   " ",
   "Move the AI Bridge: drag its text bar (above the pixels) with",
   "the left mouse button. Back to the corner: /strip reset.",
@@ -511,12 +512,48 @@ end
 local tc = CreateFrame("Button", nil, tipFrame, "UIPanelCloseButton"); tc:SetPoint("TOPRIGHT", -4, -4)
 tipFrame:Hide()
 
+-- Tools and skills the AI has (button "Tools" in the menu)
+local TOOLS = {
+  "TOOLS",
+  "Macro maker  -  the AI writes a real macro onto your cursor",
+  "Overlay windows  -  lists, builds and plans in a window",
+  "Browser over the game  -  video, guide, wiki (ghost mode =",
+  "    see-through and click-through; minimize = WAC button)",
+  "Mouse and keyboard  -  the AI clicks and types for you",
+  "    (switch on: AI setup page, Mouse and keyboard)",
+  "Web research  -  looks facts up before it answers",
+  "Login helper  -  /login renews an expired AI login",
+  " ",
+  "SKILLS",
+  "Game version aware  -  Forever is not Classic; it knows which",
+  "    client you play (Classic Era, TBC, Wrath, Cata, MoP, Retail)",
+  "Character aware  -  notices when you switch characters",
+  "Leveling macros, class builds, quest and trainer help",
+  "Video guides  -  finds and opens them in the browser window",
+  "Your own harness  -  edit what the AI is told: AI setup page",
+}
+local toolsFrame = CreateFrame("Frame", "KKToolsFrame", UIParent, "BackdropTemplate")
+toolsFrame:SetSize(430, 44 + #TOOLS * 16)
+toolsFrame:SetPoint("CENTER", UIParent, "CENTER", 0, 60)
+toolsFrame:SetFrameStrata("DIALOG"); toolsFrame:SetMovable(true); toolsFrame:EnableMouse(true)
+toolsFrame:RegisterForDrag("LeftButton"); toolsFrame:SetScript("OnDragStart", toolsFrame.StartMoving)
+toolsFrame:SetScript("OnDragStop", toolsFrame.StopMovingOrSizing); toolsFrame:SetClampedToScreen(true)
+toolsFrame:SetBackdrop({ bgFile = "Interface\\DialogFrame\\UI-DialogBox-Background", edgeFile = "Interface\\DialogFrame\\UI-DialogBox-Border",
+  tile = true, tileSize = 32, edgeSize = 24, insets = { left = 6, right = 6, top = 6, bottom = 6 } })
+local tlt = toolsFrame:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge"); tlt:SetPoint("TOPLEFT", 18, -14); tlt:SetText("Tools and skills")
+for i, line in ipairs(TOOLS) do
+  local fs = toolsFrame:CreateFontString(nil, "OVERLAY", (line == "TOOLS" or line == "SKILLS") and "GameFontNormal" or "GameFontHighlightSmall")
+  fs:SetPoint("TOPLEFT", 20, -36 - (i - 1) * 16); fs:SetJustifyH("LEFT"); fs:SetText(line)
+end
+local tlc = CreateFrame("Button", nil, toolsFrame, "UIPanelCloseButton"); tlc:SetPoint("TOPRIGHT", -4, -4)
+toolsFrame:Hide()
+
 -- Small addon menu (/wac)
 local menu
 local function buildMenu()
   if menu then return menu end
   local f = CreateFrame("Frame", "KKMenuFrame", UIParent, "BackdropTemplate")
-  f:SetSize(220, 272)
+  f:SetSize(220, 304)
   f:SetPoint("CENTER", UIParent, "CENTER", -260, 60)
   f:SetFrameStrata("DIALOG")
   f:SetMovable(true); f:EnableMouse(true); f:RegisterForDrag("LeftButton")
@@ -557,6 +594,7 @@ local function buildMenu()
     stripBtn:SetText(stripLabel())
     if applyVisible then applyVisible() end
   end)
+  button("Tools", function() if KKToolsFrame:IsShown() then KKToolsFrame:Hide() else KKToolsFrame:Show() end end)
   button("Tips", function() if KKTipFrame:IsShown() then KKTipFrame:Hide() else KKTipFrame:Show() end end)
   button("Commands", function() if KKCmdFrame:IsShown() then KKCmdFrame:Hide() else KKCmdFrame:Show() end end)
   f:Hide()
