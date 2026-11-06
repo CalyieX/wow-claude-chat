@@ -165,7 +165,7 @@ def persona_name_in_file() -> bool:
         lines = config.PERSONA.read_text(encoding="utf-8").splitlines()
     except OSError:
         return False
-    return bool(lines and clean_name(lines[0]))
+    return bool(lines and clean_name(lines[0]) and clean_name(lines[0]) != DEFAULT_NAME)
 
 
 def default_name() -> str:
@@ -186,7 +186,11 @@ def persona() -> tuple[str, str]:
         if name:
             extra = "\n".join(lines).strip()
         elif lines and clean_name(lines[0]):
-            name, extra = clean_name(lines[0]), "\n".join(lines[1:]).strip()
+            first = clean_name(lines[0])
+            if first == DEFAULT_NAME:  # the default name kept in the file is no chosen name: "Own AI" must still show while own is on
+                extra = "\n".join(lines[1:]).strip()
+            else:
+                name, extra = first, "\n".join(lines[1:]).strip()
     except OSError:
         pass
     name = name or default_name()

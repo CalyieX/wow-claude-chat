@@ -564,3 +564,12 @@ def test_setup_window_deep_search_and_command(monkeypatch):
     monkeypatch.setattr("subprocess.Popen", lambda cmd, **kw: launched.append(cmd))
     assert "own window" in bridge.handle_command("!setup")
     assert launched and launched[0][-1] == "setup-window"
+
+
+def test_default_name_in_persona_file_is_not_a_chosen_name(monkeypatch, tmp_path):
+    from wowclaude import claude, config
+    monkeypatch.setattr(config, "PERSONA", tmp_path / "persona.txt")
+    monkeypatch.setattr(config, "load", lambda: {"own_harness_wow": True})
+    (tmp_path / "persona.txt").write_text(claude.DEFAULT_NAME + "\nAntworte kurz.\n", encoding="utf-8")
+    assert claude.persona()[0] == "Own AI"
+    assert not claude.persona_name_in_file()

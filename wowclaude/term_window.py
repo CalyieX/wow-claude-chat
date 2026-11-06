@@ -105,6 +105,8 @@ def run() -> None:
             return
         try:
             BEAT.write_text(str(time.time()))
+            if int(time.time()) % 3 == 0:  # the title follows the harness switch of this window (WoW AI / Own AI)
+                win.set_title(("Own AI" if config.load().get("own_harness_win") else "WoW AI") + " - CLI")
             cols = max(20, min(200, (text.winfo_width() - 4) // cw))
             rows = max(5, min(60, text.winfo_height() // ch))
             if state["size"] != (cols, rows) or int(time.time()) % 2 == 0:

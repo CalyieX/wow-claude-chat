@@ -111,14 +111,20 @@ def run() -> None:
     def done(got: list[dict]) -> None:
         found[:] = got
         draw_found()
+        draw_others()
         msg.config(text=f"Search done: {len(got)} AI(s) found.", fg="#7fd17f")
 
     lab(outer, "Other AIs (you need an account or key there):").pack(fill="x")
     others = tk.Frame(outer, bg=bg)
     others.pack(fill="x", pady=(0, 6))
-    for i, b in enumerate(x for x in st["backends"] if x != "command"):
-        tk.Button(others, text=b, command=lambda b=b: (backend_var.set(b), key_e.focus_set()), bg="#2a2418", fg=gold,
-                  activebackground="#5c1a10", activeforeground=gold, relief="solid", bd=1, padx=6).grid(row=i // 6, column=i % 6, padx=2, pady=2, sticky="w")
+    def draw_others() -> None:  # the providers that were not found on this PC (they need an account or key)
+        for w in others.winfo_children():
+            w.destroy()
+        have = {f["backend"] for f in found}
+        for i, b in enumerate(x for x in st["backends"] if x != "command" and x not in have):
+            tk.Button(others, text=b, command=lambda b=b: (backend_var.set(b), key_e.focus_set()), bg="#2a2418", fg=gold,
+                      activebackground="#5c1a10", activeforeground=gold, relief="solid", bd=1, padx=6).grid(row=i // 6, column=i % 6, padx=2, pady=2, sticky="w")
+    draw_others()
 
     grid = tk.Frame(outer, bg=bg)
     grid.pack(fill="x")

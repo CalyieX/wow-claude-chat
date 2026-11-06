@@ -119,6 +119,8 @@ def _state() -> dict:
             rest = "\n".join(lines)
         else:  # old style: the first line of persona.txt was the name
             name, rest = claude.clean_name(lines[0] if lines else ""), "\n".join(lines[1:])
+            if name == claude.DEFAULT_NAME:
+                name = ""
     except OSError:
         pass
     return {"backends": ["claude", "codex", "command", "openai-compatible", *backends.PRESETS],

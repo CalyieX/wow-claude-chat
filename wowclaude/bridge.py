@@ -114,8 +114,9 @@ def handle_command(text: str) -> str | None:
         from . import panel_window
         panel_window.open_empty()
         return "Overlay window opened."  # (a None answer would show as unknown command)
-    if cmd == "!term":
-        return "The CLI window is for CLI mode: /aimode cli"
+    if cmd == "!term":  # the window has its own tool session: it works in every chat mode
+        from . import cli_mode
+        return cli_mode.open_window()
     if cmd == "!scroll":
         return "Scrolling works in CLI mode: /aimode cli"
     if cmd == "!k":
