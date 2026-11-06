@@ -637,6 +637,27 @@ end
 local tlc = CreateFrame("Button", nil, toolsFrame, "UIPanelCloseButton"); tlc:SetPoint("TOPRIGHT", -4, -4)
 toolsFrame:Hide()
 
+-- Round red help mark with a yellow question mark (WoW style); the tooltip explains the entry next to it
+local function helpMark(btn, text)
+  local h = CreateFrame("Button", nil, btn:GetParent())
+  h:SetSize(20, 20); h:SetPoint("LEFT", btn, "RIGHT", 4, 0)
+  local ring = h:CreateTexture(nil, "BACKGROUND"); ring:SetPoint("TOPLEFT", 0, 0); ring:SetPoint("BOTTOMRIGHT", 0, 0); ring:SetTexture("Interface\\Buttons\\WHITE8X8"); ring:SetVertexColor(0.45, 0.36, 0.05, 1)
+  local disc = h:CreateTexture(nil, "BORDER"); disc:SetPoint("TOPLEFT", 1.5, -1.5); disc:SetPoint("BOTTOMRIGHT", -1.5, 1.5)
+  disc:SetTexture("Interface\\Buttons\\WHITE8X8"); disc:SetVertexColor(0.32, 0.008, 0, 1)
+  pcall(function()  -- round shape; clients without mask textures keep a square mark
+    local mask = h:CreateMaskTexture(); mask:SetAllPoints()
+    mask:SetTexture("Interface\\CharacterFrame\\TempPortraitAlphaMask", "CLAMPTOBLACKADDITIVE", "CLAMPTOBLACKADDITIVE")
+    for _, tx in ipairs({ ring, disc }) do tx:AddMaskTexture(mask) end
+  end)
+  local q = h:CreateFontString(nil, "OVERLAY", "GameFontNormal"); q:SetPoint("CENTER", 0, 0); q:SetText("?")
+  h:SetScript("OnEnter", function(self)
+    disc:SetTexture("Interface\\Buttons\\WHITE8X8"); disc:SetVertexColor(0.5, 0.03, 0, 1)
+    GameTooltip:SetOwner(self, "ANCHOR_RIGHT"); GameTooltip:SetText(text, 1, 0.82, 0, 1, true); GameTooltip:Show()
+  end)
+  h:SetScript("OnLeave", function() disc:SetTexture("Interface\\Buttons\\WHITE8X8"); disc:SetVertexColor(0.32, 0.008, 0, 1); GameTooltip:Hide() end)
+  return h
+end
+
 -- Harness submenu: WoW AI harness or the AI's own setup, separately for the game chat and the CLI
 local harnessFrame = CreateFrame("Frame", "KKHarnessFrame", UIParent, "BackdropTemplate")
 harnessFrame:SetSize(300, 268); harnessFrame:SetPoint("CENTER", UIParent, "CENTER", 0, 60)
@@ -653,11 +674,15 @@ hfnA:SetText("|cffffd100WoW AI|r = the Warcraft harness (game version, macros, t
 local hfnB = harnessFrame:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall"); hfnB:SetPoint("TOPLEFT", 20, -212)
 hfnB:SetWidth(260); hfnB:SetJustifyH("LEFT")
 hfnB:SetText("|cffffd100Own|r = your AI's own memory files, settings and tools. In the CLI: work on your own projects.")
-local hWow = CreateFrame("Button", nil, harnessFrame, "UIPanelButtonTemplate"); hWow:SetSize(260, 26); hWow:SetPoint("TOP", 0, -42)
-local hCli = CreateFrame("Button", nil, harnessFrame, "UIPanelButtonTemplate"); hCli:SetSize(260, 26); hCli:SetPoint("TOP", 0, -74)
-local hWin = CreateFrame("Button", nil, harnessFrame, "UIPanelButtonTemplate"); hWin:SetSize(260, 26); hWin:SetPoint("TOP", 0, -106)
-local hEdit = CreateFrame("Button", nil, harnessFrame, "UIPanelButtonTemplate"); hEdit:SetSize(260, 26); hEdit:SetPoint("TOP", 0, -138)
+local hWow = CreateFrame("Button", nil, harnessFrame, "UIPanelButtonTemplate"); hWow:SetSize(232, 26); hWow:SetPoint("TOPLEFT", 22, -42)
+local hCli = CreateFrame("Button", nil, harnessFrame, "UIPanelButtonTemplate"); hCli:SetSize(232, 26); hCli:SetPoint("TOPLEFT", 22, -74)
+local hWin = CreateFrame("Button", nil, harnessFrame, "UIPanelButtonTemplate"); hWin:SetSize(232, 26); hWin:SetPoint("TOPLEFT", 22, -106)
+local hEdit = CreateFrame("Button", nil, harnessFrame, "UIPanelButtonTemplate"); hEdit:SetSize(232, 26); hEdit:SetPoint("TOPLEFT", 22, -138)
 hEdit:SetText("Edit WoW harness"); hEdit:SetScript("OnClick", function() sendToClaude("!harness edit") end)
+helpMark(hWow, "Harness for the normal WoW chat: the WoW AI harness (game knowledge, macros, tools) or your AI's own setup. Applies to the next question.")
+helpMark(hCli, "Harness for the CLI chat (the tab in the game chat, Chat mode CLI). Applies when CLI mode starts again.")
+helpMark(hWin, "Harness for the CLI window, which has its own session. Choose Own to work on your own projects there. Applies when the window opens again.")
+helpMark(hEdit, "Opens the text the WoW AI is told (name, rules, tools) in an editor window.")
 hWow:SetScript("OnClick", function() SlashCmdList["KKHARNESS"]("wow") end)
 hCli:SetScript("OnClick", function() SlashCmdList["KKHARNESS"]("cli") end)
 hWin:SetScript("OnClick", function() SlashCmdList["KKHARNESS"]("win") end)
@@ -697,20 +722,21 @@ local function buildMenu()
   local close = CreateFrame("Button", nil, f, "UIPanelCloseButton")
   close:SetPoint("TOPRIGHT", -4, -4)
   local y = -48
-  local function button(text, onClick)
+  local function button(text, onClick, help)
     local bt = CreateFrame("Button", nil, f, "UIPanelButtonTemplate")
-    bt:SetSize(184, 26)
-    bt:SetPoint("TOP", f, "TOP", 0, y)
+    bt:SetSize(160, 26)
+    bt:SetPoint("TOPLEFT", f, "TOPLEFT", 18, y)
     bt:SetText(text)
     bt:SetScript("OnClick", onClick)
+    if help then helpMark(bt, help) end
     y = y - 32
     return bt
   end
-  button("Connect AI", function() sendToClaude("!setup") end)
-  button("Browser", function() sendToClaude("!browser") end)
-  button("CLI window", function() sendToClaude("!term") end)
-  button("AI name", function() StaticPopup_Show("KKAINAME") end)
-  button("Your name", function() StaticPopup_Show("KKPLAYERNAME") end)
+  button("Connect AI", function() sendToClaude("!setup") end, "Opens the setup page: choose your AI (Claude, Codex, ChatGPT ...), sign in, pick the model and the persona.")
+  button("Browser", function() sendToClaude("!browser") end, "Opens the game browser window (web pages, YouTube ...) over the game. Yours to use; the AI may use it too.")
+  button("CLI window", function() sendToClaude("!term") end, "Opens a real terminal window with its own AI session: arrow keys, scrolling, copy and paste. Its harness is set under Harness.")
+  button("AI name", function() StaticPopup_Show("KKAINAME") end, "The name your AI uses in the chat.")
+  button("Your name", function() StaticPopup_Show("KKPLAYERNAME") end, "The name the AI calls you.")
   local stripBtn
   local function stripLabel() return "AI Bridge: " .. (KKMapDB.always and "always on" or "auto") end
   stripBtn = button(stripLabel(), function()
@@ -718,10 +744,10 @@ local function buildMenu()
     KKMapDB.off = false
     stripBtn:SetText(stripLabel())
     if applyVisible then applyVisible() end
-  end)
+  end, "The connection strip the AI program reads the game through. Auto: it shows only when needed. Always on: always visible.")
   local YEL, GREY = "|cffffd100", "|cff808080"
-  local modeBtn = button("", function() setCliFlag(""); sendToClaude("!aimode") end)
-  local accessBtn = button("", function() setAccessFlag(""); sendToClaude("!access") end)
+  local modeBtn = button("", function() setCliFlag(""); sendToClaude("!aimode") end, "WoW: the normal game chat, short answers with macros, overlays and memos. CLI: your AI's original command line tool in the chat tab.\n\nNote: chat and CLI are two different sessions with separate memory. The conversation does not carry over when you switch.")
+  local accessBtn = button("", function() setAccessFlag(""); sendToClaude("!access") end, "ON: the AI may use files and programs on this computer. OFF: it can only search the web.")
   refreshLabels = function()
     local cli, acc = stateOf("cli"), stateOf("access")
     modeBtn:SetText("Chat mode:  " .. (cli and GREY or YEL) .. "WoW|r / " .. (cli and YEL or GREY) .. "CLI|r")
@@ -729,8 +755,8 @@ local function buildMenu()
     harnessLabels()
   end
   refreshLabels()
-  button("Harness", function() SlashCmdList["KKHARNESS"]("") end)
-  button("Tools", function() if KKToolsFrame:IsShown() then KKToolsFrame:Hide() else KKToolsFrame:Show() end end)
+  button("Harness", function() SlashCmdList["KKHARNESS"]("") end, "Per WoW chat, CLI chat and CLI window: use the WoW AI harness or your AI's own setup. The WoW harness text can be edited here.")
+  button("Tools", function() if KKToolsFrame:IsShown() then KKToolsFrame:Hide() else KKToolsFrame:Show() end end, "What the AI can do for you in the game: macros, overlay and show windows, memos, web search ...")
   button("Tips", function() if KKTipFrame:IsShown() then KKTipFrame:Hide() else KKTipFrame:Show() end end)
   button("Commands", function() if KKCmdFrame:IsShown() then KKCmdFrame:Hide() else KKCmdFrame:Show() end end)
   f:Hide()
