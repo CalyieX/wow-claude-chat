@@ -557,6 +557,7 @@ def test_setup_window_deep_search_and_command(monkeypatch):
     from wowclaude import backends, setup_window, bridge
     monkeypatch.setattr(backends, "detect", lambda: [])
     monkeypatch.setattr(backends, "_port_open", lambda p, t=0.3: p == 8080)
+    monkeypatch.setattr(setup_window, "_speaks_openai", lambda p: True)
     monkeypatch.setattr("shutil.which", lambda n: None)
     found = setup_window.deep_search()
     assert any(f["backend"] == "openai-compatible" and f["base_url"].endswith(":8080/v1") for f in found)

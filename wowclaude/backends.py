@@ -64,7 +64,7 @@ def _ask_api(system: str, history: list[tuple[str, str]], prompt: str, model: st
         messages += [{"role": "user", "content": q}, {"role": "assistant", "content": a}]
     messages.append({"role": "user", "content": prompt})
     body = json.dumps({"model": model or default_model, "messages": messages}).encode("utf-8")
-    headers = {"Content-Type": "application/json", "User-Agent": "wowclaude/1.0 (+https://github.com/CalyieX/wow-claude-chat)"}  # some providers (Cloudflare, e.g. Cerebras) refuse the default Python agent with 403/1010
+    headers = {"Content-Type": "application/json", "User-Agent": "wowclaude/1.0"}  # some providers (Cloudflare, e.g. Cerebras) refuse the default Python agent with 403/1010
     if key:
         headers["Authorization"] = "Bearer " + key
     req = urllib.request.Request(base + "/chat/completions", data=body, headers=headers)
