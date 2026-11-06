@@ -29,11 +29,13 @@ button{margin-top:16px;background:#5c1a10;color:#ffd100;border:1px solid #c9a227
 button:hover{background:#7d2417}
 #msg{margin-top:12px;min-height:20px}.ok{color:#7fd17f}.bad{color:#ff8a80}
 small{color:#8c7b4d;display:block;margin-top:2px}
+button.small{margin:3px 4px 0 0;padding:4px 10px;font-size:12px}
 .card{display:block;width:100%;text-align:left;margin-top:8px}details{margin-top:14px}summary{cursor:pointer;color:#c9a227}
 </style></head><body>
 <h1>AI setup</h1>
 <div id="found"></div>
-<label>Name the AI writes with (the tab itself is always called WoW AI)</label><input id="ainame" maxlength="20" placeholder="Claude">
+<label>Other AIs (you need an account or key there)</label><div id="others"></div>
+<label>Name the AI writes with (the tab itself is always called WoW AI)</label><input id="ainame" maxlength="20" placeholder="(automatic: ChatGPT, Claude ...)">
 <small>Applies after /reload (or the next game start).</small>
 <details id="adv"><summary>Choose by hand / more options</summary>
 <label>Backend</label><select id="backend"></select>
@@ -41,7 +43,7 @@ small{color:#8c7b4d;display:block;margin-top:2px}
 <div id="modelrow"><label>Model (empty = default)</label><input id="model"></div>
 <div id="baserow"><label>API address (OpenAI-compatible)</label><input id="base_url"></div>
 <div id="keyrow"><label>API key <span id="keystate"></span></label><input id="api_key" type="password" autocomplete="off"
- placeholder="leave empty to keep the saved key"><small>Stored only in ~/.wowclaude/config.json on this computer.</small></div>
+ placeholder="leave empty to keep the saved key"><small>Stored only in ~/.wowclaude/config.json on this computer.</small><small id="keylink"></small></div>
 <div id="cmdrow"><label>Command (reads the prompt on stdin)</label><input id="command" placeholder="ollama run llama3.1"></div>
 <label>Extra instructions (optional, e.g. how it should talk)</label>
 <textarea id="persona"></textarea>
@@ -56,10 +58,14 @@ const $=id=>document.getElementById(id);
 const HINTS={claude:"Uses the Claude Code you are logged into (no API key).",codex:"Uses the Codex CLI you are logged into (ChatGPT login).",
  command:"Any local command, e.g. ollama run llama3.1.","openai-compatible":"Any OpenAI-style API: set address, key and model."};
 async function api(path,body){const r=await fetch(path+"?t="+T,{method:body?"POST":"GET",body:body?JSON.stringify(body):undefined});return r.json()}
+const KEYS={openrouter:"https://openrouter.ai/keys",openai:"https://platform.openai.com/api-keys",anthropic:"https://console.anthropic.com/settings/keys",
+ gemini:"https://aistudio.google.com/apikey",groq:"https://console.groq.com/keys",deepseek:"https://platform.deepseek.com/api_keys",
+ mistral:"https://console.mistral.ai/api-keys",xai:"https://console.x.ai",together:"https://api.together.ai/settings/api-keys",
+ perplexity:"https://www.perplexity.ai/settings/api",cerebras:"https://cloud.cerebras.ai"};
 function show(){const b=$("backend").value,isApi=!["claude","codex","command"].includes(b);
  $("hint").textContent=HINTS[b]||"OpenAI-compatible API ("+b+"). Local servers (ollama, lmstudio) need no key.";
  $("modelrow").style.display=(b==="claude"||b==="command")?"none":"block";$("baserow").style.display=b==="openai-compatible"?"block":"none";
- $("keyrow").style.display=isApi?"block":"none";$("cmdrow").style.display=b==="command"?"block":"none"}
+ $("keyrow").style.display=isApi?"block":"none";$("keylink").innerHTML=KEYS[b]?"No key yet? Create one here (copy the address into your browser): <b>"+KEYS[b]+"</b>":"";$("cmdrow").style.display=b==="command"?"block":"none"}
 (async()=>{const s=await api("/state");const sel=$("backend");
  for(const b of s.backends){const o=document.createElement("option");o.value=o.textContent=b;sel.appendChild(o)}
  sel.value=s.backend;
@@ -67,7 +73,10 @@ function show(){const b=$("backend").value,isApi=!["claude","codex","command"].i
  if(s.found.length){F.innerHTML="<label>Found on this PC - click to use</label>";
   s.found.forEach((f,i)=>{const b=document.createElement("button");b.className="card";b.textContent=(i?"":"★ ")+f.label;
    b.onclick=()=>{sel.value=f.backend;show();$("save").click()};F.appendChild(b)})}
- else{F.innerHTML="<label>Nothing found on this PC yet</label><small>Easiest: install Claude Code and log in, or install Ollama. Or open the options below and enter an API key.</small>";$("adv").open=true}$("model").value=s.model||"";$("base_url").value=s.base_url||"";$("command").value=s.command||"";
+ else{F.innerHTML="<label>Nothing found on this PC yet</label><small>Easiest: install Claude Code and log in, or install Ollama. Or open the options below and enter an API key.</small>";$("adv").open=true}const O=$("others"),have=s.found.map(f=>f.backend);
+ s.backends.filter(b=>!have.includes(b)&&b!=="command").forEach(b=>{const x=document.createElement("button");x.className="small";x.textContent=b;
+  x.onclick=()=>{sel.value=b;show();$("adv").open=true;$("api_key").focus()};O.appendChild(x)});
+ $("model").value=s.model||"";$("base_url").value=s.base_url||"";$("command").value=s.command||"";
  $("aiprompt").value=s.prompt;$("copy").onclick=()=>{$("aiprompt").select();document.execCommand("copy")};$("persona").value=s.persona||"";$("ainame").value=s.name||"";$("keystate").textContent=s.has_key?"(saved)":"";show();sel.onchange=show;
  recheck()})();
 async function recheck(){$("msg").textContent="Checking the AI ...";$("msg").className="";
@@ -139,7 +148,7 @@ def apply(data: dict) -> dict:
         from . import installer
         root = config.client_root()
         if root:
-            installer.write_name(root, name)
+            installer.write_name(root, name or backends.label())
     except OSError:
         pass
     persona = str(data.get("persona", "")).strip("\n")

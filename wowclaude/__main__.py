@@ -29,9 +29,9 @@ def cmd_setup(args) -> int:
     print(("OK: " if ok else "WARNING: ") + msg)
     print("\nNext steps:\n"
           "  1. Close the game completely and start it again (new addons need a full restart).\n"
-          "  2. In the game: a chat tab called 'Claude' appears. Use it with the game window in windowed or borderless mode.\n"
+          "  2. In the game: a chat tab called 'WoW AI' appears. Use it with the game window in windowed or borderless mode.\n"
           "  3. Start the bridge:  wowclaude run\n"
-          "  4. Click the Claude tab and write a message.\n"
+          "  4. Click the WoW AI tab and write a message.\n"
           "  In the game: /wac opens the menu (AI Setup, browser window).")
     return 0
 
@@ -44,7 +44,7 @@ def cmd_go(args) -> int:
     addon = root / "Interface" / "AddOns" / "KKMap" / "KKMap.lua"
     src = installer.ADDON_SRC / "KKMap.lua"
     if not addon.exists() or addon.read_bytes() != src.read_bytes():
-        installer.install(root, cfg.get("name", ""))
+        installer.install(root, cfg.get("name", "") or backends.label())
         print("Addon installed/updated. Restart the game completely (a new addon is only loaded at game start).", flush=True)
     cfg = config.load()
     cfg["wow_root"] = str(root)
@@ -134,7 +134,7 @@ def cmd_doctor(args) -> int:
         img = screen.grab_strip_area()
         st = decode.decode(img) if img is not None else None
         if st is None:
-            print("strip         : not visible. It only shows while you type in the Claude tab. In the game type "
+            print("strip         : not visible. It only shows while you type in the WoW AI tab. In the game type "
                   "`/strip always`, run this again, and if it is still not visible check that the game is in windowed "
                   "or borderless mode and the addon is enabled.")
         else:

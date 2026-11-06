@@ -1,1 +1,1 @@
-KKAiName = "Claude"
+KKAiName = "AI"
