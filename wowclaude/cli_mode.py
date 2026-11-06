@@ -334,13 +334,16 @@ _cli = CliMode()
 
 
 def open_window() -> str:
-    """Open the CLI window: a page in the game's overlay window (always on top, scroll, select, copy, paste, type)."""
-    from . import overlay, setup_ui
-    url = setup_ui.start_background() + "&view=term"
-    problem = overlay.play(url, "760x460")
-    if problem:
-        return f"Could not open the window ({problem}). Open this address in any browser: {url}"
-    return "CLI window opened in the browser window. Click into it to type, copy and paste; click the game to play on."
+    """Open the real CLI window (scroll, select, copy, paste, type). No console window."""
+    import subprocess
+    import sys
+    from pathlib import Path
+    from . import term_window
+    if term_window.alive():
+        return "The CLI window is already open."
+    exe = Path(sys.executable).with_name("pythonw.exe")
+    subprocess.Popen([str(exe if exe.exists() else sys.executable), "-m", "wowclaude", "term"], creationflags=0x08000000)
+    return "CLI window opened. Click into it to type, copy and paste; click the game to play on."
 
 
 def active() -> bool:
