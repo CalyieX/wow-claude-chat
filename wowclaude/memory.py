@@ -1,6 +1,6 @@
-"""A small memory about the player: short facts the AI saves itself, one file per character plus one for all characters.
+"""WoW AI memos: a small memory about the player: short facts the AI saves itself, one file per character plus one for all characters.
 
-Files live in ~/.wowclaude/memory/ (plain text, one fact per line, you can read and edit them). The AI writes with
+Files live in ~/.wowclaude/memos/ (plain text, one fact per line, you can read and edit them). The AI writes with
 [[remember a fact]] (this character) or [[remember all: a fact]] (every character) and removes with [[forget text]].
 The saved facts go in front of every question. Nothing from the player's own Claude files is used here.
 """
@@ -10,7 +10,7 @@ import re
 
 from . import config
 
-DIR = config.HOME / "memory"
+DIR = config.HOME / "memos"
 MAX_LINES = 30
 MAX_LINE = 200
 ACTION_RE = re.compile(r"\[\[(remember|forget)(?: ([^\]\n]{1,300}))?\]\]")
@@ -80,7 +80,7 @@ def prompt_block(context: str) -> str:
             parts.append(f"{char}: " + "; ".join(mine))
     if not parts:
         return ""
-    return "[Memory about this player (saved earlier by you): " + " | ".join(parts) + "]\n"
+    return "[WoW AI memos about this player (saved earlier by you): " + " | ".join(parts) + "]\n"
 
 
 def extract(text: str) -> tuple[str, list[tuple[str, str]]]:
@@ -98,15 +98,15 @@ def apply(context: str, acts: list[tuple[str, str]]) -> list[str]:
             target, text = "general", text[4:].strip()
         if action == "remember":
             if remember(target, text):
-                notes.append("saved to memory")
+                notes.append("saved to WoW AI memos")
         elif forget(target, text):
-            notes.append("removed from memory")
+            notes.append("removed from WoW AI memos")
     return notes
 
 
 def show(context: str) -> str:
-    """For the player: what is saved (command /memory)."""
+    """For the player: what is saved (command /memos)."""
     char = character(context)
     lines = [f"All: {x}" for x in read("general")] + ([f"{char}: {x}" for x in read(char)] if char != "general" else [])
-    return "Memory: " + (" | ".join(lines) if lines else "nothing saved yet. Tell the AI to remember something.") + \
-        "  (/memory clear deletes it)"
+    return "WoW AI memos: " + (" | ".join(lines) if lines else "nothing saved yet. Tell the AI to remember something.") + \
+        "  (/memos clear deletes them)"

@@ -357,7 +357,7 @@ def test_memory_saves_forgets_and_never_ships(monkeypatch, tmp_path):
     reply, acts = memory.extract("Alles klar [[remember plays solo]] [[remember all: likes short answers]] [[remember my password is x]]")
     assert "[[" not in reply and len(acts) == 3
     notes = memory.apply(ctx, acts)
-    assert notes.count("saved to memory") == 2  # the password line is refused
+    assert notes.count("saved to WoW AI memos") == 2  # the password line is refused
     block = memory.prompt_block(ctx)
     assert "plays solo" in block and "likes short answers" in block and "password" not in block
     assert "plays solo" not in memory.prompt_block("Other | Level 5")  # per character
@@ -365,4 +365,4 @@ def test_memory_saves_forgets_and_never_ships(monkeypatch, tmp_path):
     assert "plays solo" not in memory.prompt_block(ctx)
     # nothing of the author's own memory is part of the program
     root = pathlib.Path(__file__).resolve().parent.parent
-    assert not list((root / "wowclaude").glob("**/memory/*.md")) and not (root / "memory").exists()
+    assert not list((root / "wowclaude").glob("**/memos/*.md")) and not (root / "memos").exists() and not (root / "memory").exists()

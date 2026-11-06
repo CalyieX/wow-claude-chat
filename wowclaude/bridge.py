@@ -44,11 +44,11 @@ def handle_command(text: str) -> str | None:
     """In-game slash commands that the addon sends as "!name args" (never forwarded to the AI)."""
     parts = text.strip().split(None, 1)
     cmd, arg = parts[0].lower(), (parts[1].strip() if len(parts) > 1 else "")
-    if cmd == "!memory":
+    if cmd in ("!memos", "!memory"):
         from . import memory
         if arg.lower() == "clear":
             memory.clear(memory.character(_last_context[0]))
-            return "Memory of this character deleted (the shared 'all characters' memory stays)."
+            return "WoW AI memos of this character deleted (the shared 'all characters' memos stay)."
         return memory.show(_last_context[0])
     if cmd == "!browser":
         from . import overlay
