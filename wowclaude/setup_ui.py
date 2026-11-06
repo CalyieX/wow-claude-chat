@@ -35,8 +35,6 @@ button.small{margin:3px 4px 0 0;padding:4px 10px;font-size:12px}
 <h1>AI setup</h1>
 <div id="found"></div>
 <label>Other AIs (you need an account or key there)</label><div id="others"></div>
-<label>Name the AI writes with (the tab itself is always called WoW AI)</label><input id="ainame" maxlength="20" placeholder="WoW AI">
-<small>Applies after /reload (or the next game start).</small>
 <details id="adv"><summary>Choose by hand / more options</summary>
 <label>Backend</label><select id="backend"></select>
 <small id="hint"></small>
@@ -48,6 +46,9 @@ button.small{margin:3px 4px 0 0;padding:4px 10px;font-size:12px}
 <label>Extra instructions (optional, e.g. how it should talk)</label>
 <textarea id="persona"></textarea>
 </details>
+<details><summary>Mouse and keyboard (tool for the AI)</summary>
+<small>Lets the AI click and type in the game window for you (open a window, press a button, fill a field) without using your own mouse. Combat actions stay protected by the game. Off by default.</small>
+<label><input type="checkbox" id="inputctl" style="width:auto"> Allow the AI to use mouse and keyboard in the game</label></details>
 <details><summary>Harness (what your AI is told)</summary>
 <small>This is the text your AI receives before every question: game version, research rule, macros, browser window ... Edit it as you like; the AI reads it fresh each time. "Reset" goes back to the built-in version that comes with the program.</small>
 <textarea id="harness" style="height:240px"></textarea>
@@ -81,15 +82,15 @@ function show(){const b=$("backend").value,isApi=!["claude","codex","command"].i
  s.backends.filter(b=>!have.includes(b)&&b!=="command").forEach(b=>{const x=document.createElement("button");x.className="small";x.textContent=b;
   x.onclick=()=>{sel.value=b;show();$("adv").open=true;$("api_key").focus()};O.appendChild(x)});
  $("model").value=s.model||"";$("base_url").value=s.base_url||"";$("command").value=s.command||"";
- $("harness").value=s.harness;$("hstate").textContent=s.harness_custom?"Using your edited harness.":"Using the built-in harness.";
+ $("inputctl").checked=!!s.input_control;$("harness").value=s.harness;$("hstate").textContent=s.harness_custom?"Using your edited harness.":"Using the built-in harness.";
  $("hreset").onclick=async()=>{const r=await api("/save",{backend:$("backend").value,harness_reset:true});$("msg").textContent=r.status;const s2=await api("/state");$("harness").value=s2.harness;$("hstate").textContent="Using the built-in harness."};
- $("aiprompt").value=s.prompt;$("copy").onclick=()=>{$("aiprompt").select();document.execCommand("copy")};$("persona").value=s.persona||"";$("ainame").value=s.name||"";$("keystate").textContent=s.has_key?"(saved)":"";show();sel.onchange=show;
+ $("aiprompt").value=s.prompt;$("copy").onclick=()=>{$("aiprompt").select();document.execCommand("copy")};$("persona").value=s.persona||"";$("keystate").textContent=s.has_key?"(saved)":"";show();sel.onchange=show;
  recheck()})();
 async function recheck(){$("msg").textContent="Checking the AI ...";$("msg").className="";
  try{const r=await api("/check");$("msg").textContent=r.status;$("msg").className=r.ok?"ok":"bad"}catch(e){$("msg").textContent="Check failed: "+e;$("msg").className="bad"}}
 $("save").onclick=async()=>{$("msg").textContent="Saving ...";$("msg").className="";
  const r=await api("/save",{backend:$("backend").value,model:$("model").value,base_url:$("base_url").value,
-  api_key:$("api_key").value,command:$("command").value,name:$("ainame").value,persona:$("persona").value,harness:$("harness").value});
+  api_key:$("api_key").value,command:$("command").value,persona:$("persona").value,harness:$("harness").value,input_control:$("inputctl").checked});
  $("msg").textContent=r.status;$("msg").className=r.ok?"ok":"bad";if(r.has_key)$("keystate").textContent="(saved)";$("api_key").value="";await recheck()};
 </script></body></html>"""
 
@@ -123,7 +124,8 @@ def _state() -> dict:
             "backend": backends.name(), "model": cfg.get("model", ""), "base_url": cfg.get("base_url", ""),
             "command": cfg.get("command", ""), "has_key": bool(cfg.get("api_key")),
             "name": name, "persona": rest.strip("\n"), "found": backends.detect(), "prompt": ai_prompt(),
-            "harness": claude.custom_harness() or claude.builtin_harness(), "harness_custom": claude.custom_harness() is not None}
+            "harness": claude.custom_harness() or claude.builtin_harness(), "harness_custom": claude.custom_harness() is not None,
+            "input_control": bool(cfg.get("input_control"))}
 
 
 def _check() -> dict:
@@ -145,11 +147,18 @@ def apply(data: dict) -> dict:
             cfg[k] = v
         else:
             cfg.pop(k, None)
-    name = claude.clean_name(data.get("name"))
-    if name:
-        cfg["name"] = name
-    else:
-        cfg.pop("name", None)
+    name = claude.clean_name(cfg.get("name"))  # the name is set in the game menu (AI name), not on this page
+    if "name" in data:
+        name = claude.clean_name(data.get("name"))
+        if name:
+            cfg["name"] = name
+        else:
+            cfg.pop("name", None)
+    if "input_control" in data:
+        if data.get("input_control"):
+            cfg["input_control"] = True
+        else:
+            cfg.pop("input_control", None)
     key = str(data.get("api_key", "")).strip()
     if key:
         cfg["api_key"] = key

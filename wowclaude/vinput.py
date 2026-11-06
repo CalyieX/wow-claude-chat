@@ -29,7 +29,11 @@ def enabled() -> bool:
     return bool(config.load().get("input_control")) or bool(os.environ.get("WOWCLAUDE_VMOUSE"))
 
 
+SHIPPED = Path(__file__).with_name("vmouse.ps1")  # comes with the program: posts clicks/keys to the game window, needs nothing else
+
+
 def script() -> Path | None:
+    """Own helper script (config "input_script" + "input_ahk", or WOWCLAUDE_VMOUSE) if given, else the shipped one."""
     if not enabled():
         return None
     from . import config
@@ -38,7 +42,7 @@ def script() -> Path | None:
     ahk = cfg.get("input_ahk") or DEFAULT_AHK
     if cand and Path(cand).exists() and Path(ahk).exists():
         return Path(cand)
-    return None
+    return SHIPPED if SHIPPED.exists() else None
 
 
 def available() -> bool:

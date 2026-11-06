@@ -126,7 +126,7 @@ def ask(system: str, history: list[tuple[str, str]], prompt: str, model: str | N
             raise RuntimeError("the 'codex' command was not found")
         with tempfile.TemporaryDirectory() as tmp:
             out_file = Path(tmp) / "answer.txt"
-            cmd = [exe, "exec", "--skip-git-repo-check", "--ephemeral", "--ignore-user-config", "-s", "read-only",
+            cmd = [exe, "--search", "exec", "--skip-git-repo-check", "--ephemeral", "--ignore-user-config", "-s", "read-only",
                    "--color", "never",
                    "-C", str(config.HOME), "-o", str(out_file)]
             if model:

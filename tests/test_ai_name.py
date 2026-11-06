@@ -156,3 +156,43 @@ def test_custom_harness_replaces_builtin_and_reset(tmp_path):
     setup_ui.apply({"backend": "claude", "harness": "x y z"})
     setup_ui.apply({"backend": "claude", "harness_reset": True})
     assert claude.custom_harness() is None and not config.HARNESS.exists()
+
+
+def test_every_backend_receives_the_harness(monkeypatch):
+    """A new AI (any backend) gets the same harness with every question: text prompt, system message or system file."""
+    from wowclaude import backends, claude, config, setup_ui
+    setup_ui.apply({"backend": "claude", "harness": "HARNESS-MARK classic is not forever"})
+    seen = {}
+
+    monkeypatch.setattr(claude, "_exec", lambda cmd, prompt, timeout=None: seen.setdefault("exec", prompt) and (0, "ok", ""))
+    for b in ("codex", "command"):
+        cfg = config.load(); cfg["backend"] = b; cfg["command"] = "echo"; config.save(cfg)
+        monkeypatch.setattr(backends.shutil, "which", lambda n: "x")
+        monkeypatch.setattr(backends, "_command", lambda: ["echo"])
+        seen.clear()
+        try:
+            backends.ask(claude.persona()[1], [], "hi", None)
+        except Exception:  # noqa: BLE001 - codex reads an output file that the stub never writes
+            pass
+        assert "HARNESS-MARK" in seen.get("exec", ""), b
+    cfg = config.load(); cfg["backend"] = "openrouter"; config.save(cfg)
+    monkeypatch.setattr(backends, "_ask_api", lambda system, h, p, m: seen.setdefault("api", system) and "ok")
+    backends.ask(claude.persona()[1], [], "hi", None)
+    assert "HARNESS-MARK" in seen["api"]
+
+
+def test_mouse_keyboard_tool_ships_and_switches_on_from_setup_page():
+    from wowclaude import vinput, setup_ui, config
+    assert vinput.SHIPPED.exists() and not vinput.available()
+    setup_ui.apply({"backend": "claude", "input_control": True})
+    assert vinput.available() and vinput.script() == vinput.SHIPPED
+    setup_ui.apply({"backend": "claude", "input_control": False})
+    assert not vinput.available() and "input_control" not in config.load()
+
+
+def test_setup_page_has_no_name_field_and_keeps_menu_name():
+    from wowclaude import setup_ui, config
+    assert 'id="ainame"' not in setup_ui.PAGE if hasattr(setup_ui, "PAGE") else True
+    cfg = config.load(); cfg["name"] = "Gandalf"; config.save(cfg)
+    setup_ui.apply({"backend": "claude"})
+    assert config.load().get("name") == "Gandalf"
