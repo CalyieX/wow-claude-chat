@@ -69,8 +69,11 @@ class FramedWindow:
         self.canvas.bind("<Configure>", self._configure)
         self.canvas.bind("<Button-1>", self._down)
         self.canvas.bind("<B1-Motion>", self._move)
-        self.canvas.bind("<ButtonRelease-1>", lambda e: self.remember())
+        self.canvas.bind("<ButtonRelease-1>", lambda e: (self.remember(), self._drag.clear()))
         r.after(50, self.focus)
+        self.rel = None  # position and size as fractions of the game window: the window follows the game like the browser does
+        self._game = None
+        r.after(400, self._follow)
 
     def focus(self) -> None:
         try:
@@ -83,6 +86,26 @@ class FramedWindow:
             self.title = title
             self._draw()
 
+    def _follow(self) -> None:
+        """The game window was moved or resized: move and scale this window with it (same fractions as before)."""
+        try:
+            from . import overlay
+            g = overlay.game_rect()
+            if self.rel is None:
+                if g:
+                    self.rel = overlay.to_rel(g, self.root.winfo_x(), self.root.winfo_y(), self.w, self.h)
+                    self._game = g
+            elif g and g != self._game and not self._drag:
+                self._game = g
+                x, y, w, h = overlay.from_rel(g, self.rel)
+                self.root.geometry(f"{max(MIN_W, w)}x{max(MIN_H, h)}+{x}+{y}")
+        except Exception:  # noqa: BLE001 - following is a convenience
+            pass
+        try:
+            self.root.after(400, self._follow)
+        except Exception:  # noqa: BLE001 - window closed
+            pass
+
     def remember(self) -> None:
         """Position and size, relative to the game window (so it follows when the game is moved or resized)."""
         if not self.key:
@@ -91,7 +114,9 @@ class FramedWindow:
         g = overlay.game_rect()
         if g:
             try:
-                _save(self.key, overlay.to_rel(g, self.root.winfo_x(), self.root.winfo_y(), self.w, self.h))
+                self.rel = overlay.to_rel(g, self.root.winfo_x(), self.root.winfo_y(), self.w, self.h)
+                self._game = g
+                _save(self.key, self.rel)
             except Exception:  # noqa: BLE001 - remembering is a convenience
                 pass
 

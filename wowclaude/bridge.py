@@ -91,7 +91,7 @@ def handle_command(text: str) -> str | None:
     if cmd == "!ol":
         from . import panel_window
         panel_window.open_empty()
-        return None
+        return "Overlay window opened."  # (a None answer would show as unknown command)
     if cmd == "!term":
         return "The CLI window is for CLI mode: /aimode cli"
     if cmd == "!scroll":
