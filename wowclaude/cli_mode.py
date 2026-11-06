@@ -143,8 +143,7 @@ class CliMode:
             self._resize_if_needed()
             text = self._lines()
             if "Not logged in" in text or "/login" in text:
-                text += "
-[Not logged in: type  /login  in the game chat - the sign-in page opens in the game browser]"
+                text += chr(10) + "[Not logged in: type  /login  in the game chat - the sign-in page opens in the game browser]"
             if not self.running():
                 text += "\n[the command line tool ended - type anything to start it again, /aimode chat to leave]"
             if text != last:
