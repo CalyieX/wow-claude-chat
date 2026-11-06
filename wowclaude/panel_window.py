@@ -62,39 +62,25 @@ def run() -> None:
     import tkinter as tk
     if alive():
         return
-    gold, bg = "#ffd100", "#15130e"
-    root = tk.Tk()
-    root.overrideredirect(True)
-    root.attributes("-topmost", True)
-    root.attributes("-alpha", 0.96)
-    root.configure(bg="#c9a227")  # thin gold frame
-    inner = tk.Frame(root, bg=bg)
-    inner.pack(fill="both", expand=True, padx=2, pady=2)
-    head = tk.Frame(inner, bg="#2a1a10")
-    head.pack(fill="x")
-    title = tk.Label(head, text="", bg="#2a1a10", fg=gold, font=("Georgia", 12), anchor="w")
-    title.pack(side="left", padx=8, pady=3, fill="x", expand=True)
-    tk.Button(head, text="X", command=root.destroy, bg="#5c1a10", fg=gold, bd=0, padx=8, activebackground="#7d2417",
-              activeforeground=gold).pack(side="right")
-    body = tk.Text(inner, bg=bg, fg="#f0e6c8", font=("Segoe UI", 11), wrap="word", bd=0, highlightthickness=0, width=52,
-                   height=16, padx=10, pady=8, cursor="arrow", spacing1=2)
-    body.pack(fill="both", expand=True)
+    from .wowframe import FramedWindow
+    bg = "#15130e"
+
+    def cleanup() -> None:
+        BEAT.unlink(missing_ok=True)
+
+    win = FramedWindow("WoW AI", 560, 420, on_close=cleanup)
+    root = win.root
+    body = tk.Text(win.inner, bg=bg, fg="#f0e6c8", font=("Segoe UI", 11), wrap="word", bd=0, highlightthickness=0,
+                   padx=10, pady=8, cursor="arrow", spacing1=2)
+    sb = tk.Scrollbar(win.inner, command=body.yview)
+    body.configure(yscrollcommand=sb.set)
+    sb.pack(side="right", fill="y")
+    body.pack(side="left", fill="both", expand=True)
     body.configure(state="disabled")
-    drag = {}
-
-    def start(e):
-        drag["x"], drag["y"] = e.x_root - root.winfo_x(), e.y_root - root.winfo_y()
-
-    def move(e):
-        root.geometry(f"+{e.x_root - drag['x']}+{e.y_root - drag['y']}")
-
-    for w in (head, title):
-        w.bind("<Button-1>", start)
-        w.bind("<B1-Motion>", move)
     seen = {"t": 0.0, "placed": False}
 
     def render(data: dict) -> None:
-        title.config(text=str(data.get("title", "")))
+        win.set_title(str(data.get("title", "")) or "WoW AI")
         body.configure(state="normal")
         body.delete("1.0", "end")
         for line in data.get("lines", []):
@@ -115,13 +101,12 @@ def run() -> None:
         body.configure(state="disabled")
         if not seen["placed"]:
             seen["placed"] = True
-            root.update_idletasks()
             x, y = 80, 80
             try:
                 from . import overlay
                 g = overlay.game_rect()
                 if g:
-                    x, y = g[2] - root.winfo_reqwidth() - 30, g[1] + 80
+                    x, y = g[2] - 560 - 30, g[1] + 80
             except Exception:  # noqa: BLE001 - placement is a convenience
                 pass
             root.geometry(f"+{max(0, x)}+{max(0, y)}")
@@ -137,14 +122,22 @@ def run() -> None:
             pass
         root.after(300, tick)
 
-    def close() -> None:
-        try:
-            BEAT.unlink()
-        except OSError:
-            pass
-        root.destroy()
-
-    root.protocol("WM_DELETE_WINDOW", close)
-    root.bind("<Destroy>", lambda e: BEAT.unlink(missing_ok=True) if e.widget is root else None)
+    root.bind("<Destroy>", lambda e: cleanup() if e.widget is root else None)
     tick()
     root.mainloop()
+
+
+def open_empty() -> None:
+    """/ol: open the panel (shows the last content, or a short hint when the AI has not shown anything yet)."""
+    if alive():
+        return
+    if not FILE.exists():
+        show("WoW AI", ["This is the overlay window.", "The AI shows lists, builds and plans here.",
+                        "Ask it, for example: show me a leveling plan."])
+    else:
+        show_existing()
+
+
+def show_existing() -> None:
+    exe = Path(sys.executable).with_name("pythonw.exe")
+    subprocess.Popen([str(exe if exe.exists() else sys.executable), "-m", "wowclaude", "panel"], creationflags=0x08000000)

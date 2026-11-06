@@ -88,6 +88,10 @@ def handle_command(text: str) -> str | None:
         what = "WoW chat" if mode == "wow" else "CLI"
         return (f"{what}: " + ("your AI's own harness (its own memory files and settings)" if own else "the WoW AI harness") +
                 (". Applies to the next question." if mode == "wow" else ". Applies when CLI mode starts again (/aimode chat, then /aimode cli)."))
+    if cmd == "!ol":
+        from . import panel_window
+        panel_window.open_empty()
+        return None
     if cmd == "!term":
         return "The CLI window is for CLI mode: /aimode cli"
     if cmd == "!scroll":
@@ -200,7 +204,7 @@ def deliver(state: decode.GameState, reply: str) -> None:
     _post("ai", claude.persona()[0] + ": " + text.strip())
 
 
-CLI_BYPASS = ("!harness", "!aimode", "!access", "!setup", "!browser", "!login", "!name", "!me")  # still handled by the bridge in CLI mode
+CLI_BYPASS = ("!ol", "!harness", "!aimode", "!access", "!setup", "!browser", "!login", "!name", "!me")  # still handled by the bridge in CLI mode
 LOCK_PORT = 47831
 _lock_socket = None
 

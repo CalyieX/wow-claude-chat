@@ -403,6 +403,8 @@ SlashCmdList["KKHARNESS"] = function(msg)
     if KKHarnessFrame:IsShown() then KKHarnessFrame:Hide() else KKHarnessFrame:Show() end
   end
 end
+SLASH_KKOL1 = "/ol"
+SlashCmdList["KKOL"] = function() sendToClaude("!ol") end
 SLASH_KKTERM1 = "/term"
 SlashCmdList["KKTERM"] = function() sendToClaude("!term") end
 SLASH_KKSCROLL1 = "/scroll"
@@ -524,6 +526,7 @@ local COMMANDS = {
   "/browser [url]  -  open the browser  (/browser off = close)",
   "/aimode [chat|cli]  -  CLI mode: the tab shows your AI's own CLI",
   "/harness [wow|cli]  -  WoW AI harness or your AI's own, for the chat and the CLI separately",
+  "/ol  -  open the overlay window (the AI shows lists and plans there)",
   "/term  -  open the CLI in a real window (scroll, copy, paste)",
   "/scroll up|down|end  -  look back in the CLI (or mouse wheel)",
   "/memos  -  what the AI saved about you  (/memos clear)",

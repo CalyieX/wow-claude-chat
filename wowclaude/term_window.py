@@ -41,15 +41,18 @@ def run() -> None:
     import tkinter.font as tkfont
     if alive():
         return  # one window is enough
-    root = tk.Tk()
-    root.title("WoW AI - CLI")
-    root.geometry("900x520+80+80")
-    root.configure(bg="#101418")
-    root.attributes("-topmost", True)  # over the game, like the browser overlay
+    from .wowframe import FramedWindow
+
+    def cleanup() -> None:
+        BEAT.unlink(missing_ok=True)
+        SIZE.unlink(missing_ok=True)
+
+    win = FramedWindow("WoW AI - CLI", 900, 540, on_close=cleanup)
+    root = win.root
     font = tkfont.Font(family="Consolas", size=11)
-    text = tk.Text(root, bg="#101418", fg="#e6e6e6", insertbackground="#e6e6e6", font=font, wrap="none", bd=0,
+    text = tk.Text(win.inner, bg="#101418", fg="#e6e6e6", insertbackground="#e6e6e6", font=font, wrap="none", bd=0,
                    highlightthickness=0, selectbackground="#3a5a8c", cursor="xterm")
-    bar = tk.Scrollbar(root, command=text.yview)
+    bar = tk.Scrollbar(win.inner, command=text.yview)
     text.configure(yscrollcommand=bar.set)
     bar.pack(side="right", fill="y")
     text.pack(side="left", fill="both", expand=True)
@@ -91,7 +94,7 @@ def run() -> None:
 
     text.bind("<Key>", on_key)
     text.bind("<Control-Shift-C>", lambda e: copy() or "break")
-    text.bind("<Button-1>", lambda e: text.focus_set())
+    text.bind("<Button-1>", lambda e: (win.focus(), text.focus_set()))
     text.bind("<Button-3>", lambda e: paste())  # right click pastes, like most terminals
     text.focus_set()
 
@@ -121,14 +124,6 @@ def run() -> None:
             pass
         root.after(150, tick)
 
-    def close():
-        try:
-            BEAT.unlink()
-            SIZE.unlink()
-        except OSError:
-            pass
-        root.destroy()
-
-    root.protocol("WM_DELETE_WINDOW", close)
+    root.bind("<Destroy>", lambda e: cleanup() if e.widget is root else None)
     tick()
     root.mainloop()

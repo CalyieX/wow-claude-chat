@@ -623,7 +623,8 @@ def _button_art(kind: str, on: bool = False):
     return face
 
 
-def compose(fw: int, fh: int, top: int, hover: str = "", down: str = "", ghost: bool = False):
+def compose(fw: int, fh: int, top: int, hover: str = "", down: str = "", ghost: bool = False,
+            names: tuple = (), label: str = ""):
     """Render the whole frame as an RGBA image; the content window area is fully transparent."""
     from PIL import Image, ImageChops, ImageDraw
 
@@ -658,6 +659,8 @@ def compose(fw: int, fh: int, top: int, hover: str = "", down: str = "", ghost: 
     # buttons: ghost | minimize (green) | close (red), all inside the top strip
     hl = _art("UI-Panel-MinimizeButton-Highlight.png").crop(CB)
     for name, (bx, by, bw, bh) in buttons(fw).items():
+        if names and name not in names:  # other windows (panel, editor) show only the buttons they have
+            continue
         face = _button_art("close" if (name == "close" and down == "close") else name, ghost and name == "ghost")
         if name == "close" and down == "close":
             face = _art("UI-Panel-MinimizeButton-Down.png").crop(CB)
@@ -670,8 +673,8 @@ def compose(fw: int, fh: int, top: int, hover: str = "", down: str = "", ghost: 
     draw = ImageDraw.Draw(out)
     font = _font(13)
     ty = TOP // 2 + 4
-    draw.text((15, ty + 1), LABEL, font=font, fill=(0, 0, 0, 255), anchor="lm")  # WoW-style drop shadow
-    draw.text((14, ty), LABEL, font=font, fill=(255, 209, 0, 255), anchor="lm")
+    draw.text((15, ty + 1), label or LABEL, font=font, fill=(0, 0, 0, 255), anchor="lm")  # WoW-style drop shadow
+    draw.text((14, ty), label or LABEL, font=font, fill=(255, 209, 0, 255), anchor="lm")
     out.alpha_composite(_art("UI-ChatIM-SizeGrabber-Up.png").resize((18, 18), Image.LANCZOS), (fw - 4 - 18, fh - 4 - 18))
     return out
 

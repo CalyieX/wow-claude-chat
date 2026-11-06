@@ -20,25 +20,22 @@ def save(text: str) -> str:
 
 def run() -> None:
     import tkinter as tk
-    root = tk.Tk()
-    root.title("WoW AI - Harness")
-    root.geometry("720x520+120+90")
-    root.configure(bg="#15130e")
-    root.attributes("-topmost", True)
+    from .wowframe import FramedWindow
+    win = FramedWindow("Harness", 760, 560)
+    root = win.root
     gold = "#ffd100"
-    tk.Label(root, text="Harness - what your AI is told before every question", bg="#15130e", fg=gold,
-             font=("Georgia", 12), anchor="w").pack(fill="x", padx=10, pady=(8, 2))
-    box = tk.Frame(root, bg="#15130e")
-    box.pack(fill="both", expand=True, padx=10, pady=4)
+    box = tk.Frame(win.inner, bg="#15130e")
+    box.pack(fill="both", expand=True, padx=4, pady=(4, 2))
     text = tk.Text(box, bg="#0e0d09", fg="#f0e6c8", insertbackground=gold, font=("Consolas", 10), wrap="word", bd=1,
                    relief="solid", undo=True)
     bar = tk.Scrollbar(box, command=text.yview)
     text.configure(yscrollcommand=bar.set)
     bar.pack(side="right", fill="y")
     text.pack(side="left", fill="both", expand=True)
-    msg = tk.Label(root, text="", bg="#15130e", fg="#7fd17f", anchor="w")
-    row = tk.Frame(root, bg="#15130e")
-    row.pack(fill="x", padx=10, pady=(2, 4))
+    text.bind("<Button-1>", lambda e: (win.focus(), text.focus_set()))
+    msg = tk.Label(win.inner, text="", bg="#15130e", fg="#7fd17f", anchor="w")
+    row = tk.Frame(win.inner, bg="#15130e")
+    row.pack(fill="x", padx=6, pady=(2, 4), side="bottom")
 
     def load(custom_ok: bool = True) -> None:
         text.delete("1.0", "end")
@@ -52,9 +49,9 @@ def run() -> None:
         load(False)
         msg.config(text="Back to the built-in harness.")
 
-    for label, cmd in (("Save", do_save), ("Reset to built-in", do_reset), ("Close", root.destroy)):
+    for label, cmd in (("Save", do_save), ("Reset to built-in", do_reset), ("Close", win.close)):
         tk.Button(row, text=label, command=cmd, bg="#5c1a10", fg=gold, activebackground="#7d2417", activeforeground=gold,
                   relief="solid", bd=1, padx=12).pack(side="left", padx=(0, 8))
-    msg.pack(fill="x", padx=10, pady=(0, 8))
+    msg.pack(fill="x", padx=6, side="bottom")
     load()
     root.mainloop()
