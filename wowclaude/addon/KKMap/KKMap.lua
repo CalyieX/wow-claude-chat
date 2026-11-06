@@ -625,6 +625,15 @@ SlashCmdList["KKMENU"] = function()
   if f:IsShown() then f:Hide() else f:Show() end
 end
 
+-- Invisible click field in the bottom left corner of the screen: the gear on the WAC button (a program window outside the
+-- game) posts a mouse click there, which opens the menu. No typing, no focus needed.
+local gearHit = CreateFrame("Button", "KKGearHit", UIParent)
+gearHit:SetFrameStrata("TOOLTIP")
+gearHit:SetSize(24, 24)
+gearHit:SetPoint("BOTTOMLEFT", UIParent, "BOTTOMLEFT", 0, 0)
+gearHit:RegisterForClicks("LeftButtonUp")
+gearHit:SetScript("OnClick", function() SlashCmdList["KKMENU"]() end)
+
 -- Create or update a macro (name <= 16 chars, body <= 255 chars) and put it on the cursor.
 local function createMacro(name, body, perChar)
   name = strtrim(tostring(name or "")):sub(1, 16)

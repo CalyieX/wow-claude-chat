@@ -192,58 +192,6 @@ def _log(text: str) -> None:
         pass
 
 
-def type_into_game(text: str) -> None:
-    """Real keyboard input (SendInput) for the game: Enter, the text, Enter. The dock never takes the focus, so the game
-    still has it. Messages posted to the window are ignored by the game's chat box, real input is not."""
-    import ctypes
-    from ctypes import wintypes
-
-    class KI(ctypes.Structure):
-        _fields_ = [("wVk", wintypes.WORD), ("wScan", wintypes.WORD), ("dwFlags", wintypes.DWORD), ("time", wintypes.DWORD),
-                    ("dwExtraInfo", ctypes.c_size_t)]
-
-    class MI(ctypes.Structure):
-        _fields_ = [("dx", wintypes.LONG), ("dy", wintypes.LONG), ("mouseData", wintypes.DWORD), ("dwFlags", wintypes.DWORD),
-                    ("time", wintypes.DWORD), ("dwExtraInfo", ctypes.c_size_t)]
-
-    class IU(ctypes.Union):
-        _fields_ = [("ki", KI), ("mi", MI)]
-
-    class IN(ctypes.Structure):
-        _fields_ = [("type", wintypes.DWORD), ("u", IU)]
-
-    def send(vk: int = 0, ch: str = "") -> None:
-        for up in (0, 2):
-            if ch:
-                ki = KI(0, ord(ch), 0x4 | up, 0, 0)  # KEYEVENTF_UNICODE
-            else:
-                ki = KI(vk, 0x1C if vk == 0x0D else 0, up, 0, 0)
-            ctypes.windll.user32.SendInput(1, ctypes.byref(IN(1, IU(ki=ki))), ctypes.sizeof(IN))
-            time.sleep(0.03)
-
-    u = ctypes.windll.user32
-    u.GetForegroundWindow.restype = ctypes.c_void_p
-    game = u.FindWindowW("GxWindowClass", None)
-    if not game:
-        return
-    if u.GetForegroundWindow() != game:  # the player clicked our button: bring the game forward first
-        fg = u.GetForegroundWindow()
-        me, cur = u.GetWindowThreadProcessId(ctypes.c_void_p(fg), None), ctypes.windll.kernel32.GetCurrentThreadId()
-        u.AttachThreadInput(cur, me, True)
-        u.ShowWindow(ctypes.c_void_p(game), 9)  # SW_RESTORE
-        u.SetForegroundWindow(ctypes.c_void_p(game))
-        u.AttachThreadInput(cur, me, False)
-        time.sleep(0.4)
-    if u.GetForegroundWindow() != game:  # never type into another program: only when the game really has the focus
-        return
-    send(vk=0x0D)
-    time.sleep(0.15)
-    for c in text:
-        send(ch=c)
-    time.sleep(0.1)
-    send(vk=0x0D)
-
-
 class Dock:
     """The always-on WAC button: shown whenever the browser window is not running, click opens it, drag moves it.
     (While the browser window runs it draws its own frame / minimized button, using the same remembered spot.)"""
@@ -369,8 +317,11 @@ class Dock:
             overlay.save_state(bx=self.pos[0], by=self.pos[1], brel=overlay.to_rel(g, self.pos[0], self.pos[1], 64, 64)[:2])
             self._draw()
         elif not moved and self.OFF <= self.drag_start[0] < self.OFF + self.GEAR and self.OFF <= self.drag_start[1] < self.OFF + self.GEAR:  # the gear: open the addon menu
-            import threading
-            threading.Thread(target=lambda: type_into_game("/wac"), daemon=True).start()
+            g = overlay.game_rect()
+            if g:  # a click into the addon's invisible field in the bottom left corner of the game opens the menu
+                import threading
+                from . import vinput
+                threading.Thread(target=lambda: vinput.run(f"click 6 {g[3] - g[1] - 6}"), daemon=True).start()
         elif not moved and time.time() - self.busy > 45:  # the browser needs a while to start: no second click starts a second one
             self.busy = time.time()
             import threading
