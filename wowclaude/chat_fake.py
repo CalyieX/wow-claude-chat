@@ -139,6 +139,9 @@ def paint(entries: list[tuple[str, str]], size: tuple[int, int], scroll: int = 0
 _last_frame: list = [None]  # last tab rectangle relative to the game window: searched first (a small crop is much faster)
 
 
+EXTERNAL_BUTTON = False  # the WAC button is an addon element now (KKWacButton); the old window above the game stays off
+
+
 def find_in_game() -> tuple[tuple[int, int, int, int], int] | None:
     """(screen rectangle of the chat tab, its text size in px), or None (tab hidden, game minimised, marks missing)."""
     g = overlay.game_rect()
@@ -309,9 +312,11 @@ class Dock:
             return round(g[0] + st["brel"][0] * (g[2] - g[0])), round(g[1] + st["brel"][1] * (g[3] - g[1]))
         return int(st.get("bx", g[2] - 150)), int(st.get("by", g[1] + 80))
 
-    def update(self) -> None:
+    def update(self, ui_ok: bool = True) -> None:
+        """ui_ok: the addon's marks are on screen. Without them the game shows no interface (loading screen, /reload): the button
+        belongs to that interface, so it goes with it - like an addon inside the game."""
         g = overlay.game_rect()
-        want = bool(g) and not overlay.game_minimized() and not overlay.overlay_alive()
+        want = EXTERNAL_BUTTON and bool(g) and ui_ok and not overlay.game_minimized() and not overlay.overlay_alive()
         if want != getattr(self, '_want', None):
             self._want = want
             _log(f'dock want={want} game={g}')
@@ -382,6 +387,7 @@ def run(poll: float = 0.25, find_every: float = 0.5) -> None:
     entries: list[tuple[str, str]] = []
     offset = EVENTS.stat().st_size if EVENTS.exists() else 0
     frame, fs, last_find, shown_key, visible = None, 17, 0.0, None, False
+    ui_ok = True  # False while the addon's marks stay away (loading screen)
     while True:
         try:
             root.update()
@@ -395,7 +401,7 @@ def run(poll: float = 0.25, find_every: float = 0.5) -> None:
             pass
         if dock:
             try:
-                dock.update()
+                dock.update(ui_ok)
             except Exception as exc:  # noqa: BLE001 - the button is a convenience, never stop the chat overlay
                 _log(f'dock failed: {exc!r}')
         events, offset = read_new(offset)
@@ -413,8 +419,11 @@ def run(poll: float = 0.25, find_every: float = 0.5) -> None:
             if found:
                 frame, fs = found
                 misses = 0
+                ui_ok = True
             else:
                 misses += 1
+                if misses >= 2:
+                    ui_ok = False
                 if misses >= 3:  # one hidden marker (a tooltip over it) must not make the overlay blink away
                     frame = None
         if frame is None:
