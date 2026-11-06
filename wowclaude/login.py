@@ -49,6 +49,15 @@ def no_browser_env() -> dict:
 def logged_in() -> bool:
     """True unless the tool says it is not logged in (Claude only: `claude auth status`; unknown counts as logged in)."""
     import json
+    if backends.name() == "codex":  # `codex login status` prints "Logged in ..." and exits 0 when signed in
+        exe = shutil.which("codex")
+        if not exe:
+            return True
+        try:
+            return subprocess.run([exe, "login", "status"], capture_output=True, timeout=20, cwd=claude.neutral_cwd(),
+                                  env=claude._clean_env(), **hidden()).returncode == 0
+        except Exception:  # noqa: BLE001
+            return True
     exe = claude.claude_path()
     if not exe or backends.name() != "claude":
         return True
