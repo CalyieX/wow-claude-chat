@@ -55,6 +55,7 @@ class FramedWindow:
         self.title, self.w, self.h, self.on_close = title, w, h, on_close
         self.root = tk.Tk()
         r = self.root
+        r.title("WoW AI - " + title)  # a real window title: tools (screen readers, automation) can find the window
         r.overrideredirect(True)
         r.attributes("-topmost", True)
         from . import overlay as _ov

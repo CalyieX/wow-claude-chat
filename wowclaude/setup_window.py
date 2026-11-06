@@ -46,7 +46,7 @@ def run() -> None:
     win = FramedWindow("AI setup", 760, 680, key="aisetup")
     gold, bg, fg = "#ffd100", "#15130e", "#f0e6c8"
     st = setup_ui._state()
-    found: list[dict] = list(st["found"])
+    found: list[dict] = []  # starts empty like on a fresh PC: the Search button fills it
 
     def btn(parent, text, cmd, **kw):
         b = tk.Button(parent, text=text, command=cmd, bg="#5c1a10", fg=gold, activebackground="#7d2417", activeforeground=gold,
@@ -68,7 +68,7 @@ def run() -> None:
     outer = tk.Frame(win.inner, bg=bg)
     outer.pack(side="top", fill="both", expand=True, padx=8, pady=6)
 
-    lab(outer, "Found on this PC - click to use:").pack(fill="x")
+    lab(outer, "Found on this PC (press Search) - click one to use it:").pack(fill="x")
     foundf = tk.Frame(outer, bg=bg)
     foundf.pack(fill="x", pady=(0, 6))
     backend_var = tk.StringVar(value=st["backend"])
@@ -92,7 +92,7 @@ def run() -> None:
         for w in foundf.winfo_children():
             w.destroy()
         if not found:
-            lab(foundf, "Nothing found yet. Press Search, or install Claude Code / Ollama, or enter an API key below.", "#b9b093").pack(fill="x")
+            lab(foundf, "No AI loaded yet. Press Search to look for the AIs on this PC (or enter an API key below).", "#b9b093").pack(fill="x")
         for i, f in enumerate(found):
             b = btn(foundf, ("* " if i == 0 else "") + f["label"], lambda f=f: use_found(f))
             b.pack(fill="x", pady=2)
@@ -116,8 +116,7 @@ def run() -> None:
     lab(outer, "Other AIs (you need an account or key there):").pack(fill="x")
     others = tk.Frame(outer, bg=bg)
     others.pack(fill="x", pady=(0, 6))
-    have = {f["backend"] for f in found}
-    for i, b in enumerate(x for x in st["backends"] if x not in have and x != "command"):
+    for i, b in enumerate(x for x in st["backends"] if x != "command"):
         tk.Button(others, text=b, command=lambda b=b: (backend_var.set(b), key_e.focus_set()), bg="#2a2418", fg=gold,
                   activebackground="#5c1a10", activeforeground=gold, relief="solid", bd=1, padx=6).grid(row=i // 6, column=i % 6, padx=2, pady=2, sticky="w")
 
