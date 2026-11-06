@@ -22,6 +22,12 @@ def load() -> dict:
         return {}
 
 
+def model_for(backend: str) -> str | None:
+    """The model chosen for this AI (Own AI tab), else the general one from the AI Setup page, else None = the AI's default."""
+    c = load()
+    return (c.get("models") or {}).get(backend) or c.get("model") or None
+
+
 def save(cfg: dict) -> None:
     HOME.mkdir(parents=True, exist_ok=True)
     CONFIG.write_text(json.dumps(cfg, indent=2), encoding="utf-8")

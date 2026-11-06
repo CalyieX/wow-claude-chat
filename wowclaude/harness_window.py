@@ -41,6 +41,14 @@ def run(tab: str = "wow") -> None:
     pick_var = tk.StringVar(value=str(config.load().get("backend") or ""))
     dir_var = tk.StringVar(value=str(config.load().get("own_config_dir") or ""))
     dirs = tk.Frame(own, bg="#15130e")
+    mrow = tk.Frame(own, bg="#15130e")
+    model_var = tk.StringVar()
+    tk.Label(mrow, text="Model for the WoW chat (empty = the AI's own default; a small one is enough):", bg="#15130e",
+             fg=gold).pack(side="left")
+    tk.Entry(mrow, textvariable=model_var, width=22, bg="#1d1a12", fg="#f0e6c8", insertbackground=gold, relief="solid",
+             bd=1).pack(side="left", padx=6)
+    tk.Button(mrow, text="Set", command=set_model, bg="#5c1a10", fg=gold, activebackground="#7d2417", activeforeground=gold,
+              relief="solid", bd=1, padx=10).pack(side="left")
     info = tk.Text(own, bg="#15130e", fg="#f0e6c8", font=("Consolas", 10), wrap="word", bd=1, relief="solid")
     ibar = WowScrollbar(own, info.yview)
     info.configure(yscrollcommand=ibar.set)
@@ -105,6 +113,19 @@ def run(tab: str = "wow") -> None:
         refresh()
         msg.config(text=f"AI: {pick_var.get()}. Used from the next question on.", fg="#7fd17f")
 
+    def set_model() -> None:
+        cfg = config.load()
+        models = dict(cfg.get("models") or {})
+        value = model_var.get().strip()
+        if value:
+            models[cfg.get("backend") or ""] = value
+        else:
+            models.pop(cfg.get("backend") or "", None)
+        cfg["models"] = models
+        config.save(cfg)
+        refresh()
+        msg.config(text="Model: " + (value or "the AI's own default") + ". Used from the next question on.", fg="#7fd17f")
+
     def choose_dir() -> None:
         cfg = config.load()
         if dir_var.get():
@@ -153,6 +174,11 @@ def run(tab: str = "wow") -> None:
             else:
                 body += ("No folder with instructions, memory or skills - it answers as the bare model.\n"
                          "Model, API address and keys: AI Setup (game menu).")
+        if active:
+            model_var.set((cfg.get("models") or {}).get(active) or cfg.get("model") or "")
+            mrow.pack(side="top", fill="x", pady=(0, 4), before=info)
+        else:
+            mrow.pack_forget()
         info.insert("1.0", body)
         info.config(state="disabled")
         rebuild_row()

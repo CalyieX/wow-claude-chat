@@ -246,8 +246,9 @@ def overview(src: Source) -> str:
 def model_of(backend: str, cfg: dict, home: Path | None = None) -> str:
     """The model that AI answers with: from its own settings (Codex config.toml, Claude settings.json) or the Setup page."""
     home = home or Path.home()
-    if cfg.get("model"):
-        return str(cfg["model"])
+    chosen = (cfg.get("models") or {}).get(backend) or cfg.get("model")
+    if chosen:
+        return str(chosen)
     if backend == "codex":
         text = _read(Path(os.environ.get("CODEX_HOME") or (home / ".codex")) / "config.toml")
         m = re.search(r'^model\s*=\s*"([^"]+)"', text, re.M)

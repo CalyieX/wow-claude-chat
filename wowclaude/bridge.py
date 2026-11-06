@@ -5,7 +5,7 @@ import re
 import time
 from pathlib import Path
 
-from . import claude, config, decode, screen
+from . import backends, claude, config, decode, screen
 
 
 def read_state() -> decode.GameState | None:
@@ -286,7 +286,7 @@ def run(root: Path, poll: float = 0.6) -> None:
             _post("think", "thinking ...")
             try:
                 cmd_reply = handle_command(state.message) if state.message.lstrip().startswith("!") else None
-                reply = cmd_reply if cmd_reply is not None else session.ask(question, config.load().get("model"))
+                reply = cmd_reply if cmd_reply is not None else session.ask(question, config.model_for(backends.name()))
             except Exception as exc:  # noqa: BLE001 - tell the player, keep running
                 from . import login
                 reply = login.explain(exc)

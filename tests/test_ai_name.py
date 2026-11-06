@@ -497,3 +497,13 @@ def test_own_uses_the_chosen_claude_folder(monkeypatch):
     assert claude._clean_env("wow")["CLAUDE_CONFIG_DIR"] == "X:/claude-work"
     cfg["own_harness_wow"] = False
     assert claude._clean_env("wow").get("CLAUDE_CONFIG_DIR") != "X:/claude-work"
+
+
+def test_model_is_chosen_per_ai(monkeypatch):
+    from wowclaude import config
+    cfg = {"models": {"codex": "gpt-6-mini"}, "model": "general"}
+    monkeypatch.setattr(config, "load", lambda: cfg)
+    assert config.model_for("codex") == "gpt-6-mini"
+    assert config.model_for("claude") == "general"
+    cfg.pop("model")
+    assert config.model_for("claude") is None
