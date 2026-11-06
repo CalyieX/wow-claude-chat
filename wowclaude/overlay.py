@@ -797,7 +797,7 @@ def frame_loop(hwnd: int, x: int, y: int, w: int, h: int, opacity: int, click_th
         fl.update_idletasks()
         FL["h"] = user32.GetParent(fl.winfo_id()) or fl.winfo_id()
         user32.SetWindowLongW(ctypes.c_void_p(FL["h"]), GWL_EXSTYLE,
-                              user32.GetWindowLongW(ctypes.c_void_p(FL["h"]), GWL_EXSTYLE) | WS_EX_LAYERED | WS_EX_TOOLWINDOW)
+                              user32.GetWindowLongW(ctypes.c_void_p(FL["h"]), GWL_EXSTYLE) | WS_EX_LAYERED | WS_EX_TOOLWINDOW | 0x08000000)
     sprites = {s: slot_sprite(s) for s in ("", "hover", "down")}
     rect = game_rect() or (0, 0, user32.GetSystemMetrics(0), user32.GetSystemMetrics(1))
     S["bx"] = int(saved.get("bx", rect[2] - 150))  # top-left of the 64x64 sprite; the slot itself is 14 px inside

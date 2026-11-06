@@ -48,6 +48,16 @@ def handle_command(text: str) -> str | None:
         if problem:
             return "Browser did not open: " + problem
         return "Browser closed." if closing else "Browser opened."
+    if cmd == "!access":
+        cfg = config.load()
+        want = arg.lower() in ("on", "1", "yes") if arg else not cfg.get("computer_access")
+        if want:
+            cfg["computer_access"] = True
+        else:
+            cfg.pop("computer_access", None)
+        config.save(cfg)
+        return ("AI access is ON: the AI may read and change files and run commands on this computer when you ask it. "
+                "Switch it off again in the menu (/wac)." if want else "AI access is OFF: the AI can only search the web.")
     if cmd == "!login":
         from . import login
         return login.submit(arg) if arg else login.start()
@@ -66,7 +76,7 @@ def handle_command(text: str) -> str | None:
         else:
             cfg.pop("player", None)
         config.save(cfg)
-        return "Dein Name: " + (who or "(keiner)")
+        return "Your name: " + (who or "(none)")
     if cmd == "!name":
         from . import installer
         name = claude.clean_name(arg)
@@ -178,8 +188,8 @@ def run(root: Path, poll: float = 0.6) -> None:
             if vinput.available() and state.frames:
                 question = vinput.frames_hint(state.frames) + question
             print(f"> {state.message.strip()}", flush=True)
-            _post("user", "Du: " + state.message.strip())
-            _post("think", "denkt ...")
+            _post("user", "You: " + state.message.strip())
+            _post("think", "thinking ...")
             try:
                 cmd_reply = handle_command(state.message) if state.message.lstrip().startswith("!") else None
                 reply = cmd_reply if cmd_reply is not None else session.ask(question, config.load().get("model"))

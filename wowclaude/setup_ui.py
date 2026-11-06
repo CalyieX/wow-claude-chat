@@ -46,6 +46,9 @@ button.small{margin:3px 4px 0 0;padding:4px 10px;font-size:12px}
 <label>Extra instructions (optional, e.g. how it should talk)</label>
 <textarea id="persona"></textarea>
 </details>
+<details><summary>Computer access (your choice)</summary>
+<small>Off by default: the AI can only search the web. When you switch it on, the AI (Claude Code / Codex login only) may read and change files and run commands on this computer when you ask it, like the original command line tool. The same switch is in the game menu (/wac, AI access).</small>
+<label><input type="checkbox" id="access" style="width:auto"> Let the AI use this computer</label></details>
 <details><summary>Mouse and keyboard (tool for the AI)</summary>
 <small>Lets the AI click and type in the game window for you (open a window, press a button, fill a field) without using your own mouse. Combat actions stay protected by the game. Off by default.</small>
 <label><input type="checkbox" id="inputctl" style="width:auto"> Allow the AI to use mouse and keyboard in the game</label></details>
@@ -82,7 +85,7 @@ function show(){const b=$("backend").value,isApi=!["claude","codex","command"].i
  s.backends.filter(b=>!have.includes(b)&&b!=="command").forEach(b=>{const x=document.createElement("button");x.className="small";x.textContent=b;
   x.onclick=()=>{sel.value=b;show();$("adv").open=true;$("api_key").focus()};O.appendChild(x)});
  $("model").value=s.model||"";$("base_url").value=s.base_url||"";$("command").value=s.command||"";
- $("inputctl").checked=!!s.input_control;$("harness").value=s.harness;$("hstate").textContent=s.harness_custom?"Using your edited harness.":"Using the built-in harness.";
+ $("inputctl").checked=!!s.input_control;$("access").checked=!!s.computer_access;$("harness").value=s.harness;$("hstate").textContent=s.harness_custom?"Using your edited harness.":"Using the built-in harness.";
  $("hreset").onclick=async()=>{const r=await api("/save",{backend:$("backend").value,harness_reset:true});$("msg").textContent=r.status;const s2=await api("/state");$("harness").value=s2.harness;$("hstate").textContent="Using the built-in harness."};
  $("aiprompt").value=s.prompt;$("copy").onclick=()=>{$("aiprompt").select();document.execCommand("copy")};$("persona").value=s.persona||"";$("keystate").textContent=s.has_key?"(saved)":"";show();sel.onchange=show;
  recheck()})();
@@ -90,7 +93,7 @@ async function recheck(){$("msg").textContent="Checking the AI ...";$("msg").cla
  try{const r=await api("/check");$("msg").textContent=r.status;$("msg").className=r.ok?"ok":"bad"}catch(e){$("msg").textContent="Check failed: "+e;$("msg").className="bad"}}
 $("save").onclick=async()=>{$("msg").textContent="Saving ...";$("msg").className="";
  const r=await api("/save",{backend:$("backend").value,model:$("model").value,base_url:$("base_url").value,
-  api_key:$("api_key").value,command:$("command").value,persona:$("persona").value,harness:$("harness").value,input_control:$("inputctl").checked});
+  api_key:$("api_key").value,command:$("command").value,persona:$("persona").value,harness:$("harness").value,input_control:$("inputctl").checked,computer_access:$("access").checked});
  $("msg").textContent=r.status;$("msg").className=r.ok?"ok":"bad";if(r.has_key)$("keystate").textContent="(saved)";$("api_key").value="";await recheck()};
 </script></body></html>"""
 
@@ -125,7 +128,7 @@ def _state() -> dict:
             "command": cfg.get("command", ""), "has_key": bool(cfg.get("api_key")),
             "name": name, "persona": rest.strip("\n"), "found": backends.detect(), "prompt": ai_prompt(),
             "harness": claude.custom_harness() or claude.builtin_harness(), "harness_custom": claude.custom_harness() is not None,
-            "input_control": bool(cfg.get("input_control"))}
+            "input_control": bool(cfg.get("input_control")), "computer_access": bool(cfg.get("computer_access"))}
 
 
 def _check() -> dict:
@@ -154,6 +157,11 @@ def apply(data: dict) -> dict:
             cfg["name"] = name
         else:
             cfg.pop("name", None)
+    if "computer_access" in data:
+        if data.get("computer_access"):
+            cfg["computer_access"] = True
+        else:
+            cfg.pop("computer_access", None)
     if "input_control" in data:
         if data.get("input_control"):
             cfg["input_control"] = True

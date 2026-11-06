@@ -13,7 +13,26 @@ from . import config
 from .winproc import hidden
 
 CREATE_NO_WINDOW = 0x08000000  # Windows: no console window for the child process
-WEB_TOOLS = "WebSearch,WebFetch"  # the only tools the AI gets: it can look things up, never touch files or run commands
+WEB_TOOLS = "WebSearch,WebFetch"  # default: the AI can look things up, never touch files or run commands
+ACCESS_TOOLS = "Read,Glob,Grep,WebSearch,WebFetch,Bash,Edit,Write"  # only when the player switched computer access on
+
+
+def computer_access() -> bool:
+    """The player's own choice (menu button AI access, or the AI setup page): may the AI use this computer?"""
+    return bool(config.load().get("computer_access"))
+
+
+def run_tools() -> str:
+    return ACCESS_TOOLS if computer_access() else WEB_TOOLS
+
+
+def progress_label(tool: str, arg: str = "") -> str:
+    """One short line for the chat while the AI works: what it is doing right now."""
+    arg = (arg or "").replace(chr(10), " ").strip()[:40]
+    names = {"WebSearch": "searching the web", "WebFetch": "reading a web page", "Read": "reading a file", "Glob": "looking for files",
+             "Grep": "searching files", "Bash": "running a command", "Edit": "editing a file", "Write": "writing a file"}
+    what = names.get(tool, "using " + tool)
+    return what + (": " + arg if arg and tool in ("WebSearch", "WebFetch", "Bash") else "") + " ..."
 TIMEOUT = 100  # seconds; the addon gives up after 120, so one run must fit in that
 
 
@@ -95,16 +114,17 @@ def clean_name(raw) -> str:
 
 
 def builtin_tools() -> str:
-    """The built-in tool texts that follow the general instructions (macros, browser window, background input)."""
-    out = ""
+    """The built-in tool text that follows the general instructions (macros, browser window): the part you can edit."""
     try:
-        out += "\n\n" + (Path(__file__).parent / "macro_skill.md").read_text(encoding="utf-8")
+        return "\n\n" + (Path(__file__).parent / "macro_skill.md").read_text(encoding="utf-8")
     except OSError:
-        pass
+        return ""
+
+
+def input_tool_text() -> str:
+    """Mouse and keyboard tool text: always added by the program (never part of the editable harness) while the tool is on."""
     from . import vinput
-    if vinput.available():
-        out += "\n\n" + vinput.SKILL
-    return out
+    return ("\n\n" + vinput.SKILL) if vinput.available() else ""
 
 
 def builtin_harness() -> str:
@@ -116,7 +136,7 @@ def custom_harness() -> str | None:
     """The player's own edited harness (AI setup page), or None to use the built-in one."""
     try:
         text = config.HARNESS.read_text(encoding="utf-8").strip()
-    except OSError:
+    except (OSError, ValueError):  # missing, or saved in a non-UTF-8 editor: use the built-in one
         return None
     return text or None
 
@@ -141,8 +161,14 @@ def persona() -> tuple[str, str]:
     player = clean_name(config.load().get("player"))
     if player:
         base += f"\nThe player's name is {player}. Call them {player}."
+    base += ("\nCOMPUTER ACCESS: ON. The player allowed you to read and change files and run commands on their computer. Do it only "
+             "when they ask, say in one sentence what you did, and ask before deleting anything."
+             if computer_access() else
+             "\nCOMPUTER ACCESS: OFF. You cannot touch the player's computer; you can only search the web. If they want more, "
+             "tell them to switch AI access on in the menu (/wac).")
     if custom is None:
         base += builtin_tools()
+    base += input_tool_text()
     return name, (base + "\n\n" + extra) if extra else base
 
 
@@ -265,6 +291,8 @@ def _clean_env() -> dict:
 def _exec(cmd: list, prompt: str, timeout: float | None = None) -> tuple:
     """Run the command with a hard time limit. On timeout the whole process tree is killed (a .cmd wrapper would
     otherwise keep running) and AskTimeout is raised. Returns (exit code, stdout, stderr)."""
+    if "stream-json" in cmd:  # a normal question: tool use is shown in the chat while the AI works
+        return _exec_stream(cmd, prompt, timeout or TIMEOUT, _progress, cwd=str(Path.home()) if computer_access() else None)
     proc = subprocess.Popen(cmd, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
                             text=True, encoding="utf-8", errors="replace", cwd=neutral_cwd(), env=_clean_env(),
                             **hidden())
@@ -281,6 +309,65 @@ def _exec(cmd: list, prompt: str, timeout: float | None = None) -> tuple:
             pass
         raise AskTimeout(f"Claude did not answer within {round(timeout or TIMEOUT)} seconds.") from exc
     return proc.returncode, out, err
+
+
+def _progress(text: str) -> None:
+    try:
+        from . import chat_fake
+        chat_fake.post("think", text)
+    except Exception:  # noqa: BLE001 - no overlay, no progress line
+        pass
+
+
+def _exec_stream(cmd: list, prompt: str, timeout: float, on_progress, cwd: str | None = None) -> tuple:
+    """Like _exec, but for `--output-format stream-json`: every tool the AI starts is reported to on_progress as a
+    short line, the final text comes from the "result" event. Returns (exit code, final text, stderr)."""
+    import json
+    import threading
+    proc = subprocess.Popen(cmd, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                            text=True, encoding="utf-8", errors="replace", cwd=cwd or neutral_cwd(), env=_clean_env(), **hidden())
+    result: list = []
+    errbuf: list = []
+
+    def read_out() -> None:
+        for line in proc.stdout:
+            try:
+                ev = json.loads(line)
+            except ValueError:
+                continue
+            if ev.get("type") == "assistant":
+                for blk in (ev.get("message") or {}).get("content") or []:
+                    if isinstance(blk, dict) and blk.get("type") == "tool_use":
+                        inp = blk.get("input") or {}
+                        try:
+                            on_progress(progress_label(blk.get("name", ""), str(inp.get("query") or inp.get("url") or inp.get("command") or "")))
+                        except Exception:  # noqa: BLE001 - progress is a courtesy
+                            pass
+            elif ev.get("type") == "result":
+                result.append(ev)
+
+    t1 = threading.Thread(target=read_out, daemon=True)
+    t2 = threading.Thread(target=lambda: errbuf.append(proc.stderr.read()), daemon=True)
+    t1.start()
+    t2.start()
+    try:
+        proc.stdin.write(prompt)
+        proc.stdin.close()
+    except OSError:
+        pass
+    t1.join(timeout)
+    if t1.is_alive():
+        if os.name == "nt":
+            subprocess.run(["taskkill", "/F", "/T", "/PID", str(proc.pid)], capture_output=True, **hidden())
+        else:
+            proc.kill()
+        raise AskTimeout(f"Claude did not answer within {round(timeout)} seconds.")
+    proc.wait(10)
+    t2.join(2)
+    ev = result[-1] if result else {}
+    text = str(ev.get("result") or "")
+    code = proc.returncode if not ev.get("is_error") else (proc.returncode or 1)
+    return code, text, "".join(errbuf)
 
 
 class Session:
@@ -335,8 +422,11 @@ class Session:
         sysfile = config.HOME / "system_prompt.txt"
         config.HOME.mkdir(parents=True, exist_ok=True)
         sysfile.write_text(persona()[1], encoding="utf-8")
-        cmd = [exe, "-p", "--output-format", "text", "--tools", WEB_TOOLS, "--allowedTools", WEB_TOOLS, "--strict-mcp-config", *ISOLATION,
-               "--append-system-prompt-file", str(sysfile)]
+        tools = run_tools()
+        cmd = [exe, "-p", "--output-format", "stream-json", "--verbose", "--tools", tools, "--allowedTools", tools, "--strict-mcp-config",
+               *ISOLATION, "--append-system-prompt-file", str(sysfile)]
+        if computer_access():
+            cmd += ["--permission-mode", "acceptEdits"]
         cmd += ["--resume" if self.started else "--session-id", self.id]
         if model:
             cmd += ["--model", model]

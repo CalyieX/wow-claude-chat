@@ -184,7 +184,7 @@ class Dock:
         u.GetWindowLongW.restype = ctypes.c_long
         self.h = u.GetAncestor(self.win.winfo_id(), 2) or self.win.winfo_id()  # GA_ROOT
         u.SetWindowLongW(ctypes.c_void_p(self.h), overlay.GWL_EXSTYLE,
-                         u.GetWindowLongW(ctypes.c_void_p(self.h), overlay.GWL_EXSTYLE) | overlay.WS_EX_LAYERED | overlay.WS_EX_TOOLWINDOW)
+                         u.GetWindowLongW(ctypes.c_void_p(self.h), overlay.GWL_EXSTYLE) | overlay.WS_EX_LAYERED | overlay.WS_EX_TOOLWINDOW | 0x08000000)  # NOACTIVATE: a click never takes the keyboard from the game
 
     def _draw(self, state: str = "") -> None:
         self._layered()  # a Tk window that was moved or re-mapped may have lost the layered style: ask again every time
@@ -242,7 +242,7 @@ class Dock:
         if moved and g:
             overlay.save_state(bx=self.pos[0], by=self.pos[1], brel=overlay.to_rel(g, self.pos[0], self.pos[1], 64, 64)[:2])
             self._draw()
-        elif not moved and time.time() - self.busy > 10:
+        elif not moved and time.time() - self.busy > 45:  # the browser needs a while to start: no second click starts a second one
             self.busy = time.time()
             import threading
             threading.Thread(target=lambda: overlay.play(""), daemon=True).start()

@@ -307,7 +307,7 @@ def test_lua_addon_strip_is_read_by_python_decoder():
     h, lua = _lua_addon()
     st = decode.decode(h.strip_image(lua))
     assert st is not None and st.addon_version == 25
-    assert "Tester" in st.context and "Fehler" not in st.context
+    assert "Tester" in st.context and "Error" not in st.context
 
 
 def test_lua_addon_sends_a_message_through_the_strip():

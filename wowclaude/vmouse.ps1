@@ -8,8 +8,10 @@ public class VM {
   [DllImport("user32.dll")] public static extern bool EnumWindows(EnumProc e, IntPtr p);
   [DllImport("user32.dll", CharSet=CharSet.Unicode)] public static extern int GetWindowText(IntPtr h, StringBuilder s, int n);
   [DllImport("user32.dll")] public static extern bool IsWindowVisible(IntPtr h);
+  [DllImport("user32.dll", CharSet=CharSet.Unicode)] public static extern IntPtr FindWindow(string cls, string title);
   [DllImport("user32.dll")] public static extern bool PostMessage(IntPtr h, uint m, IntPtr w, IntPtr l);
   public static IntPtr Find(string title) {
+    foreach (var c in new string[] { "GxWindowClass", "GxWindowClassD3d" }) { IntPtr g = FindWindow(c, null); if (g != IntPtr.Zero) return g; }  // the game itself, never a browser page titled like it
     IntPtr found = IntPtr.Zero;
     EnumWindows((h, p) => { if (!IsWindowVisible(h)) return true; var sb = new StringBuilder(256); GetWindowText(h, sb, 256);
       if (sb.ToString().StartsWith(title)) { found = h; return false; } return true; }, IntPtr.Zero);

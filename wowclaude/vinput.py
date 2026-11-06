@@ -20,6 +20,10 @@ from .winproc import hidden
 DEFAULT_AHK = r"C:\Program Files\AutoHotkey\v2\AutoHotkey64_UIA.exe"
 TITLE = "World of Warcraft"
 MAX_ACTIONS = 5
+# A web page the AI read must never be able to make it type destructive chat commands (script execution, quitting, deleting ...)
+DANGEROUS = re.compile(r"/(run|script|dump|gquit|guildquit|guilddisband|logout|camp|quit|exit|delete|destroy|reloadui|console|cvar|"
+                       r"trade|invite|uninvite|leave|duel|release|resign|abandon|forfeit|sell|mail|send|dismount|disband)\b|"
+                       r"\{(alt|ctrl|win|lwin|rwin)", re.I)
 INPUT_RE = re.compile(r"\[\[(click \d{1,5} \d{1,5}(?: [LRM])?|keys [^\]\n]{1,80})\]\]")
 
 
@@ -51,7 +55,8 @@ def available() -> bool:
 
 def extract(text: str) -> tuple[str, list[str]]:
     """Split [[click ..]] / [[keys ..]] commands out of a reply (at most MAX_ACTIONS)."""
-    cmds = [m.group(1) for m in INPUT_RE.finditer(text)][:MAX_ACTIONS]
+    cmds = [m.group(1) for m in INPUT_RE.finditer(text)]
+    cmds = [c for c in cmds if not (c.startswith("keys ") and DANGEROUS.search(c))][:MAX_ACTIONS]
     return INPUT_RE.sub("", text).strip(), cmds
 
 

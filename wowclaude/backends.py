@@ -126,9 +126,10 @@ def ask(system: str, history: list[tuple[str, str]], prompt: str, model: str | N
             raise RuntimeError("the 'codex' command was not found")
         with tempfile.TemporaryDirectory() as tmp:
             out_file = Path(tmp) / "answer.txt"
-            cmd = [exe, "--search", "exec", "--skip-git-repo-check", "--ephemeral", "--ignore-user-config", "-s", "read-only",
+            from . import claude as _c
+            cmd = [exe, "--search", "exec", "--skip-git-repo-check", "--ephemeral", "--ignore-user-config", "-s", ("workspace-write" if _c.computer_access() else "read-only"),
                    "--color", "never",
-                   "-C", str(config.HOME), "-o", str(out_file)]
+                   "-C", (str(Path.home()) if _c.computer_access() else _c.neutral_cwd()), "-o", str(out_file)]
             if model:
                 cmd += ["-m", model]
             config.HOME.mkdir(parents=True, exist_ok=True)

@@ -14,7 +14,7 @@ import threading
 from . import backends, claude, config
 from .winproc import hidden
 
-_AUTH = re.compile(r"oauth|authenticat|not logged in|log ?in|unauthori[sz]ed|\b401\b|expired|credentials", re.I)
+_AUTH = re.compile(r"oauth|authenticat|not logged in|please log ?in|login required|unauthori[sz]ed|\b401\b|expired|credentials", re.I)
 _URL = re.compile(r"https://[^\s\"'<>]+")
 _running: list = []
 
@@ -91,6 +91,8 @@ _KEY = re.compile(r"api key|invalid.*key|incorrect.*key|\b40[13]\b|forbidden|per
 def explain(exc: Exception) -> str:
     """One plain sentence for the chat: what went wrong and what to do (never just 'it does not answer')."""
     text = str(exc)
+    if "not found" in text.lower():
+        return "The AI program was not found. Open /wac and choose Connect AI to pick another one."
     if isinstance(exc, claude.AskTimeout) or re.search(r"timed? ?out", text, re.I) and "connect" not in text.lower():
         return "The AI took too long to answer. Ask again, or try a shorter question."
     if is_auth_error(text):

@@ -91,7 +91,7 @@ def test_player_name_comes_only_from_the_menu_and_the_ai_never_asks(monkeypatch)
     from wowclaude import claude, config, bridge
     system = claude.persona()[1]
     assert "what you should call them" not in system and "[[me" not in system
-    assert bridge.handle_command("!me Bob").startswith("Dein Name: Bob") and config.load()["player"] == "Bob"
+    assert bridge.handle_command("!me Bob").startswith("Your name: Bob") and config.load()["player"] == "Bob"
     assert "Call them Bob" in claude.persona()[1]
     bridge.handle_command("!me")
     assert "player" not in config.load() and "briefly ask" not in claude.persona()[1]
@@ -224,3 +224,48 @@ def test_login_code_is_sent_to_the_waiting_login(monkeypatch):
     assert proc.got == "abc123\n"
     login._running[:] = []
     assert "No login" in login.submit("x")
+
+
+def test_keys_from_the_ai_cannot_run_destructive_chat_commands():
+    from wowclaude import vinput
+    text = "x [[keys {Enter}/run DeleteCursorItem(){Enter}]] [[keys /gquit]] [[keys {Esc}]] [[click 10 20]] [[keys hello]]"
+    _, cmds = vinput.extract(text)
+    assert cmds == ["keys {Esc}", "click 10 20", "keys hello"]
+    assert vinput.extract("[[keys {ctrl down}]]")[1] == []
+
+
+def test_input_tool_text_is_not_part_of_the_editable_harness(monkeypatch):
+    from wowclaude import claude, vinput, setup_ui
+    before = claude.builtin_harness()
+    setup_ui.apply({"backend": "claude", "input_control": True})
+    assert claude.builtin_harness() == before  # switching the tool on must not change what the page shows
+    assert "BACKGROUND INPUT" in claude.persona()[1]
+    setup_ui.apply({"backend": "claude", "harness": "my own text"})
+    assert "BACKGROUND INPUT" in claude.persona()[1]  # the program adds the tool text even to an edited harness
+
+
+def test_broken_harness_file_falls_back_to_builtin():
+    from wowclaude import claude, config
+    config.HOME.mkdir(parents=True, exist_ok=True)
+    config.HARNESS.write_bytes("Text mit \xe4 ANSI".encode("latin-1"))
+    assert claude.custom_harness() is None
+    assert "GAME VERSION" in claude.persona()[1]
+
+
+def test_missing_program_is_not_reported_as_login_problem():
+    from wowclaude import login
+    assert "not found" in login.explain(RuntimeError("The 'claude' command was not found. Install Claude Code and log in."))
+
+
+def test_claude_command_line_keeps_the_tool_limits(monkeypatch):
+    from wowclaude import claude, config
+    seen = {}
+    monkeypatch.setattr(claude, "_exec", lambda cmd, prompt, timeout=None: seen.setdefault("cmd", cmd) and (0, "ok", ""))
+    claude.Session()._run("claude", "hi", None)
+    cmd = seen["cmd"]
+    assert cmd[cmd.index("--tools") + 1] == "WebSearch,WebFetch" and cmd[cmd.index("--allowedTools") + 1] == "WebSearch,WebFetch"
+    assert "--strict-mcp-config" in cmd and "--permission-mode" not in cmd
+    cfg = config.load(); cfg["computer_access"] = True; config.save(cfg)
+    seen.clear()
+    claude.Session()._run("claude", "hi", None)
+    assert "Bash" in seen["cmd"][seen["cmd"].index("--tools") + 1]
