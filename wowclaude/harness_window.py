@@ -5,7 +5,7 @@ Save writes ~/.wowclaude/harness.txt; a text equal to the built-in one (or empty
 """
 from __future__ import annotations
 
-from . import claude, config, harness_import
+from . import backends, claude, config, harness_import
 
 
 def save(text: str) -> str:
@@ -95,8 +95,14 @@ def run(tab: str = "wow") -> None:
     def refresh() -> None:
         info.config(state="normal")
         info.delete("1.0", "end")
-        info.insert("1.0", head + ("\n\n".join(harness_import.overview(s) for s in found) if found else
-                                   "Nothing found yet. Click Search (all AI programs on this computer) or Pick folder."))
+        body = ("\n\n".join(harness_import.overview(s) for s in found) if found else
+                "Nothing found yet. Click Search (all AI programs on this computer) or Pick folder.")
+        plain = [b for b in backends.detect() if b["backend"] not in ("claude", "codex")]
+        if plain:
+            body += ("\n\nRUNS HERE WITHOUT AN OWN FOLDER (API key or local program): choose it on the AI Setup page. Own then means\n"
+                     "the model itself without the WoW AI role; there is no memory or skill folder to show.\n"
+                     + "\n".join("  - " + b["label"] for b in plain))
+        info.insert("1.0", head + body)
         info.config(state="disabled")
         rebuild_row()
 
