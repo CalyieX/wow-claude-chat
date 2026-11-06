@@ -632,7 +632,7 @@ toolsFrame:Hide()
 
 -- Harness submenu: WoW AI harness or the AI's own setup, separately for the game chat and the CLI
 local harnessFrame = CreateFrame("Frame", "KKHarnessFrame", UIParent, "BackdropTemplate")
-harnessFrame:SetSize(300, 186); harnessFrame:SetPoint("CENTER", UIParent, "CENTER", 0, 60)
+harnessFrame:SetSize(300, 212); harnessFrame:SetPoint("CENTER", UIParent, "CENTER", 0, 60)
 harnessFrame:SetFrameStrata("DIALOG"); harnessFrame:SetMovable(true); harnessFrame:EnableMouse(true)
 harnessFrame:RegisterForDrag("LeftButton"); harnessFrame:SetScript("OnDragStart", harnessFrame.StartMoving)
 harnessFrame:SetScript("OnDragStop", harnessFrame.StopMovingOrSizing); harnessFrame:SetClampedToScreen(true)
@@ -664,7 +664,7 @@ local menu
 local function buildMenu()
   if menu then return menu end
   local f = CreateFrame("Frame", "KKMenuFrame", UIParent, "BackdropTemplate")
-  f:SetSize(220, 400)
+  f:SetSize(220, 444)
   f:SetPoint("CENTER", UIParent, "CENTER", -260, 60)
   f:SetFrameStrata("DIALOG")
   f:SetMovable(true); f:EnableMouse(true); f:RegisterForDrag("LeftButton")
