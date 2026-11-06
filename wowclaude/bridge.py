@@ -64,10 +64,12 @@ def handle_command(text: str) -> str | None:
     if cmd == "!harness":
         words = arg.lower().split()
         if words and words[0] == "edit":  # the harness text lives here (menu Harness), not on the Connect AI page
-            from . import overlay, setup_ui
-            url = setup_ui.start_background() + "&view=harness"
-            problem = overlay.play(url, "640x520")
-            return "Harness editor opened in the browser window." if not problem else f"Could not open the window ({problem}). Open: {url}"
+            import subprocess
+            import sys
+            from pathlib import Path
+            exe = Path(sys.executable).with_name("pythonw.exe")
+            subprocess.Popen([str(exe if exe.exists() else sys.executable), "-m", "wowclaude", "harness"], creationflags=0x08000000)
+            return "Harness editor opened in its own window."
         mode = words[0] if words and words[0] in ("wow", "cli") else ""
         if not mode:
             return "Harness: /harness wow  or  /harness cli  switches between the WoW AI harness and your AI's own setup."

@@ -188,6 +188,8 @@ def main(argv=None) -> int:
     pfk.set_defaults(fn=lambda a: __import__("wowclaude.chat_fake", fromlist=["run"]).run())
     pt = sub.add_parser("term", help="the CLI mode window (scroll, copy, paste)")
     pt.set_defaults(fn=lambda a: __import__("wowclaude.term_window", fromlist=["run"]).run())
+    ph = sub.add_parser("harness", help="edit the harness text (what the AI is told) in its own window")
+    ph.set_defaults(fn=lambda a: __import__("wowclaude.harness_window", fromlist=["run"]).run())
     args = ap.parse_args(argv)
     return args.fn(args)
 

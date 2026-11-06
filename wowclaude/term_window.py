@@ -45,6 +45,7 @@ def run() -> None:
     root.title("WoW AI - CLI")
     root.geometry("900x520+80+80")
     root.configure(bg="#101418")
+    root.attributes("-topmost", True)  # over the game, like the browser overlay
     font = tkfont.Font(family="Consolas", size=11)
     text = tk.Text(root, bg="#101418", fg="#e6e6e6", insertbackground="#e6e6e6", font=font, wrap="none", bd=0,
                    highlightthickness=0, selectbackground="#3a5a8c", cursor="xterm")

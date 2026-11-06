@@ -54,10 +54,6 @@ button.small{margin:3px 4px 0 0;padding:4px 10px;font-size:12px}
 <details><summary>Mouse and keyboard (tool for the AI)</summary>
 <small>Lets the AI click and type in the game window for you (open a window, press a button, fill a field) without using your own mouse. Combat actions stay protected by the game. Off by default.</small>
 <label><input type="checkbox" id="inputctl" style="width:auto"> Allow the AI to use mouse and keyboard in the game</label></details>
-<details><summary>Harness (what your AI is told)</summary>
-<small>This is the text your AI receives before every question: game version, research rule, macros, browser window ... Edit it as you like; the AI reads it fresh each time. "Reset" goes back to the built-in version that comes with the program.</small>
-<textarea id="harness" style="height:240px"></textarea>
-<button id="hreset" type="button" class="small">Reset to built-in</button><small id="hstate"></small></details>
 <details><summary>Let my own AI set this up</summary>
 <small>Copy this text into an AI that can edit files on your PC (Claude Code, Codex ...). It writes the settings for you.</small>
 <textarea id="aiprompt" readonly style="height:130px"></textarea><button id="copy" type="button">Copy</button></details>
@@ -87,20 +83,15 @@ function show(){const b=$("backend").value,isApi=!["claude","codex","command"].i
  s.backends.filter(b=>!have.includes(b)&&b!=="command").forEach(b=>{const x=document.createElement("button");x.className="small";x.textContent=b;
   x.onclick=()=>{sel.value=b;show();$("adv").open=true;$("api_key").focus()};O.appendChild(x)});
  $("model").value=s.model||"";$("base_url").value=s.base_url||"";$("command").value=s.command||"";
- $("inputctl").checked=!!s.input_control;$("access").checked=!!s.computer_access;$("harness").value=s.harness;$("hstate").textContent=s.harness_custom?"Using your edited harness.":"Using the built-in harness.";
- $("hreset").onclick=async()=>{const r=await api("/save",{backend:$("backend").value,harness_reset:true});$("msg").textContent=r.status;const s2=await api("/state");$("harness").value=s2.harness;$("hstate").textContent="Using the built-in harness."};
+ $("inputctl").checked=!!s.input_control;$("access").checked=!!s.computer_access;
  $("aiprompt").value=s.prompt;$("copy").onclick=()=>{$("aiprompt").select();document.execCommand("copy")};$("persona").value=s.persona||"";$("keystate").textContent=s.has_key?"(saved)":"";$("tokstate").textContent=s.has_token?"(saved)":"";show();sel.onchange=show;
  recheck()})();
 async function recheck(){$("msg").textContent="Checking the AI ...";$("msg").className="";
  try{const r=await api("/check");$("msg").textContent=r.status;$("msg").className=r.ok?"ok":"bad"}catch(e){$("msg").textContent="Check failed: "+e;$("msg").className="bad"}}
 $("save").onclick=async()=>{$("msg").textContent="Saving ...";$("msg").className="";
  const r=await api("/save",{backend:$("backend").value,model:$("model").value,base_url:$("base_url").value,
-  api_key:$("api_key").value,claude_token:$("claude_token").value,command:$("command").value,persona:$("persona").value,harness:$("harness").value,input_control:$("inputctl").checked,computer_access:$("access").checked});
+  api_key:$("api_key").value,claude_token:$("claude_token").value,command:$("command").value,persona:$("persona").value,input_control:$("inputctl").checked,computer_access:$("access").checked});
  $("msg").textContent=r.status;$("msg").className=r.ok?"ok":"bad";if(r.has_key)$("keystate").textContent="(saved)";$("api_key").value="";$("claude_token").value="";if(r.has_token)$("tokstate").textContent="(saved)";await recheck()};
-if(new URLSearchParams(location.search).get("view")==="harness"){document.querySelector("h1").textContent="Harness";
- for(const e of [...document.body.children]){const k=e.tagName;if(k==="H1"||k==="SCRIPT"||e.id==="save"||e.id==="msg")continue;
-  if(k==="DETAILS"&&e.querySelector("summary").textContent.startsWith("Harness")){e.open=true;continue}e.style.display="none"}}
-else{for(const e of document.querySelectorAll("details")){if(e.querySelector("summary").textContent.startsWith("Harness"))e.style.display="none"}}
 </script></body></html>"""
 
 
