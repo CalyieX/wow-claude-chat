@@ -22,6 +22,12 @@ def computer_access() -> bool:
     return bool(config.load().get("computer_access"))
 
 
+def own_harness(mode: str) -> bool:
+    """Menu Harness: does the player want the AI's OWN setup (its own memory files, settings, tools) instead of the WoW AI harness?
+    mode is "wow" (game chat) or "cli" (CLI mode); each one is set on its own."""
+    return bool(config.load().get("own_harness_" + mode))
+
+
 def run_tools() -> str:
     return ACCESS_TOOLS if computer_access() else WEB_TOOLS
 
@@ -284,11 +290,12 @@ def neutral_cwd() -> str:
 ISOLATION = ["--setting-sources", ""]  # no user/project settings, hooks or memory files shape the chat answers
 
 
-def _clean_env() -> dict:
+def _clean_env(mode: str = "wow") -> dict:
     """The player's own CLAUDE.md files and auto-memory must not shape (or leak into) game chat answers."""
     env = dict(os.environ)
-    env["CLAUDE_CODE_DISABLE_CLAUDE_MDS"] = "1"
-    env["CLAUDE_CODE_DISABLE_AUTO_MEMORY"] = "1"
+    if not own_harness(mode):  # the own harness keeps the AI's memory files
+        env["CLAUDE_CODE_DISABLE_CLAUDE_MDS"] = "1"
+        env["CLAUDE_CODE_DISABLE_AUTO_MEMORY"] = "1"
     for var in ("ANTHROPIC_API_KEY", "ANTHROPIC_AUTH_TOKEN"):
         env.pop(var, None)  # the Claude login is the subscription: a stray API key must not answer for it
     token = config.load().get("claude_token")  # one-year token (claude setup-token) entered on the AI setup page: chat AND CLI mode
@@ -304,7 +311,7 @@ def _exec(cmd: list, prompt: str, timeout: float | None = None) -> tuple:
     """Run the command with a hard time limit. On timeout the whole process tree is killed (a .cmd wrapper would
     otherwise keep running) and AskTimeout is raised. Returns (exit code, stdout, stderr)."""
     if "stream-json" in cmd:  # a normal question: tool use is shown in the chat while the AI works
-        return _exec_stream(cmd, prompt, timeout or TIMEOUT, _progress, cwd=str(Path.home()) if computer_access() else None)
+        return _exec_stream(cmd, prompt, timeout or TIMEOUT, _progress, cwd=str(Path.home()) if computer_access() or own_harness("wow") else None)
     proc = subprocess.Popen(cmd, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
                             text=True, encoding="utf-8", errors="replace", cwd=neutral_cwd(), env=_clean_env(),
                             **hidden())
@@ -402,7 +409,7 @@ class Session:
     def ask(self, prompt: str, model: str | None = None) -> str:
         from . import backends
         if backends.name() != "claude":
-            answer = backends.ask(persona()[1], self.history, prompt + reminder(), model)
+            answer = backends.ask("" if own_harness("wow") else persona()[1], self.history, prompt + reminder(), model)
             self.history.append((prompt, answer))
             return answer
         exe = claude_path()
@@ -434,11 +441,14 @@ class Session:
         sysfile = config.HOME / "system_prompt.txt"
         config.HOME.mkdir(parents=True, exist_ok=True)
         sysfile.write_text(persona()[1], encoding="utf-8")
-        tools = run_tools()
-        cmd = [exe, "-p", "--output-format", "stream-json", "--verbose", "--tools", tools, "--allowedTools", tools, "--strict-mcp-config",
-               *ISOLATION, "--append-system-prompt-file", str(sysfile)]
-        if computer_access():
-            cmd += ["--permission-mode", "acceptEdits"]
+        if own_harness("wow"):  # the AI's own setup: its memory files, settings and tools; only the answer format is ours
+            cmd = [exe, "-p", "--output-format", "stream-json", "--verbose", "--permission-mode", "acceptEdits"]
+        else:
+            tools = run_tools()
+            cmd = [exe, "-p", "--output-format", "stream-json", "--verbose", "--tools", tools, "--allowedTools", tools, "--strict-mcp-config",
+                   *ISOLATION, "--append-system-prompt-file", str(sysfile)]
+            if computer_access():
+                cmd += ["--permission-mode", "acceptEdits"]
         cmd += ["--resume" if self.started else "--session-id", self.id]
         if model:
             cmd += ["--model", model]

@@ -41,7 +41,7 @@ def no_browser_env() -> dict:
     from pathlib import Path
     exe = Path(sys.executable).with_name("pythonw.exe")  # a windowless program that ignores the address: no black pop-up
     noop = str(exe if exe.exists() else sys.executable)
-    env = claude._clean_env()
+    env = claude._clean_env("cli")
     env["BROWSER"] = noop
     return env
 

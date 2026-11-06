@@ -61,6 +61,26 @@ def handle_command(text: str) -> str | None:
         from . import cli_mode
         want = arg.lower() if arg else ("chat" if cli_mode.active() else "cli")
         return cli_mode.set_mode("cli" if want == "cli" else "chat")
+    if cmd == "!harness":
+        words = arg.lower().split()
+        mode = words[0] if words and words[0] in ("wow", "cli") else ""
+        if not mode:
+            return "Harness: /harness wow  or  /harness cli  switches between the WoW AI harness and your AI's own setup."
+        cfg = config.load()
+        own = (words[1] in ("own", "mine", "on")) if len(words) > 1 else not cfg.get("own_harness_" + mode)
+        if own:
+            cfg["own_harness_" + mode] = True
+        else:
+            cfg.pop("own_harness_" + mode, None)
+        config.save(cfg)
+        try:
+            from . import installer
+            installer.write_state()
+        except Exception:  # noqa: BLE001
+            pass
+        what = "WoW chat" if mode == "wow" else "CLI"
+        return (f"{what}: " + ("your AI's own harness (its own memory files and settings)" if own else "the WoW AI harness") +
+                (". Applies to the next question." if mode == "wow" else ". Applies when CLI mode starts again (/aimode chat, then /aimode cli)."))
     if cmd == "!term":
         return "The CLI window is for CLI mode: /aimode cli"
     if cmd == "!scroll":
@@ -157,7 +177,7 @@ def deliver(state: decode.GameState, reply: str) -> None:
     _post("ai", claude.persona()[0] + ": " + text.strip())
 
 
-CLI_BYPASS = ("!aimode", "!access", "!setup", "!browser", "!login", "!name", "!me")  # still handled by the bridge in CLI mode
+CLI_BYPASS = ("!harness", "!aimode", "!access", "!setup", "!browser", "!login", "!name", "!me")  # still handled by the bridge in CLI mode
 LOCK_PORT = 47831
 _lock_socket = None
 

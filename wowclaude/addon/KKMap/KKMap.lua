@@ -393,6 +393,16 @@ end
 SLASH_KKMEMORY1 = "/memos"
 SLASH_KKMEMORY2 = "/memory"
 SlashCmdList["KKMEMORY"] = function(msg) sendToClaude((("!memos " .. (msg or "")):gsub("%s+$", ""))) end
+SLASH_KKHARNESS1 = "/harness"
+SlashCmdList["KKHARNESS"] = function(msg)
+  local w, v = strtrim(msg or ""):lower():match("^(%a+)%s*(%a*)$")
+  if w == "wow" or w == "cli" then
+    setOwnFlag(w, v)
+    sendToClaude("!harness " .. w .. (v ~= "" and (" " .. v) or (KKMapDB and KKMapDB[w == "cli" and "ownCli" or "ownWow"] and " own" or " wow")))
+  elseif KKHarnessFrame then
+    if KKHarnessFrame:IsShown() then KKHarnessFrame:Hide() else KKHarnessFrame:Show() end
+  end
+end
 SLASH_KKTERM1 = "/term"
 SlashCmdList["KKTERM"] = function() sendToClaude("!term") end
 SLASH_KKSCROLL1 = "/scroll"
@@ -402,6 +412,14 @@ local refreshLabels = function() end  -- replaced when the menu is built
 local function stateOf(name)
   if KKMapDB and KKMapDB[name] == nil then KKMapDB[name] = (KKMapState and KKMapState[name]) and true or false end
   return KKMapDB and KKMapDB[name]
+end
+local function setOwnFlag(which, msg)
+  local key = which == "cli" and "ownCli" or "ownWow"
+  local m = strtrim(msg or ""):lower()
+  if KKMapDB then
+    if m == "own" then KKMapDB[key] = true elseif m == "wow" then KKMapDB[key] = false else KKMapDB[key] = not stateOf(key) end
+  end
+  refreshLabels()
 end
 local function setAccessFlag(msg)
   local m = strtrim(msg or ""):lower()
@@ -505,6 +523,7 @@ local COMMANDS = {
   "/nameme name  -  what the AI calls you (empty = no name)",
   "/browser [url]  -  open the browser  (/browser off = close)",
   "/aimode [chat|cli]  -  CLI mode: the tab shows your AI's own CLI",
+  "/harness [wow|cli]  -  WoW AI harness or your AI's own, for the chat and the CLI separately",
   "/term  -  open the CLI in a real window (scroll, copy, paste)",
   "/scroll up|down|end  -  look back in the CLI (or mouse wheel)",
   "/memos  -  what the AI saved about you  (/memos clear)",
@@ -546,6 +565,7 @@ local TIPS = {
   "Best place: the very top, outside your windows.",
   " ",
   "The AI tab can be moved and resized freely.",
+  "Harness menu example: WoW chat = WoW AI (Warcraft help), CLI = Own: your local AI with its own setup works on your projects.",
   "Play in windowed or borderless mode, not fullscreen.",
   " ",
   "Login expired? The sign-in page opens by itself in the game",
@@ -610,12 +630,39 @@ end
 local tlc = CreateFrame("Button", nil, toolsFrame, "UIPanelCloseButton"); tlc:SetPoint("TOPRIGHT", -4, -4)
 toolsFrame:Hide()
 
+-- Harness submenu: WoW AI harness or the AI's own setup, separately for the game chat and the CLI
+local harnessFrame = CreateFrame("Frame", "KKHarnessFrame", UIParent, "BackdropTemplate")
+harnessFrame:SetSize(300, 150); harnessFrame:SetPoint("CENTER", UIParent, "CENTER", 0, 60)
+harnessFrame:SetFrameStrata("DIALOG"); harnessFrame:SetMovable(true); harnessFrame:EnableMouse(true)
+harnessFrame:RegisterForDrag("LeftButton"); harnessFrame:SetScript("OnDragStart", harnessFrame.StartMoving)
+harnessFrame:SetScript("OnDragStop", harnessFrame.StopMovingOrSizing); harnessFrame:SetClampedToScreen(true)
+harnessFrame:SetBackdrop({ bgFile = "Interface\\DialogFrame\\UI-DialogBox-Background", edgeFile = "Interface\\DialogFrame\\UI-DialogBox-Border",
+  tile = true, tileSize = 32, edgeSize = 24, insets = { left = 6, right = 6, top = 6, bottom = 6 } })
+local hft = harnessFrame:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge"); hft:SetPoint("TOPLEFT", 18, -14); hft:SetText("Harness")
+local hfc = CreateFrame("Button", nil, harnessFrame, "UIPanelCloseButton"); hfc:SetPoint("TOPRIGHT", -4, -4)
+local hfn = harnessFrame:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall"); hfn:SetPoint("TOPLEFT", 20, -118)
+hfn:SetWidth(260); hfn:SetJustifyH("LEFT")
+hfn:SetText("Own = your AI's own memory files, settings and tools (CLI: work on your own projects). WoW AI = the Warcraft harness.")
+local hWow = CreateFrame("Button", nil, harnessFrame, "UIPanelButtonTemplate"); hWow:SetSize(260, 26); hWow:SetPoint("TOP", 0, -42)
+local hCli = CreateFrame("Button", nil, harnessFrame, "UIPanelButtonTemplate"); hCli:SetSize(260, 26); hCli:SetPoint("TOP", 0, -74)
+hWow:SetScript("OnClick", function() SlashCmdList["KKHARNESS"]("wow") end)
+hCli:SetScript("OnClick", function() SlashCmdList["KKHARNESS"]("cli") end)
+local function harnessLabels()
+  local Y, G = "|cffffd100", "|cff808080"
+  local w, c = stateOf("ownWow"), stateOf("ownCli")
+  hWow:SetText("WoW chat:  " .. (w and G or Y) .. "WoW AI|r / " .. (w and Y or G) .. "Own|r")
+  hCli:SetText("CLI:  " .. (c and G or Y) .. "WoW AI|r / " .. (c and Y or G) .. "Own|r")
+end
+harnessFrame:SetScript("OnShow", harnessLabels)
+harnessFrame:Hide()
+local baseRefresh = refreshLabels
+
 -- Small addon menu (/wac)
 local menu
 local function buildMenu()
   if menu then return menu end
   local f = CreateFrame("Frame", "KKMenuFrame", UIParent, "BackdropTemplate")
-  f:SetSize(220, 368)
+  f:SetSize(220, 400)
   f:SetPoint("CENTER", UIParent, "CENTER", -260, 60)
   f:SetFrameStrata("DIALOG")
   f:SetMovable(true); f:EnableMouse(true); f:RegisterForDrag("LeftButton")
@@ -664,8 +711,10 @@ local function buildMenu()
     local cli, acc = stateOf("cli"), stateOf("access")
     modeBtn:SetText("Chat mode:  " .. (cli and GREY or YEL) .. "WoW|r / " .. (cli and YEL or GREY) .. "CLI|r")
     accessBtn:SetText("AI access:  " .. (acc and YEL or GREY) .. "ON|r / " .. (acc and GREY or YEL) .. "OFF|r")
+    harnessLabels()
   end
   refreshLabels()
+  button("Harness", function() SlashCmdList["KKHARNESS"]("") end)
   button("Tools", function() if KKToolsFrame:IsShown() then KKToolsFrame:Hide() else KKToolsFrame:Show() end end)
   button("Tips", function() if KKTipFrame:IsShown() then KKTipFrame:Hide() else KKTipFrame:Show() end end)
   button("Commands", function() if KKCmdFrame:IsShown() then KKCmdFrame:Hide() else KKCmdFrame:Show() end end)

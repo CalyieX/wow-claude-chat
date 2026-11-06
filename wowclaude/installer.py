@@ -41,8 +41,9 @@ def write_state(root: Path | None = None) -> None:
     cfg = config.load()
     folder = _addons(root) / "KKMap"
     if folder.is_dir():
-        (folder / "State.lua").write_text("KKMapState = { cli = %s, access = %s }\n" % (
-            "true" if cfg.get("ai_mode") == "cli" else "false", "true" if cfg.get("computer_access") else "false"), encoding="utf-8")
+        (folder / "State.lua").write_text("KKMapState = { cli = %s, access = %s, ownWow = %s, ownCli = %s }\n" % (
+            "true" if cfg.get("ai_mode") == "cli" else "false", "true" if cfg.get("computer_access") else "false",
+            "true" if cfg.get("own_harness_wow") else "false", "true" if cfg.get("own_harness_cli") else "false"), encoding="utf-8")
 
 
 def remove_old_slots(root: Path) -> int:

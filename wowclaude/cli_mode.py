@@ -72,6 +72,8 @@ def command() -> list[str] | None:
         exe = claude.claude_path()
         if not exe:
             return None
+        if claude.own_harness("cli"):  # the AI's own setup (memory files, settings, tools): work on your own projects
+            return [exe]
         cmd = [exe, "--setting-sources", "", "--append-system-prompt-file", str(harness_file())]  # not the player's own settings
         if not claude.computer_access():
             cmd += ["--tools", claude.WEB_TOOLS, "--allowedTools", claude.WEB_TOOLS]
@@ -80,6 +82,8 @@ def command() -> list[str] | None:
         exe = shutil.which("codex")
         if not exe:
             return None
+        if claude.own_harness("cli"):
+            return [exe, "--search", "-c", "projects." + json.dumps(str(Path.home())) + '.trust_level="trusted"']
         cmd = [exe, "--search"] + ([] if claude.computer_access() else ["-s", "read-only"])
         folder = str(Path.home()) if claude.computer_access() else claude.neutral_cwd()  # chosen by the "AI access" switch
         cmd += ["-c", "projects." + json.dumps(folder) + '.trust_level="trusted"']  # no "trust this folder?" question
@@ -153,7 +157,7 @@ class CliMode:
         self.screen = pyte.HistoryScreen(cols, rows, history=2000)  # keeps what scrolled off the top
         self.offset = 0
         self.stream = pyte.Stream(self.screen)
-        cwd = str(Path.home()) if claude.computer_access() else claude.neutral_cwd()
+        cwd = str(Path.home()) if claude.computer_access() or claude.own_harness("cli") else claude.neutral_cwd()
         prepare_config(cwd)
         from . import login
         env = login.no_browser_env()  # a /login inside the tool must not open the normal browser
