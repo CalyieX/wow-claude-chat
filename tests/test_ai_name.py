@@ -108,7 +108,7 @@ def test_flavor_from_interface_number():
 def test_system_prompt_has_version_research_and_tools():
     from wowclaude import claude
     p = claude.DEFAULT_SYSTEM
-    assert "GAME VERSION" in p and "RESEARCH FIRST" in p
+    assert "GAME VERSION" in p and "RESEARCH FIRST" in p and "CHARACTER" in p
     for tool in ("[[macro", "[[overlay", "[[play", "/wac", "/browser"):
         assert tool in p
     assert not any(w in p.lower() for w in ("bor" + "ro", "caly" + "ie"))

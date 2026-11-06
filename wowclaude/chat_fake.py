@@ -136,6 +136,14 @@ def _make_window():
     return root, hwnd
 
 
+def _log(text: str) -> None:
+    try:
+        with open(config.HOME / 'dock.log', 'a', encoding='utf-8') as f:
+            f.write(text + chr(10))
+    except OSError:
+        pass
+
+
 class Dock:
     """The always-on WAC button: shown whenever the browser window is not running, click opens it, drag moves it.
     (While the browser window runs it draws its own frame / minimized button, using the same remembered spot.)"""
@@ -191,6 +199,9 @@ class Dock:
     def update(self) -> None:
         g = overlay.game_rect()
         want = bool(g) and not overlay.game_minimized() and not overlay.overlay_alive()
+        if want != getattr(self, '_want', None):
+            self._want = want
+            _log(f'dock want={want} game={g}')
         if self.drag:
             return
         if not want:
@@ -267,7 +278,7 @@ def run(poll: float = 0.25, find_every: float = 0.5) -> None:
             try:
                 dock.update()
             except Exception as exc:  # noqa: BLE001 - the button is a convenience, never stop the chat overlay
-                print(f'dock failed: {exc}', flush=True)
+                _log(f'dock failed: {exc!r}')
         events, offset = read_new(offset)
         if events:
             entries = apply_events(entries, events)

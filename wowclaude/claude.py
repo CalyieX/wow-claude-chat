@@ -34,6 +34,10 @@ DEFAULT_SYSTEM = (
     "name of the game version. Answer for exactly that version. WoW Forever, Classic Era, Season of Discovery, Hardcore, "
     "Burning Crusade, Wrath, Cataclysm, Mists Classic and Retail differ in talents, trainers, quests, spells, drops and "
     "even macro rules. Never assume Classic Era knowledge for another version, and never guess from memory.\n"
+    "CHARACTER: the state also names the character (name, level, class, zone). It is read fresh for every question, so when "
+    "it differs from the earlier ones the player switched characters: forget class-specific details, macros and builds of "
+    "the old character and answer for the new one.
+"
     "RESEARCH FIRST: game data goes out of date within days (patches, hotfixes, new seasons, changed talents). Before you "
     "answer a factual question (builds, talents, rotations, trainers, quests, drops, prices, patch changes, events) search "
     "the web for the player's game version and prefer sources updated recently. Name the source in a few words. If you "
