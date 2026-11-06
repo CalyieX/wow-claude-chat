@@ -47,7 +47,7 @@ def run(tab: str = "wow") -> None:
              fg=gold).pack(side="left")
     tk.Entry(mrow, textvariable=model_var, width=22, bg="#1d1a12", fg="#f0e6c8", insertbackground=gold, relief="solid",
              bd=1).pack(side="left", padx=6)
-    tk.Button(mrow, text="Set", command=set_model, bg="#5c1a10", fg=gold, activebackground="#7d2417", activeforeground=gold,
+    tk.Button(mrow, text="Set", command=lambda: set_model(), bg="#5c1a10", fg=gold, activebackground="#7d2417", activeforeground=gold,
               relief="solid", bd=1, padx=10).pack(side="left")
     info = tk.Text(own, bg="#15130e", fg="#f0e6c8", font=("Consolas", 10), wrap="word", bd=1, relief="solid")
     ibar = WowScrollbar(own, info.yview)
