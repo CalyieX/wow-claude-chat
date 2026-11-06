@@ -239,7 +239,7 @@ local function claudeFrame0()
   if chatFrame then return chatFrame end
   -- the tab may carry the previous name (the AI was renamed): find it by the name we used last, rename it, and never
   -- leave a second tab behind
-  local olds = { [TABNAME] = true, [KKMapDB.tabName or "Claude"] = true, Claude = true }
+  local olds = { [TABNAME] = true, [KKMapDB.tabName or "Claude"] = true, Claude = true, ["WoW AI"] = true, ["Own AI"] = true }
   local found
   for i = 1, NUM_CHAT_WINDOWS do
     local name = GetChatWindowInfo(i)
@@ -251,14 +251,14 @@ local function claudeFrame0()
   end
   if found then
     chatFrame = found
-    renameTab(chatFrame, TABNAME)
-    KKMapDB.tabName = TABNAME
+    renameTab(chatFrame, aiName())  -- the tab carries the name of the AI in use (WoW AI / Own AI)
+    KKMapDB.tabName = aiName()
     return chatFrame
   end
-  local ok, f = pcall(FCF_OpenNewWindow, TABNAME)
+  local ok, f = pcall(FCF_OpenNewWindow, aiName())
   if not (ok and f) or f == DEFAULT_CHAT_FRAME then return nil end  -- never fall back to the normal chat: it would swallow every message
   chatFrame = f
-  KKMapDB.tabName = TABNAME
+  KKMapDB.tabName = aiName()
   if FCF_SetChatWindowFontSize then pcall(FCF_SetChatWindowFontSize, nil, chatFrame, 16) end
   return chatFrame
 end
@@ -433,6 +433,7 @@ setOwnFlag = function(which, msg)
     if m == "own" then KKMapDB[key] = true elseif m == "wow" then KKMapDB[key] = false else KKMapDB[key] = not stateOf(key) end
   end
   refreshLabels()
+  if chatFrame and which ~= "win" then renameTab(chatFrame, aiName()); KKMapDB.tabName = aiName() end  -- the tab switches with the harness
 end
 local function setAccessFlag(msg)
   local m = strtrim(msg or ""):lower()
