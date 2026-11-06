@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 from pathlib import Path
 
 from . import backends, config
@@ -32,6 +33,116 @@ def claude_models(home: Path | None = None) -> list[tuple[str, str]]:
                 if isinstance(m, dict) and m.get("value"):
                     out.append((str(m["value"]), f'{m.get("label", m["value"])} - {m.get("description", "")}'.strip(" -")))
             break
+    return out
+
+
+_ROW = re.compile(r"^\s*[>\u203a\u276f]?\s*(\d+)\.\s+(.+?)(?:\s{2,}(.*))?$")
+_MARKS = "\u221a\u2714\u2713"
+
+
+def parse_claude_picker(lines: list[str]) -> list[tuple[str, str, bool]]:
+    """The rows of Claude Code's /model dialog: (name, description, is_current). name is as shown ("Sonnet", "Fable", ...)."""
+    rows, inside = [], False
+    for line in lines:
+        if "Select model" in line:
+            inside = True
+            continue
+        if not inside:
+            continue
+        if "Enter to" in line or "Esc to" in line:
+            break
+        m = _ROW.match(line.rstrip())
+        if m:
+            name = m.group(2).strip()
+            cur = any(c in name for c in _MARKS)
+            name = re.sub(r"\s*[" + _MARKS + r"]\s*$", "", name).strip()
+            rows.append((name, (m.group(3) or "").strip(), cur))
+    return rows
+
+
+def claude_cli_models(timeout: float = 45.0) -> list[tuple[str, str]]:
+    """The list exactly as Claude Code shows it in /model (concrete versions, what the account really has): the CLI is
+    started hidden, /model typed, the dialog read from its screen. [] when that is not possible (no pywinpty/pyte, not logged in)."""
+    try:
+        import threading
+        import time
+
+        import pyte
+        import winpty
+    except ImportError:
+        return []
+    from . import claude
+    exe = claude.claude_path()
+    if not exe:
+        return []
+    screen = pyte.Screen(140, 45)
+    stream = pyte.Stream(screen)
+    try:
+        proc = winpty.PtyProcess.spawn([exe], dimensions=(45, 140), cwd=str(Path.home()), env=claude._clean_env("wow"))
+    except Exception:  # noqa: BLE001
+        return []
+
+    def reader() -> None:
+        while True:
+            try:
+                data = proc.read(4096)
+            except Exception:  # noqa: BLE001
+                return
+            if data:
+                stream.feed(data)
+
+    threading.Thread(target=reader, daemon=True).start()
+
+    def text() -> list[str]:
+        return [ln.rstrip() for ln in screen.display]
+
+    def wait_for(needle: str, secs: float) -> bool:
+        end = time.time() + secs
+        while time.time() < end:
+            if any(needle in ln for ln in text()):
+                return True
+            time.sleep(0.3)
+        return False
+
+    rows: list[tuple[str, str, bool]] = []
+    try:
+        end = time.time() + timeout / 2
+        ready = False
+        while time.time() < end:  # until the prompt is there; a one-time start dialog is answered with its safe default
+            lines = text()
+            if any("No, keep browser tools off" in ln for ln in lines):
+                proc.write("\r")
+                time.sleep(1.5)
+            elif (any(ln.lstrip().startswith((">", "❯")) for ln in lines) and any(ln.startswith("──") for ln in lines)
+                  and not any("Enter to" in ln or "Esc to" in ln for ln in lines)):
+                ready = True  # the input prompt between its two rules, and no start dialog on screen
+                time.sleep(1.5)
+                break
+            time.sleep(0.4)
+        if ready:
+            time.sleep(1.0)
+            proc.write("/model")
+            time.sleep(1.5)
+            proc.write("\r")
+            if not wait_for("Select model", 4):
+                proc.write("\r")
+            if wait_for("Esc to", timeout / 2):
+                rows = parse_claude_picker(text())
+    finally:
+        try:
+            proc.write("\x1b")
+            time.sleep(0.3)
+            proc.terminate(force=True)
+        except Exception:  # noqa: BLE001
+            pass
+    known = {v.lower(): v for v, _ in claude_models()}
+    out = []
+    for name, desc, _cur in rows:
+        low = name.lower().split()[0] if name else ""
+        if low in ("default", "more"):
+            continue  # "the AI's own default" has its own button; "More models" is not a model
+        value = known.get(low) or next((v for v in known.values() if low in v.lower()), low)
+        out.append((value, f"{name} - {desc}" if desc else name))
     return out
 
 

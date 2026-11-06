@@ -27,7 +27,9 @@ def run() -> None:
     current = config.model_for(backend)
     head = tk.Label(win.inner, text=f"AI: {backend}    current: {current or 'the AI default'}", bg="#15130e", fg=gold, anchor="w")
     head.pack(fill="x", padx=8, pady=(6, 0))
-    tk.Label(win.inner, text=note, bg="#15130e", fg="#b9b093", anchor="w", wraplength=600, justify="left").pack(fill="x", padx=8)
+    note_label = tk.Label(win.inner, text=note + ("  Reading the live list ..." if backend == "claude" else ""), bg="#15130e",
+                          fg="#b9b093", anchor="w", wraplength=600, justify="left")
+    note_label.pack(fill="x", padx=8)
     box = tk.Frame(win.inner, bg="#15130e")
     box.pack(fill="both", expand=True, padx=8, pady=6)
     lst = tk.Listbox(box, bg="#15130e", fg="#f0e6c8", selectbackground="#5c1a10", selectforeground=gold, font=("Consolas", 10),
@@ -44,6 +46,25 @@ def run() -> None:
     msg.pack(fill="x", padx=8, side="bottom")
     row = tk.Frame(win.inner, bg="#15130e")
     row.pack(fill="x", padx=6, pady=(2, 4), side="bottom")
+
+    def fill(new_items, new_note) -> None:
+        items[:] = new_items
+        lst.delete(0, "end")
+        for ident, label in items:
+            lst.insert("end", ("> " if ident == config.model_for(backend) else "  ") + (f"{ident}   {label}" if label != ident else ident))
+        note_label.config(text=new_note)
+
+    def live() -> None:  # the real list from the AI's own program, read in the background
+        import threading
+
+        def work() -> None:
+            got = models.claude_cli_models() if backend == "claude" else []
+            if got:
+                try:
+                    win.root.after(0, lambda: fill(got, "Read live from Claude Code (/model): what your account has right now."))
+                except Exception:  # noqa: BLE001 - window already closed
+                    pass
+        threading.Thread(target=work, daemon=True).start()
 
     def use(_e=None) -> None:
         sel = lst.curselection()
@@ -63,4 +84,5 @@ def run() -> None:
     for label, cmd in (("Use selected", use), ("AI default", default), ("Close", win.close)):
         tk.Button(row, text=label, command=cmd, bg="#5c1a10", fg=gold, activebackground="#7d2417", activeforeground=gold,
                   relief="solid", bd=1, padx=12).pack(side="left", padx=(0, 8))
+    live()
     win.root.mainloop()

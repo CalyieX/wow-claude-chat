@@ -539,3 +539,15 @@ def test_model_lists_come_from_the_ai_itself(tmp_path, monkeypatch):
         {"slug": "h", "display_name": "H", "visibility": "hide", "priority": 3}]}), encoding="utf-8")
     monkeypatch.delenv("CODEX_HOME", raising=False)
     assert [i for i, _ in models.codex_models(tmp_path)] == ["a", "b"]
+
+
+def test_claude_model_dialog_is_parsed():
+    from wowclaude import models
+    lines = ["   Select model",
+             "   > 1. Default (recommended) \u221a  Sonnet 5.5 \u00b7 Efficient for routine tasks",
+             "     2. Opus                     Opus 5.5 \u00b7 Best for everyday, complex tasks",
+             "     3. More models              Show 8 more",
+             "   Enter to set as default"]
+    rows = models.parse_claude_picker(lines)
+    assert [r[0] for r in rows] == ["Default (recommended)", "Opus", "More models"]
+    assert rows[0][2] and not rows[1][2]
