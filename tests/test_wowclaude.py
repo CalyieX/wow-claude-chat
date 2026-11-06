@@ -427,7 +427,7 @@ def test_expired_login_gets_a_clear_message(monkeypatch, tmp_path):
         claude.Session().ask("hi")
         assert False, "should raise"
     except RuntimeError as exc:
-        assert "log in again" in str(exc)
+        assert "Not signed in" in str(exc)
 
 
 def test_native_claude_exe_preferred(monkeypatch, tmp_path):

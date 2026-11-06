@@ -479,7 +479,8 @@ class Session:
             except RuntimeError as exc:
                 low = str(exc).lower()
                 if "expired" in low or "log in" in low or "login" in low or "authenticate" in low:
-                    raise RuntimeError("Claude login expired: run `claude` once in a terminal and log in again.") from exc
+                    raise RuntimeError("Not signed in (Claude login expired). Type  /login  in the game chat: the sign-in page "
+                                       "opens in the game browser. (Or run `claude` once in a terminal and log in.)") from exc
                 stale = ("no conversation found" in low or "already in use" in low or "session not found" in low
                          or "invalid session" in low or "unknown session" in low)
                 if not (self.started and stale) or t_end - time.time() < 20:
