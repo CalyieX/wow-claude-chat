@@ -69,7 +69,7 @@ def run(tab: str = "wow") -> None:
     def do_import(src) -> None:
         text.delete("1.0", "end")
         text.insert("1.0", harness_import.render(src, claude.builtin_harness()))
-        msg.config(text="Imported - " + harness_import.summary(src) + ". Click Save to use it.")
+        msg.config(text="Imported - " + harness_import.summary(src) + ". Click Save to use it.", fg="#7fd17f")
 
     def do_reset() -> None:
         config.HARNESS.unlink(missing_ok=True)
@@ -78,6 +78,18 @@ def run(tab: str = "wow") -> None:
 
     found = harness_import.sources()
 
+    def pick() -> None:
+        from tkinter import filedialog
+        folder = filedialog.askdirectory(title="Folder of your AI setup (e.g. .claude, .codex)", parent=root)
+        if not folder:
+            return
+        src = harness_import.from_folder(folder)
+        if not src.found():
+            msg.config(text="Nothing usable in that folder (looked for CLAUDE.md / AGENTS.md, MEMORY.md, skills).", fg="#e0a060")
+            return
+        do_import(src)
+        show("wow")
+
     def rebuild_row() -> None:
         for w in row.winfo_children():
             w.destroy()
@@ -85,7 +97,7 @@ def run(tab: str = "wow") -> None:
             buttons = [("Save", do_save), ("Reset to built-in", do_reset), ("Close", win.close)]
         else:
             buttons = [(f"Load {s.label} into WoW AI text", (lambda s=s: (do_import(s), show("wow")))) for s in found]
-            buttons.append(("Close", win.close))
+            buttons += [("Pick folder...", pick), ("Close", win.close)]
         for label, cmd in buttons:
             tk.Button(row, text=label, command=cmd, bg="#5c1a10", fg=gold, activebackground="#7d2417", activeforeground=gold,
                       relief="solid", bd=1, padx=12).pack(side="left", padx=(0, 8))

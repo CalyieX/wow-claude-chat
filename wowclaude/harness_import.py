@@ -101,6 +101,32 @@ def codex_source(home: Path | None = None) -> Source:
     return src
 
 
+def from_folder(folder: Path) -> Source:
+    """A setup in a folder the player picked by hand: any AI program's config folder (or a folder with the files in it).
+
+    Looks for the instructions (CLAUDE.md, AGENTS.md), the memory (MEMORY.md here, in memory/, or in projects/*/memory/)
+    and skills (skills/*/SKILL.md, also in .agents/skills).
+    """
+    folder = Path(folder)
+    src = Source("folder", folder.name or str(folder))
+    for name in ("CLAUDE.md", "AGENTS.md"):
+        if (folder / name).is_file():
+            src.instructions_file = folder / name
+            break
+    cands = [folder, folder / "memory"]
+    try:
+        cands += sorted((folder / "projects").glob("*/memory"), key=lambda p: -sum(1 for _ in p.glob("*.md")))
+    except OSError:
+        pass
+    for c in cands:
+        if (c / "MEMORY.md").is_file():
+            src.memory_index, src.memory_dir = c / "MEMORY.md", c
+            break
+    for sk in (folder / "skills", folder / ".agents" / "skills"):
+        src.skills += [s for s in _skills(sk) if s[0] not in {x[0] for x in src.skills}]
+    return src
+
+
 def sources(home: Path | None = None) -> list[Source]:
     """The setups found on this computer (only those with something in them)."""
     return [s for s in (claude_source(home), codex_source(home)) if s.found()]

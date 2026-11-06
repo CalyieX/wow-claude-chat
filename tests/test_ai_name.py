@@ -473,3 +473,18 @@ def test_harness_import_reads_claude_and_codex_setups(tmp_path, monkeypatch):
     assert "demo: Does a demo" in text and text.endswith("GAME PART")
     assert "Codex rules" in hi.render(found["codex"], "G")
     assert hi.sources(tmp_path / "empty") == [] and hi.render(hi.Source("claude", "x"), "G") == "G"
+
+
+def test_harness_import_from_picked_folder(tmp_path):
+    from wowclaude import harness_import as hi
+    (tmp_path / "CLAUDE.md").write_text("I am Mira.", encoding="utf-8")
+    mem = tmp_path / "projects" / "p1" / "memory"
+    mem.mkdir(parents=True)
+    (mem / "MEMORY.md").write_text("- note", encoding="utf-8")
+    sk = tmp_path / "skills" / "demo"
+    sk.mkdir(parents=True)
+    (sk / "SKILL.md").write_text("---\nname: demo\ndescription: does demo\n---\nbody", encoding="utf-8")
+    src = hi.from_folder(tmp_path)
+    assert src.found() and src.memory_dir == mem and [s[0] for s in src.skills] == ["demo"]
+    assert "I am Mira." in hi.render(src, "GAME")
+    assert not hi.from_folder(tmp_path / "nothing").found()
