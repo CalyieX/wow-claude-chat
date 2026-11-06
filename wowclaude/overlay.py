@@ -534,16 +534,14 @@ def slot_sprite(state: str = ""):
 
     out = Image.new("RGBA", (64, 64), (0, 0, 0, 0))
     out.alpha_composite(_art("UI-Quickslot.png"))
-    icon = _art("INV_Misc_Map_01.png")
-    icon = icon.crop((5, 5, 59, 59)).resize((36, 36), Image.LANCZOS)  # action buttons show texcoords 0.08-0.92
-    out.alpha_composite(icon, (14, 14))
+    out.alpha_composite(Image.new("RGBA", (36, 36), (88, 88, 92, 255)), (14, 14))  # plain grey background (no icon)
     out.alpha_composite(_art("UI-Quickslot2.png"))
     from PIL import ImageDraw  # macro-style name in the game's font, centred in the slot: "WAC"
     d = ImageDraw.Draw(out)
     font = _font(13)
     for ox, oy in ((-1, 0), (1, 0), (0, -1), (0, 1), (1, 1), (-1, -1), (1, -1), (-1, 1)):
         d.text((32 + ox, 32 + oy), "WAC", font=font, fill=(0, 0, 0, 255), anchor="mm")
-    d.text((32, 32), "WAC", font=font, fill=(255, 255, 255, 255), anchor="mm")
+    d.text((32, 32), "WAC", font=font, fill=(255, 209, 0, 255), anchor="mm")  # WoW yellow
     if state == "down":  # pressed: the icon dims slightly, like a pushed action button
         dim = Image.new("RGBA", (36, 36), (0, 0, 0, 90))
         out.alpha_composite(dim, (14, 14))

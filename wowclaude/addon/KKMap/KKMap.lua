@@ -27,7 +27,7 @@ local function layout()
   host:SetScale(768 / (ph * UIParent:GetEffectiveScale()))
   host:ClearAllPoints()
   if KKMapDB.stripX then host:SetPoint("TOPLEFT", UIParent, "BOTTOMLEFT", KKMapDB.stripX, KKMapDB.stripY)
-  else host:SetPoint("TOPLEFT", UIParent, "TOPLEFT", 0, 0) end
+  else host:SetPoint("TOPLEFT", UIParent, "TOPLEFT", 3, -29) end  -- 3 px in: the gold frame stays fully visible
 end
 
 local function cell(i)
@@ -170,15 +170,15 @@ local chatFrame
 -- Die Leiste liegt NUR unter dem Streifen: Ursprung (0,0) und Zellen bleiben unberuehrt.
 local holdUntil, stripOn, lastEdit = 0, true, false
 local deco = CreateFrame("Frame", nil, host, "BackdropTemplate")
-deco:SetPoint("TOPLEFT", host, "TOPLEFT", 0, -ROWS * CELL)  -- under the pixels (moved up to touch them in applyVisible)
+deco:SetPoint("BOTTOMLEFT", host, "TOPLEFT", 0, 0)  -- the text sits ABOVE the pixels
 deco:SetSize(COLS * CELL, 25)  -- as wide as the strip: strip + label form one box
 deco:SetBackdrop({ bgFile = "Interface\\Buttons\\WHITE8X8", edgeFile = "Interface\\Buttons\\WHITE8X8", edgeSize = 1 })
 deco:SetBackdropColor(0.06, 0.05, 0.03, 0.85)
 deco:SetBackdropBorderColor(0, 0, 0, 0)
 -- one gold frame around pixels + label (drawn just OUTSIDE the pixel cells, so they stay untouched)
 local box = CreateFrame("Frame", nil, host, "BackdropTemplate")
-box:SetPoint("TOPLEFT", host, "TOPLEFT", -1, 1)
-box:SetPoint("BOTTOMRIGHT", deco, "BOTTOMRIGHT", 1, -1)
+box:SetPoint("TOPLEFT", deco, "TOPLEFT", -1, 1)
+box:SetPoint("BOTTOMRIGHT", host, "TOPLEFT", COLS * CELL + 1, -ROWS * CELL - 1)
 box:SetBackdrop({ edgeFile = "Interface\\Buttons\\WHITE8X8", edgeSize = 1 })
 box:SetBackdropBorderColor(0.85, 0.65, 0.2, 1)
 deco.fs = deco:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
@@ -197,7 +197,7 @@ deco:SetScript("OnUpdate", function()
   if not deco.drag then return end
   local cx, cy = GetCursorPosition()
   local s = host:GetEffectiveScale()
-  local x, y = cx / s - 40, cy / s + ROWS * CELL + 9
+  local x, y = cx / s - 40, cy / s - 13
   local top = UIParent:GetTop() * UIParent:GetEffectiveScale() / s
   x = math.max(0, math.min(x, 700)); y = math.max(top - 460, math.min(y, top))
   KKMapDB.stripX, KKMapDB.stripY = x, y
@@ -208,10 +208,11 @@ local function applyVisible()
   if lastEdit and not ae then holdUntil = math.max(holdUntil, GetTime() + 2) end
   lastEdit = ae
   local want = KKMapDB.always or pending ~= nil or ae or GetTime() < holdUntil
-  if pending ~= nil then deco.fs:SetText("AI: thinking ...")
-  elseif ae then deco.fs:SetText("AI: listening")
-  else deco.fs:SetText("AI strip") end
-  deco:ClearAllPoints(); deco:SetPoint("TOPLEFT", host, "TOPLEFT", 0, -usedRows * CELL)
+  if pending ~= nil then deco.fs:SetText("AI Bridge: thinking")
+  elseif ae then deco.fs:SetText("AI Bridge: listening")
+  else deco.fs:SetText("AI Bridge") end
+  box:ClearAllPoints(); box:SetPoint("TOPLEFT", deco, "TOPLEFT", -1, 1)
+  box:SetPoint("BOTTOMRIGHT", host, "TOPLEFT", COLS * CELL + 1, -usedRows * CELL - 1)
   if want and not stripOn then stripOn = true; host:SetAlpha(1); render()
   elseif not want and stripOn then stripOn = false; host:SetAlpha(0) end
 end
@@ -473,12 +474,12 @@ cmdFrame:Hide()
 
 -- Tips (button "Tipps" in the menu)
 local TIPS = {
-  "Der AI Strip (bunter Pixelstreifen) und die drei Farbpunkte",
+  "Die AI Bridge (Text oben, bunte Pixel darunter) und die drei Farbpunkte",
   "am KI-Tab duerfen NIE verdeckt werden: kein Fenster, kein",
   "Browser, keine Karte, kein Tooltip darueber. Sonst kommt",
   "keine Frage an und die Antwort verschwindet.",
   " ",
-  "AI Strip verschieben: am Textbalken unter dem Streifen",
+  "AI Strip verschieben: am Textbalken ueber den Pixeln",
   "ziehen (mit gedrueckter linker Maustaste). Zurueck: /strip reset.",
   "Er liegt am besten ganz oben, ausserhalb deiner Fenster.",
   " ",
