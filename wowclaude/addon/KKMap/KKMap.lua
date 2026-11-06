@@ -502,7 +502,7 @@ local COMMANDS = {
   "/nameai name  -  rename the AI (empty = WoW AI)",
   "/nameme name  -  what the AI calls you (empty = no name)",
   "/browser [url]  -  open the browser  (/browser off = close)",
-  "/aimode [chat|cli]  -  CLI mode: the tab shows the original Claude/Codex CLI",
+  "/aimode [chat|cli]  -  CLI mode: the tab shows your AI's own CLI",
   "/scroll up|down|end  -  look back in the CLI (or mouse wheel)",
   "/memos  -  what the AI saved about you  (/memos clear)",
   "/k up|down|enter|esc|tab|ctrl-c  -  send a key to the CLI",
@@ -547,9 +547,9 @@ local TIPS = {
   " ",
   "Login expired? The sign-in page opens by itself in the game",
   "browser (or type /login). One login covers chat and CLI mode.",
-  "Longer lasting: run `claude setup-token` once with Claude Code",
-  "(valid for a year) and paste the token into the AI setup page",
-  "(Claude token). Or use 'Let my own AI set this up' there.",
+  "Longer lasting: create a one-year token with your AI's CLI",
+  "(see the AI setup page) and paste it there",
+  "(AI token). Or use 'Let my own AI set this up' there.",
 }
 local tipFrame = CreateFrame("Frame", "KKTipFrame", UIParent, "BackdropTemplate")
 tipFrame:SetSize(430, 44 + #TIPS * 16)
@@ -577,7 +577,7 @@ local TOOLS = {
   "Mouse and keyboard  -  the AI clicks and types for you",
   "    (switch on: AI setup page, Mouse and keyboard)",
   "Web research  -  looks facts up before it answers",
-  "CLI mode  -  the tab runs the original Claude Code / Codex CLI",
+  "CLI mode  -  the tab runs your AI's own CLI",
   "    (/aimode cli; keys: /k up|down|enter|esc|tab|ctrl-c)",
   "Login helper  -  /login renews an expired AI login",
   "Computer access  -  YOUR choice (menu: AI access): the AI may",

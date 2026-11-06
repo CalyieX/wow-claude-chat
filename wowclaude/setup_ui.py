@@ -42,7 +42,7 @@ button.small{margin:3px 4px 0 0;padding:4px 10px;font-size:12px}
 <div id="baserow"><label>API address (OpenAI-compatible)</label><input id="base_url"></div>
 <div id="keyrow"><label>API key <span id="keystate"></span></label><input id="api_key" type="password" autocomplete="off"
  placeholder="leave empty to keep the saved key"><small>Stored only in ~/.wowclaude/config.json on this computer.</small><small id="keylink"></small></div>
-<div id="tokrow"><label>Claude token <span id="tokstate"></span></label><input id="claude_token" type="password" autocomplete="off"
+<div id="tokrow"><label>Year login token <span id="tokstate"></span></label><input id="claude_token" type="password" autocomplete="off"
  placeholder="optional: instead of the browser sign-in"><small>One token for chat AND CLI mode: run  claude setup-token  once, paste the result here. Stored only in ~/.wowclaude/config.json on this computer.</small></div>
 <div id="cmdrow"><label>Command (reads the prompt on stdin)</label><input id="command" placeholder="ollama run llama3.1"></div>
 <label>Extra instructions (optional, e.g. how it should talk)</label>
@@ -200,8 +200,8 @@ def apply(data: dict) -> dict:
             config.HARNESS.write_text(text + "\n", encoding="utf-8")
     persona = str(data.get("persona", "")).strip("\n")
     config.HOME.mkdir(parents=True, exist_ok=True)
-    if persona and not name:  # no name set: persona() reads the first line as the name, so keep "Claude" there
-        config.PERSONA.write_text("Claude\n" + persona + "\n", encoding="utf-8")
+    if persona and not name:  # no name set: persona() reads the first line as the name, so keep the default name there
+        config.PERSONA.write_text(claude.DEFAULT_NAME + "\n" + persona + "\n", encoding="utf-8")
     elif persona:
         config.PERSONA.write_text(persona + "\n", encoding="utf-8")
     elif config.PERSONA.exists():
