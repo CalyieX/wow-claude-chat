@@ -226,6 +226,7 @@ class Dock:
         for name, s in self.sprites.items():
             self.add_gear(s, hot=name == "gear")
         self.on_gear = False
+        self.cur = ""
         self.pos = (-200, -200)
         self.shown = False
         self.drag: dict = {}
@@ -242,12 +243,12 @@ class Dock:
         self._layered()
         self._park()
 
-    GEAR = 18  # diameter of the round gear badge on the button (top left) that opens the addon menu
+    GEAR = 14  # diameter of the round gear badge on the button (top left) that opens the addon menu
     OFF = 7  # 4 px of the gear stick out over the corner of the dark slot (which starts at 14)
 
     @staticmethod
     def add_gear(img, hot: bool = False) -> None:
-        """The gear badge (top left): a round dark blue button with a gold ring and a small gold gear, light blue while the
+        """The gear badge (top left): a round dark blue button with a grey ring like the button frame and a small gold gear, light blue while the
         pointer is on it. 4x supersampled."""
         import math
         from PIL import Image, ImageDraw
@@ -255,7 +256,8 @@ class Dock:
         g = Image.new("RGBA", (n * k, n * k), (0, 0, 0, 0))
         d = ImageDraw.Draw(g)
         fill = (70, 150, 235, 255) if hot else (16, 34, 92, 255)
-        d.ellipse((1, 1, n * k - 2, n * k - 2), fill=fill, outline=(235, 190, 40, 255), width=2 * k // 2)
+        d.ellipse((1, 1, n * k - 2, n * k - 2), fill=fill, outline=(16, 12, 8, 255), width=k)  # dark outer edge ...
+        d.ellipse((1 + k, 1 + k, n * k - 2 - k, n * k - 2 - k), outline=(105, 103, 105, 255), width=k)  # ... grey ring like the button frame
         c, r = n * k / 2, n * k / 2 - 5 * k / 2
         pts = []
         for i in range(16):  # 8 teeth
@@ -294,7 +296,10 @@ class Dock:
         u.SetWindowLongW(ctypes.c_void_p(self.h), overlay.GWL_EXSTYLE,
                          u.GetWindowLongW(ctypes.c_void_p(self.h), overlay.GWL_EXSTYLE) | overlay.WS_EX_LAYERED | overlay.WS_EX_TOOLWINDOW | 0x08000000)  # NOACTIVATE: a click never takes the keyboard from the game
 
-    def _draw(self, state: str = "") -> None:
+    def _draw(self, state: str | None = None) -> None:
+        if state is None:  # the periodic repaint keeps the current look (hover, gear glow) instead of resetting it
+            state = self.cur
+        self.cur = state
         self._layered()  # a Tk window that was moved or re-mapped may have lost the layered style: ask again every time
         overlay.update_layered(self.h, self.sprites[state], *self.pos)
 
