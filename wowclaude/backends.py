@@ -127,16 +127,41 @@ def ask(system: str, history: list[tuple[str, str]], prompt: str, model: str | N
         with tempfile.TemporaryDirectory() as tmp:
             out_file = Path(tmp) / "answer.txt"
             from . import claude as _c
-            cmd = [exe, "--search", "exec", "--skip-git-repo-check", "--ephemeral", *([] if _c.own_harness("wow") else ["--ignore-user-config"]), "-s", ("workspace-write" if _c.computer_access() else "read-only"),
-                   "--color", "never",
-                   "-C", (str(Path.home()) if _c.computer_access() else _c.neutral_cwd()), "-o", str(out_file)]
+            from . import claude
+            own = _c.own_harness("wow")  # Own: a real Codex session (kept between questions), its own config; else one-shot
+            sess = config.HOME / "codex_session.txt"
+            sid = ""
+            if own:
+                try:
+                    sid = sess.read_text(encoding="utf-8").strip()
+                except OSError:
+                    sid = ""
+            sandbox = "workspace-write" if _c.computer_access() else "read-only"
+            if sid:  # resume has no -s / -C: the sandbox goes in as a config value
+                cmd = [exe, "--search", "exec", "resume", "--skip-git-repo-check", "--json", "-c", f'sandbox_mode="{sandbox}"',
+                       "-o", str(out_file)]
+            else:
+                cmd = [exe, "--search", "exec", "--skip-git-repo-check", *([] if own else ["--ephemeral", "--ignore-user-config"]),
+                       *(["--json"] if own else []), "-s", sandbox, "--color", "never",
+                       "-C", (str(Path.home()) if _c.computer_access() else _c.neutral_cwd()), "-o", str(out_file)]
             if model:
                 cmd += ["-m", model]
             config.HOME.mkdir(parents=True, exist_ok=True)
-            from . import claude
-            code, out, err = claude._exec(cmd + ["-"], text)  # hard limit, whole process tree killed on timeout
+            tail = [sid, "-"] if sid else ["-"]
+            code, out, err = claude._exec(cmd + tail, text if not own else prompt)  # hard limit, whole process tree killed on timeout
             answer = out_file.read_text(encoding="utf-8").strip() if out_file.exists() else ""
+            if own and not sid:  # remember the new session for the next question
+                for line in (out or "").splitlines():
+                    if '"thread.started"' in line:
+                        try:
+                            import json as _json
+                            sess.write_text(_json.loads(line)["thread_id"], encoding="utf-8")
+                        except (ValueError, KeyError, OSError):
+                            pass
+                        break
             if code != 0 or not answer:
+                if sid:  # the session is gone: forget it, the next question starts a new one
+                    sess.unlink(missing_ok=True)
                 raise RuntimeError((err or out or "codex failed").strip()[-200:])
             return answer
     if b == "command":
