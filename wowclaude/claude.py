@@ -159,6 +159,13 @@ def custom_harness() -> str | None:
     return text or None
 
 
+def default_name() -> str:
+    """Who writes when the player chose no name: "Own AI" while the AI's own setup is on (the one in use: CLI chat or WoW chat),
+    else "WoW AI"."""
+    mode = "cli" if config.load().get("ai_mode") == "cli" else "wow"
+    return "Own AI" if own_harness(mode) else DEFAULT_NAME
+
+
 def persona() -> tuple[str, str]:
     """(name shown in the chat, system prompt). The name comes from config.json "name" (AI setup page); persona.txt is
     then all extra instructions. Old style without a name in config.json: the first line of persona.txt is the name.
@@ -173,7 +180,7 @@ def persona() -> tuple[str, str]:
             name, extra = clean_name(lines[0]), "\n".join(lines[1:]).strip()
     except OSError:
         pass
-    name = name or DEFAULT_NAME
+    name = name or default_name()
     custom = custom_harness()
     base = (custom if custom is not None else DEFAULT_SYSTEM) + f"\nYour name is {name}. Answer as {name}."
     player = clean_name(config.load().get("player"))
@@ -422,9 +429,26 @@ class Session:
         self.id, self.started = str(uuid.uuid4()), False
         config.HOME.mkdir(parents=True, exist_ok=True)
         config.SESSION.write_text(self.id, encoding="utf-8")
+        self._mode_file().write_text("own" if own_harness("wow") else "wow", encoding="utf-8")
+
+    @staticmethod
+    def _mode_file():
+        return config.HOME / "session_mode.txt"
+
+    def _sync_harness(self) -> None:
+        """A session keeps the harness it started with (a resumed conversation goes on as WoW AI): switching WoW AI / Own starts a new one."""
+        want = "own" if own_harness("wow") else "wow"
+        try:
+            have = self._mode_file().read_text(encoding="utf-8").strip()
+        except OSError:
+            have = "wow"
+        if self.started and have != want:
+            self._new()
+            self.history = []
 
     def ask(self, prompt: str, model: str | None = None) -> str:
         from . import backends
+        self._sync_harness()
         if backends.name() != "claude":
             answer = backends.ask("" if own_harness("wow") else persona()[1], self.history, prompt + reminder(), model)
             self.history.append((prompt, answer))

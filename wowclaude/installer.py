@@ -26,7 +26,7 @@ def _account_lists(root: Path) -> list[Path]:
 def write_name(root: Path, name: str) -> None:
     """The name the AI writes with: the addon reads Name.lua when the game (re)loads."""
     from . import claude
-    clean = claude.clean_name(name) or claude.DEFAULT_NAME
+    clean = claude.clean_name(name) or claude.default_name()
     folder = _addons(root) / "KKMap"
     if folder.is_dir():
         (folder / "Name.lua").write_text('KKAiName = "' + clean.replace("\\", "").replace('"', "") + '"\n', encoding="utf-8")
@@ -45,6 +45,9 @@ def write_state(root: Path | None = None) -> None:
             "true" if cfg.get("ai_mode") == "cli" else "false", "true" if cfg.get("computer_access") else "false",
             "true" if cfg.get("own_harness_wow") else "false", "true" if cfg.get("own_harness_cli") else "false",
             "true" if cfg.get("own_harness_win") else "false"), encoding="utf-8")
+        from . import claude
+        if not claude.clean_name(cfg.get("name")):  # no name chosen: the tab name follows the harness (WoW AI / Own AI)
+            write_name(root, claude.persona()[0])
 
 
 def remove_old_slots(root: Path) -> int:

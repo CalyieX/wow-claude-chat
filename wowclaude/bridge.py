@@ -145,7 +145,7 @@ def handle_command(text: str) -> str | None:
         root = config.client_root()
         if root:
             installer.write_name(root, name)
-        return "Name: " + (name or claude.DEFAULT_NAME)
+        return "Name: " + (name or claude.default_name())
     return None
 
 

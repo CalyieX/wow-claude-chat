@@ -413,8 +413,13 @@ SLASH_KKSCROLL1 = "/scroll"
 SlashCmdList["KKSCROLL"] = function(msg) sendToClaude((("!scroll " .. (msg or "")):gsub("%s+$", ""))) end
 SLASH_KKAIMODE1 = "/aimode"
 local refreshLabels = function() end  -- replaced when the menu is built
+local stateSeeded = {}
 local function stateOf(name)
-  if KKMapDB and KKMapDB[name] == nil then KKMapDB[name] = (KKMapState and KKMapState[name]) and true or false end
+  if KKMapDB and not stateSeeded[name] then  -- once per load: the AI program's settings (State.lua) win over what was saved here
+    stateSeeded[name] = true
+    if KKMapState and KKMapState[name] ~= nil then KKMapDB[name] = KKMapState[name] and true or false
+    elseif KKMapDB[name] == nil then KKMapDB[name] = false end
+  end
   return KKMapDB and KKMapDB[name]
 end
 setOwnFlag = function(which, msg)
