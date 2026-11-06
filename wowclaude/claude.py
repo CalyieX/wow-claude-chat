@@ -62,6 +62,9 @@ def persona() -> tuple[str, str]:
         pass
     name = name or DEFAULT_NAME
     base = DEFAULT_SYSTEM + f"\nYour name is {name}. Answer as {name}."
+    player = clean_name(config.load().get("player"))
+    if player:
+        base += f"\nThe player's name is {player}. Call them {player}."
     try:
         base += "\n\n" + (Path(__file__).parent / "macro_skill.md").read_text(encoding="utf-8")
     except OSError:

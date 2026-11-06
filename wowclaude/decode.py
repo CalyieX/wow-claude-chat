@@ -38,7 +38,7 @@ def _cell_size(px, ox: int, oy: int, width: int) -> int:
     return n
 
 
-def _locate(image, search_w: int = 400, search_h: int = 400):
+def _locate(image, search_w: int = 800, search_h: int = 560):
     px = image.convert("RGB").load()
     w, h = image.size
     for oy in range(0, max(0, min(search_h, h - 4))):

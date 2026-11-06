@@ -40,7 +40,7 @@ def grab_strip_area():
     if rect is None:
         return None
     left, top, right, bottom = rect
-    box = (left, top, min(right, left + 700), min(bottom, top + 200))
+    box = (left, top, min(right, left + 1300), min(bottom, top + 760))  # the strip may be dragged away from the corner
     try:
         return ImageGrab.grab(bbox=box, all_screens=True)
     except OSError:

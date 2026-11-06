@@ -169,6 +169,16 @@ def place(w: int, h: int, corner: str, margin: int = 24) -> tuple[int, int]:
     return x, y
 
 
+STRIP_W, STRIP_H = 560, 70  # the addon's colour strip (top-left corner of the game): a window over it blinds the program
+
+
+def _off_strip(x: int, y: int, rect) -> tuple[int, int]:
+    """Move a window that would start on top of the colour strip below it (messages would stop arriving)."""
+    if rect and rect[0] - 5 <= x < rect[0] + STRIP_W and rect[1] - 5 <= y < rect[1] + STRIP_H:
+        return x, rect[1] + STRIP_H
+    return x, y
+
+
 _pinned: dict = {}
 
 
@@ -412,6 +422,7 @@ def run(url: str | None = None, corner: str | None = None, size: str | None = No
         x, y = int(saved["x"]), int(saved["y"])  # remembered position (browser window top-left)
     if not corner and not _on_screen(x, y, w, h):
         x, y = place(w, h + TOP + EDGE, "br")  # remembered spot is gone (monitor unplugged): back into the game
+    x, y = _off_strip(x, y, g0)
     save_state(url=url, x=x, y=y, w=w, h=h)
     profile = config.HOME / "overlay-profile"
     profile.mkdir(parents=True, exist_ok=True)
@@ -902,7 +913,7 @@ def frame_loop(hwnd: int, x: int, y: int, w: int, h: int, opacity: int, click_th
     def move(e):
         z = drag.get("z")
         if z == "bar":
-            S["x"], S["y"] = e.x_root - drag["dx"] + EDGE, e.y_root - drag["dy"] + TOP
+            S["x"], S["y"] = _off_strip(e.x_root - drag["dx"] + EDGE, e.y_root - drag["dy"] + TOP, game_rect())  # never over the strip
             root.geometry(f"+{S['x'] - EDGE}+{S['y'] - TOP}")
             place_bar()
             update_layered(top_hwnd, cache["img"], S["x"] - EDGE, S["y"] - TOP)

@@ -85,3 +85,13 @@ def test_prompt_for_own_ai_has_no_private_paths():
 def test_prompt_tells_the_ai_to_make_a_long_lived_login():
     from wowclaude import setup_ui
     assert "setup-token" in setup_ui.ai_prompt() and "year" in setup_ui.ai_prompt()
+
+
+def test_player_name_comes_only_from_the_menu_and_the_ai_never_asks(monkeypatch):
+    from wowclaude import claude, config, bridge
+    system = claude.persona()[1]
+    assert "what you should call them" not in system and "[[me" not in system
+    assert bridge.handle_command("!me Bob").startswith("Dein Name: Bob") and config.load()["player"] == "Bob"
+    assert "Call them Bob" in claude.persona()[1]
+    bridge.handle_command("!me")
+    assert "player" not in config.load() and "briefly ask" not in claude.persona()[1]

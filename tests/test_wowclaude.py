@@ -860,3 +860,11 @@ def test_deliver_posts_the_answer_with_macro_hint_and_overlay_lines(monkeypatch)
     kind, text = posted[-1]
     assert kind == "ai" and text.startswith("WoW AI: Hallo")
     assert "/kkm Test~/cast Foo" in text and "Zeile" in text and "|c" not in text
+
+
+def test_overlay_window_is_kept_off_the_colour_strip():
+    from wowclaude import overlay
+    game = (100, 50, 1900, 1100)
+    assert overlay._off_strip(110, 60, game)[1] >= 50 + overlay.STRIP_H  # over the strip: moved below
+    assert overlay._off_strip(900, 60, game) == (900, 60)               # elsewhere: untouched
+    assert overlay._off_strip(110, 400, game) == (110, 400)

@@ -25,7 +25,9 @@ local function layout()
   -- 1 Einheit in host = 1 physisches Pixel
   local _, ph = GetPhysicalScreenSize()
   host:SetScale(768 / (ph * UIParent:GetEffectiveScale()))
-  host:ClearAllPoints(); host:SetPoint("TOPLEFT", UIParent, "TOPLEFT", 0, 0)
+  host:ClearAllPoints()
+  if KKMapDB.stripX then host:SetPoint("TOPLEFT", UIParent, "BOTTOMLEFT", KKMapDB.stripX, KKMapDB.stripY)
+  else host:SetPoint("TOPLEFT", UIParent, "TOPLEFT", 0, 0) end
 end
 
 local function cell(i)
@@ -136,6 +138,7 @@ local function collect()
   return table.concat(lines, "\n")
 end
 
+local usedRows = ROWS
 local function render()
   layout()
   local text = collect()
@@ -156,6 +159,7 @@ local function render()
     ci = ci + 1
   end
   for i = ci, total - 1 do if cells[i] then cells[i]:Hide() end end
+  usedRows = math.ceil(ci / COLS)  -- the label box hangs right under the drawn pixels
 end
 
 KKMapState = KKMapState or { seq = 0, out = "", idx = 1 }
@@ -166,23 +170,48 @@ local chatFrame
 -- Die Leiste liegt NUR unter dem Streifen: Ursprung (0,0) und Zellen bleiben unberuehrt.
 local holdUntil, stripOn, lastEdit = 0, true, false
 local deco = CreateFrame("Frame", nil, host, "BackdropTemplate")
-deco:SetPoint("TOPLEFT", host, "TOPRIGHT", 2, 0)
-deco:SetSize(300, 14)
+deco:SetPoint("TOPLEFT", host, "TOPLEFT", 0, -ROWS * CELL)  -- under the pixels (moved up to touch them in applyVisible)
+deco:SetSize(COLS * CELL, 25)  -- as wide as the strip: strip + label form one box
 deco:SetBackdrop({ bgFile = "Interface\\Buttons\\WHITE8X8", edgeFile = "Interface\\Buttons\\WHITE8X8", edgeSize = 1 })
 deco:SetBackdropColor(0.06, 0.05, 0.03, 0.85)
-deco:SetBackdropBorderColor(0.85, 0.65, 0.2, 1)
+deco:SetBackdropBorderColor(0, 0, 0, 0)
+-- one gold frame around pixels + label (drawn just OUTSIDE the pixel cells, so they stay untouched)
+local box = CreateFrame("Frame", nil, host, "BackdropTemplate")
+box:SetPoint("TOPLEFT", host, "TOPLEFT", -1, 1)
+box:SetPoint("BOTTOMRIGHT", deco, "BOTTOMRIGHT", 1, -1)
+box:SetBackdrop({ edgeFile = "Interface\\Buttons\\WHITE8X8", edgeSize = 1 })
+box:SetBackdropBorderColor(0.85, 0.65, 0.2, 1)
 deco.fs = deco:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-deco.fs:SetPoint("LEFT", deco, "LEFT", 6, 0)
+deco.fs:SetPoint("TOPLEFT", deco, "TOPLEFT", 4, -2)
 deco.fs:SetTextColor(0.9, 0.8, 0.5)
+deco.fs2 = deco:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+deco.fs2:SetPoint("TOPLEFT", deco, "TOPLEFT", 4, -13)
+deco.fs2:SetTextColor(1, 0.55, 0.45)
+deco.fs2:SetText("Do not cover!")
+-- The strip can be dragged away from the corner (grab the label next to it): so the window or a tooltip over the corner
+-- does not blind the program. Kept within reach of the program's search area.
+deco:EnableMouse(true); deco:RegisterForDrag("LeftButton")
+deco:SetScript("OnDragStart", function() deco.drag = true end)
+deco:SetScript("OnDragStop", function() deco.drag = false end)
+deco:SetScript("OnUpdate", function()
+  if not deco.drag then return end
+  local cx, cy = GetCursorPosition()
+  local s = host:GetEffectiveScale()
+  local x, y = cx / s - 40, cy / s + ROWS * CELL + 9
+  local top = UIParent:GetTop() * UIParent:GetEffectiveScale() / s
+  x = math.max(0, math.min(x, 700)); y = math.max(top - 460, math.min(y, top))
+  KKMapDB.stripX, KKMapDB.stripY = x, y
+  host:ClearAllPoints(); host:SetPoint("TOPLEFT", UIParent, "BOTTOMLEFT", x, y)
+end)
 local function applyVisible()
   local ae = (ChatEdit_GetActiveWindow and ChatEdit_GetActiveWindow()) and true or false
   if lastEdit and not ae then holdUntil = math.max(holdUntil, GetTime() + 2) end
   lastEdit = ae
   local want = KKMapDB.always or pending ~= nil or ae or GetTime() < holdUntil
-  if pending ~= nil then deco.fs:SetText(L("K&K WoW AI Bridge | denkt ...", "K&K WoW AI Bridge | thinking ..."))
-  elseif ae then deco.fs:SetText(L("K&K WoW AI Bridge | aktiv", "K&K WoW AI Bridge | active"))
-  else deco.fs:SetText("K&K WoW AI Bridge") end
-  deco:SetWidth(math.max(120, deco.fs:GetStringWidth() + 14))
+  if pending ~= nil then deco.fs:SetText("AI: thinking ...")
+  elseif ae then deco.fs:SetText("AI: listening")
+  else deco.fs:SetText("AI strip") end
+  deco:ClearAllPoints(); deco:SetPoint("TOPLEFT", host, "TOPLEFT", 0, -usedRows * CELL)
   if want and not stripOn then stripOn = true; host:SetAlpha(1); render()
   elseif not want and stripOn then stripOn = false; host:SetAlpha(0) end
 end
@@ -343,11 +372,13 @@ local function sendToClaude(msg)
 end
 
 SLASH_KKCHAT1 = "/c"
-SLASH_KKCHAT2 = "/claude"
+SLASH_KKCHAT2 = "/ai"
+SLASH_KKCHAT3 = "/claude"  -- old name, still works
 SlashCmdList["KKCHAT"] = function(m) sendToClaude(m) end
 
 -- Commands for the bridge ("!browser ..." is handled by wowclaude, not sent to the AI)
-SLASH_KKTAB1 = "/claudetab"
+SLASH_KKTAB1 = "/aitab"
+SLASH_KKTAB2 = "/claudetab"  -- old name, still works
 SlashCmdList["KKTAB"] = function()  -- bring the AI tab to the front (used by tools that cannot click)
   local f = claudeFrame()
   if not f or f == DEFAULT_CHAT_FRAME then return end
@@ -391,18 +422,37 @@ StaticPopupDialogs["KKAINAME"] = {
   EditBoxOnEscapePressed = function(eb) eb:GetParent():Hide() end,
   timeout = 0, whileDead = 1, hideOnEscape = 1,
 }
-SLASH_KKNAME1 = "/kkname"
+local function setPlayerName(n)
+  n = strtrim(tostring(n or "")):gsub("[|\\\"]", ""):sub(1, 20)
+  KKMapDB.playerName = (n ~= "") and n or nil
+  sendToClaude("!me " .. n)
+end
+StaticPopupDialogs["KKPLAYERNAME"] = {
+  text = "Wie soll die KI dich nennen? (leer = kein Name)", button1 = ACCEPT, button2 = CANCEL, hasEditBox = 1, maxLetters = 20,
+  OnShow = function(self) local eb = self.editBox or self.EditBox; if eb then eb:SetText(KKMapDB.playerName or UnitName("player") or ""); eb:HighlightText(); eb:SetFocus() end end,
+  OnAccept = function(self) local eb = self.editBox or self.EditBox; if eb then setPlayerName(eb:GetText()) end end,
+  EditBoxOnEnterPressed = function(eb) setPlayerName(eb:GetText()); eb:GetParent():Hide() end,
+  EditBoxOnEscapePressed = function(eb) eb:GetParent():Hide() end,
+  timeout = 0, whileDead = 1, hideOnEscape = 1,
+}
+SLASH_KKME1 = "/nameme"
+SLASH_KKME2 = "/kkme"  -- old name, still works
+SlashCmdList["KKME"] = function(m) setPlayerName(m) end
+SLASH_KKNAME1 = "/nameai"
+SLASH_KKNAME2 = "/kkname"  -- old name, still works
 SlashCmdList["KKNAME"] = function(m) setAiName(m) end
 
 -- List of all commands (button "Befehle" in the menu)
 local COMMANDS = {
   "/wac  -  Menue",
-  "/c Text  oder  /claude Text  -  die KI fragen",
-  "/kkname Name  -  KI umbenennen (leer = WoW AI)",
+  "/ai Text  (oder /c Text)  -  die KI fragen",
+  "/nameai Name  -  KI umbenennen (leer = WoW AI)",
+  "/nameme Name  -  wie die KI dich nennt (leer = kein Name)",
   "/browser [url]  -  Browser oeffnen  (/browser off = zu)",
   "/wm Name~Zeile1\\nZeile2  -  Makro anlegen",
-  "/strip always|auto|off  -  Farbstreifen",
-  "/claudetab  -  KI-Tab anzeigen",
+  "/strip always|auto|off  -  AI strip on/auto/off",
+  "/strip move X Y  -  AI Strip an Pixel X,Y setzen  |  /strip reset = Ecke",
+  "/aitab  -  KI-Tab anzeigen",
   "Im KI-Tab: einfach schreiben, ohne /",
 }
 local cmdFrame = CreateFrame("Frame", "KKCmdFrame", UIParent, "BackdropTemplate")
@@ -421,12 +471,42 @@ end
 local cc = CreateFrame("Button", nil, cmdFrame, "UIPanelCloseButton"); cc:SetPoint("TOPRIGHT", -4, -4)
 cmdFrame:Hide()
 
+-- Tips (button "Tipps" in the menu)
+local TIPS = {
+  "Der AI Strip (bunter Pixelstreifen) und die drei Farbpunkte",
+  "am KI-Tab duerfen NIE verdeckt werden: kein Fenster, kein",
+  "Browser, keine Karte, kein Tooltip darueber. Sonst kommt",
+  "keine Frage an und die Antwort verschwindet.",
+  " ",
+  "AI Strip verschieben: am Textbalken unter dem Streifen",
+  "ziehen (mit gedrueckter linker Maustaste). Zurueck: /strip reset.",
+  "Er liegt am besten ganz oben, ausserhalb deiner Fenster.",
+  " ",
+  "Der KI-Tab darf frei bewegt und vergroessert werden.",
+  "Spiel im Fenster- oder Rahmenlos-Modus, nicht Vollbild.",
+}
+local tipFrame = CreateFrame("Frame", "KKTipFrame", UIParent, "BackdropTemplate")
+tipFrame:SetSize(430, 44 + #TIPS * 16)
+tipFrame:SetPoint("CENTER", UIParent, "CENTER", 0, 80)
+tipFrame:SetFrameStrata("DIALOG"); tipFrame:SetMovable(true); tipFrame:EnableMouse(true)
+tipFrame:RegisterForDrag("LeftButton"); tipFrame:SetScript("OnDragStart", tipFrame.StartMoving)
+tipFrame:SetScript("OnDragStop", tipFrame.StopMovingOrSizing); tipFrame:SetClampedToScreen(true)
+tipFrame:SetBackdrop({ bgFile = "Interface\\DialogFrame\\UI-DialogBox-Background", edgeFile = "Interface\\DialogFrame\\UI-DialogBox-Border",
+  tile = true, tileSize = 32, edgeSize = 24, insets = { left = 6, right = 6, top = 6, bottom = 6 } })
+local tt = tipFrame:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge"); tt:SetPoint("TOPLEFT", 18, -14); tt:SetText("Tipps")
+for i, line in ipairs(TIPS) do
+  local fs = tipFrame:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+  fs:SetPoint("TOPLEFT", 20, -36 - (i - 1) * 16); fs:SetJustifyH("LEFT"); fs:SetText(line)
+end
+local tc = CreateFrame("Button", nil, tipFrame, "UIPanelCloseButton"); tc:SetPoint("TOPRIGHT", -4, -4)
+tipFrame:Hide()
+
 -- Small addon menu (/wac)
 local menu
 local function buildMenu()
   if menu then return menu end
   local f = CreateFrame("Frame", "KKMenuFrame", UIParent, "BackdropTemplate")
-  f:SetSize(220, 176)
+  f:SetSize(220, 272)
   f:SetPoint("CENTER", UIParent, "CENTER", -260, 60)
   f:SetFrameStrata("DIALOG")
   f:SetMovable(true); f:EnableMouse(true); f:RegisterForDrag("LeftButton")
@@ -458,6 +538,16 @@ local function buildMenu()
   button("KI verbinden", function() sendToClaude("!setup") end)
   button("Browser", function() sendToClaude("!browser") end)
   button("KI-Name", function() StaticPopup_Show("KKAINAME") end)
+  button("Dein Name", function() StaticPopup_Show("KKPLAYERNAME") end)
+  local stripBtn
+  local function stripLabel() return "AI Strip: " .. (KKMapDB.always and "immer an" or "auto") end
+  stripBtn = button(stripLabel(), function()
+    KKMapDB.always = not KKMapDB.always
+    KKMapDB.off = false
+    stripBtn:SetText(stripLabel())
+    if applyVisible then applyVisible() end
+  end)
+  button("Tipps", function() if KKTipFrame:IsShown() then KKTipFrame:Hide() else KKTipFrame:Show() end end)
   button("Befehle", function() if KKCmdFrame:IsShown() then KKCmdFrame:Hide() else KKCmdFrame:Show() end end)
   f:Hide()
   menu = f
@@ -621,6 +711,14 @@ SLASH_KKMAP1 = "/strip"
 SLASH_KKMAP2 = "/kkmap"
 SlashCmdList["KKMAP"] = function(msg)
   if msg == "frames" then KKMapDB.frames = not KKMapDB.frames; print("KKMap: button list " .. (KKMapDB.frames and "on" or "off")) return end
+  local mx, my = msg:match("^move%s+(%d+)%s+(%d+)$")
+  if mx then  -- /strip move X Y : place the strip X, Y pixels from the top-left corner (same thing as dragging it)
+    local sc = host:GetEffectiveScale()
+    local top = UIParent:GetTop() * UIParent:GetEffectiveScale() / sc
+    KKMapDB.stripX, KKMapDB.stripY = math.min(tonumber(mx), 700), top - math.min(tonumber(my), 460)
+    layout(); return
+  end
+  if msg == "reset" then KKMapDB.stripX, KKMapDB.stripY = nil, nil; layout(); print("KKMap: strip back in the corner") return end
   if msg == "always" then KKMapDB.always = true; KKMapDB.off = false; host:Show(); host:SetAlpha(1); stripOn = true; render(); print("KKMap: strip always visible") return end
   if msg == "auto" then KKMapDB.always = false; KKMapDB.off = false; host:Show(); print("KKMap: strip only when needed") return end
   if msg == "off" then KKMapDB.off = true; host:Hide()
