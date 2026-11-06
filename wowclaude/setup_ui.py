@@ -97,6 +97,10 @@ $("save").onclick=async()=>{$("msg").textContent="Saving ...";$("msg").className
  const r=await api("/save",{backend:$("backend").value,model:$("model").value,base_url:$("base_url").value,
   api_key:$("api_key").value,claude_token:$("claude_token").value,command:$("command").value,persona:$("persona").value,harness:$("harness").value,input_control:$("inputctl").checked,computer_access:$("access").checked});
  $("msg").textContent=r.status;$("msg").className=r.ok?"ok":"bad";if(r.has_key)$("keystate").textContent="(saved)";$("api_key").value="";$("claude_token").value="";if(r.has_token)$("tokstate").textContent="(saved)";await recheck()};
+if(new URLSearchParams(location.search).get("view")==="harness"){document.querySelector("h1").textContent="Harness";
+ for(const e of [...document.body.children]){const k=e.tagName;if(k==="H1"||k==="SCRIPT"||e.id==="save"||e.id==="msg")continue;
+  if(k==="DETAILS"&&e.querySelector("summary").textContent.startsWith("Harness")){e.open=true;continue}e.style.display="none"}}
+else{for(const e of document.querySelectorAll("details")){if(e.querySelector("summary").textContent.startsWith("Harness"))e.style.display="none"}}
 </script></body></html>"""
 
 

@@ -63,6 +63,11 @@ def handle_command(text: str) -> str | None:
         return cli_mode.set_mode("cli" if want == "cli" else "chat")
     if cmd == "!harness":
         words = arg.lower().split()
+        if words and words[0] == "edit":  # the harness text lives here (menu Harness), not on the Connect AI page
+            from . import overlay, setup_ui
+            url = setup_ui.start_background() + "&view=harness"
+            problem = overlay.play(url, "640x520")
+            return "Harness editor opened in the browser window." if not problem else f"Could not open the window ({problem}). Open: {url}"
         mode = words[0] if words and words[0] in ("wow", "cli") else ""
         if not mode:
             return "Harness: /harness wow  or  /harness cli  switches between the WoW AI harness and your AI's own setup."
