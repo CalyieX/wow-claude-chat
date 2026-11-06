@@ -343,6 +343,7 @@ def open_window() -> str:
     from . import term_window
     if term_window.alive():
         return "The CLI window is already open."
+    (config.HOME / "term.close").unlink(missing_ok=True)  # an old close request must not shut the new window
     exe = Path(sys.executable).with_name("pythonw.exe")
     subprocess.Popen([str(exe if exe.exists() else sys.executable), "-m", "wowclaude", "term"], creationflags=0x08000000)
     return "CLI window opened. Click into it to type, copy and paste; click the game to play on."
@@ -384,6 +385,10 @@ def set_mode(mode: str) -> str:
     config.save(cfg)
     _write_state()
     _cli.stop()
+    try:
+        (config.HOME / "term.close").write_text("1")  # closes the CLI window if it is open
+    except OSError:
+        pass
     return "Chat mode on."
 
 

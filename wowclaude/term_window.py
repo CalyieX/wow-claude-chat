@@ -99,6 +99,10 @@ def run() -> None:
     text.focus_set()
 
     def tick():
+        if (config.HOME / "term.close").exists():  # CLI mode was switched off: the window goes with it
+            (config.HOME / "term.close").unlink(missing_ok=True)
+            win.close()
+            return
         try:
             BEAT.write_text(str(time.time()))
             cols = max(20, min(200, (text.winfo_width() - 4) // cw))
