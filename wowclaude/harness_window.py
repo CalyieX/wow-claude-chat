@@ -35,11 +35,20 @@ def run(tab: str = "wow") -> None:
     bar.pack(side="right", fill="y")
     text.pack(side="left", fill="both", expand=True)
     text.bind("<Button-1>", lambda e: (win.focus(), text.focus_set()))
-    info = tk.Text(own, bg="#15130e", fg="#f0e6c8", font=("Consolas", 10), wrap="word", bd=1, relief="solid", height=10)
-    ibar = WowScrollbar(own, info.yview)
-    info.configure(yscrollcommand=ibar.set)
-    ibar.pack(side="right", fill="y")
-    info.pack(side="left", fill="both", expand=True)
+    info = tk.Text(own, bg="#15130e", fg="#f0e6c8", font=("Consolas", 9), wrap="word", bd=1, relief="solid", height=6)
+    info.pack(side="top", fill="x")
+    tk.Label(own, text="Own AI text (used when a switch is on Own - separate from the WoW AI text):", bg="#15130e", fg=gold,
+             anchor="w").pack(side="top", fill="x", pady=(4, 0))
+    obox = tk.Frame(own, bg="#15130e")
+    obox.pack(side="top", fill="both", expand=True)
+    otext = tk.Text(obox, bg="#15130e", fg="#f0e6c8", insertbackground=gold, font=("Consolas", 10), wrap="word", bd=1,
+                    relief="solid", undo=True)
+    obar = WowScrollbar(obox, otext.yview)
+    otext.configure(yscrollcommand=obar.set)
+    obar.pack(side="right", fill="y")
+    otext.pack(side="left", fill="both", expand=True)
+    otext.bind("<Button-1>", lambda e: (win.focus(), otext.focus_set()))
+    otext.insert("1.0", claude.own_text())
     shown = {"tab": "wow"}
 
     def show(tab: str) -> None:
@@ -67,9 +76,19 @@ def run(tab: str = "wow") -> None:
         msg.config(text=save(text.get("1.0", "end")))
 
     def do_import(src) -> None:
-        text.delete("1.0", "end")
-        text.insert("1.0", harness_import.render(src, claude.builtin_harness()))
-        msg.config(text="Imported - " + harness_import.summary(src) + ". Click Save to use it.", fg="#7fd17f")
+        otext.delete("1.0", "end")
+        otext.insert("1.0", harness_import.render(src, ""))
+        msg.config(text="Loaded - " + harness_import.summary(src) + ". Click Save own text to use it.", fg="#7fd17f")
+
+    def save_own() -> None:
+        body = otext.get("1.0", "end").strip()
+        if body:
+            config.HOME.mkdir(parents=True, exist_ok=True)
+            config.OWN_HARNESS.write_text(body + "\n", encoding="utf-8")
+            msg.config(text="Own AI text saved. Used from the next question on when the switch is on Own.", fg="#7fd17f")
+        else:
+            config.OWN_HARNESS.unlink(missing_ok=True)
+            msg.config(text="Own AI text removed: Own uses only your AI's normal folder.", fg="#7fd17f")
 
     def do_reset() -> None:
         config.HARNESS.unlink(missing_ok=True)
@@ -87,8 +106,23 @@ def run(tab: str = "wow") -> None:
         if not src.found():
             msg.config(text="Nothing usable in that folder (looked for CLAUDE.md / AGENTS.md, MEMORY.md, skills).", fg="#e0a060")
             return
-        do_import(src)
-        show("wow")
+        if src not in found:
+            found.append(src)
+        refresh()
+        show("own")
+
+    def do_search() -> None:
+        found[:] = harness_import.search([s.memory_dir or s.instructions_file.parent for s in found if s.kind == "folder"])
+        refresh()
+        msg.config(text=f"Search done: {len(found)} setup(s) found.", fg="#7fd17f")
+
+    def refresh() -> None:
+        info.config(state="normal")
+        info.delete("1.0", "end")
+        info.insert("1.0", head + ("\n\n".join(harness_import.overview(s) for s in found) if found else
+                                   "Nothing found yet. Click Search (all AI programs on this computer) or Pick folder."))
+        info.config(state="disabled")
+        rebuild_row()
 
     def rebuild_row() -> None:
         for w in row.winfo_children():
@@ -96,17 +130,17 @@ def run(tab: str = "wow") -> None:
         if shown["tab"] == "wow":
             buttons = [("Save", do_save), ("Reset to built-in", do_reset), ("Close", win.close)]
         else:
-            buttons = [(f"Load {s.label} into WoW AI text", (lambda s=s: (do_import(s), show("wow")))) for s in found]
-            buttons += [("Pick folder...", pick), ("Close", win.close)]
+            buttons = [("Save own text", save_own), ("Search", do_search), ("Pick folder...", pick)]
+            buttons += [(f"Load {s.label}", (lambda s=s: do_import(s))) for s in found]
+            buttons.append(("Close", win.close))
         for label, cmd in buttons:
             tk.Button(row, text=label, command=cmd, bg="#5c1a10", fg=gold, activebackground="#7d2417", activeforeground=gold,
                       relief="solid", bd=1, padx=12).pack(side="left", padx=(0, 8))
 
     head = ("Own AI = your real AI with its normal folder, login, memory and skills (used live when a switch is on Own;\n"
-            "nothing is copied). Found on this computer:\n\n")
-    info.insert("1.0", head + ("\n\n".join(harness_import.overview(s) for s in found) if found else
-                               "Nothing found: no Claude Code or Codex setup in the normal folders."))
-    info.config(state="disabled")
+            "nothing is copied). Search finds every AI setup on this computer; Load puts the chosen one into the\n"
+            "own text below (then Save own text).\n\n")
+    refresh()
     msg.pack(fill="x", padx=6, side="bottom")
     load()
     show(tab)

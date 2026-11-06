@@ -488,3 +488,14 @@ def test_harness_import_from_picked_folder(tmp_path):
     assert src.found() and src.memory_dir == mem and [s[0] for s in src.skills] == ["demo"]
     assert "I am Mira." in hi.render(src, "GAME")
     assert not hi.from_folder(tmp_path / "nothing").found()
+
+
+def test_own_text_is_separate_from_wow_text(tmp_path, monkeypatch):
+    from wowclaude import claude, config
+    monkeypatch.setattr(config, "HOME", tmp_path)
+    monkeypatch.setattr(config, "OWN_HARNESS", tmp_path / "own_harness.txt")
+    monkeypatch.setattr(config, "HARNESS", tmp_path / "harness.txt")
+    assert claude.own_text() == ""
+    (tmp_path / "own_harness.txt").write_text("I am my own AI.\n", encoding="utf-8")
+    assert claude.own_text() == "I am my own AI."
+    assert claude.custom_harness() is None  # the WoW AI text is untouched

@@ -109,7 +109,7 @@ def from_folder(folder: Path) -> Source:
     """
     folder = Path(folder)
     src = Source("folder", folder.name or str(folder))
-    for name in ("CLAUDE.md", "AGENTS.md"):
+    for name in ("CLAUDE.md", "AGENTS.md", "GEMINI.md"):
         if (folder / name).is_file():
             src.instructions_file = folder / name
             break
@@ -125,6 +125,54 @@ def from_folder(folder: Path) -> Source:
     for sk in (folder / "skills", folder / ".agents" / "skills"):
         src.skills += [s for s in _skills(sk) if s[0] not in {x[0] for x in src.skills}]
     return src
+
+
+KNOWN = {  # folder name in a home folder -> label of the AI program
+    ".claude": "Claude Code", ".codex": "Codex", ".gemini": "Gemini CLI", ".agents": "Agents folder",
+    ".cursor": "Cursor", ".config/opencode": "OpenCode", ".aider": "Aider", ".continue": "Continue",
+}
+
+
+def _homes() -> list[Path]:
+    """Home folders to look in: this user's and, where readable, the other user folders of the computer."""
+    homes = [Path.home()]
+    parent = Path.home().parent
+    try:
+        homes += [p for p in sorted(parent.iterdir()) if p.is_dir() and p != Path.home() and p.name not in ("Public", "Default", "All Users")]
+    except OSError:
+        pass
+    return homes
+
+
+def search(extra: list[Path] | None = None) -> list[Source]:
+    """Scan for AI setups: the known config folders (and variants like .claude-work) in every readable home folder."""
+    out, seen = [], set()
+    for home in _homes():
+        owner = "" if home == Path.home() else f" ({home.name})"
+        try:
+            names = [n for n in KNOWN] + [p.name for p in home.glob(".claude-*")] + [p.name for p in home.glob(".codex-*")]
+        except OSError:
+            continue
+        for n in names:
+            f = home / n
+            try:
+                ok = f.is_dir() and str(f.resolve()) not in seen
+            except OSError:
+                continue
+            if not ok:
+                continue
+            seen.add(str(f.resolve()))
+            src = from_folder(f)
+            if src.found():
+                base = KNOWN.get(n) or ("Claude Code" if n.startswith(".claude") else "Codex")
+                src.kind, src.label = base.lower().split()[0], base + (f" [{n}]" if n not in KNOWN else "") + owner
+                out.append(src)
+    for f in extra or []:
+        if str(Path(f).resolve()) not in seen:
+            src = from_folder(Path(f))
+            if src.found():
+                out.append(src)
+    return out
 
 
 def sources(home: Path | None = None) -> list[Source]:
@@ -158,6 +206,8 @@ def render(src: Source, game_part: str) -> str:
             lines.append(line)
             size += len(line) + 1
         parts.append("--- Your own skills (read the SKILL.md when one fits) ---\n" + "\n".join(lines))
+    if not game_part:  # the own AI text has no game part
+        return "\n\n".join(parts)
     return "\n\n".join(parts + [MARK, game_part]) if parts else game_part
 
 
