@@ -306,3 +306,22 @@ def test_cli_mode_bridge_commands(monkeypatch):
     assert bridge.handle_command("!aimode cli") == "mode cli"
     assert bridge.handle_command("!aimode chat") == "mode chat"
     assert "off" in bridge.handle_command("!k up")
+
+
+def test_every_helper_process_is_started_hidden():
+    """The addon may only ever show pop-ups that are meant to be seen (the browser window): no console flashes."""
+    import pathlib
+    import re
+    root = pathlib.Path(__file__).resolve().parent.parent / "wowclaude"
+    bad = []
+    for f in root.glob("*.py"):
+        src = f.read_text(encoding="utf-8")
+        for m in re.finditer(r"subprocess\.(?:run|Popen|call|check_output|check_call)\(", src):
+            depth, i = 1, m.end()
+            while depth and i < len(src):
+                depth += {"(": 1, ")": -1}.get(src[i], 0)
+                i += 1
+            call = src[m.start():i]
+            if not re.search(r"hidden\(\)|CREATE_NO_WINDOW|0x08000000", call):
+                bad.append(f"{f.name}: {call[:60]}")
+    assert not bad, bad
