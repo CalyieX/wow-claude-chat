@@ -75,6 +75,8 @@ def command() -> list[str] | None:
         if not exe:
             return None
         cmd = [exe, "--search"] + ([] if claude.computer_access() else ["-s", "read-only"])
+        if not claude.computer_access():  # the neutral working folder holds nothing: no "trust this folder?" question
+            cmd += ["-c", "projects." + json.dumps(claude.neutral_cwd()) + '.trust_level="trusted"']
         text = harness_text()
         if len(text) < 20000:  # Windows command lines are limited: a longer harness is left out rather than breaking the start
             cmd += ["-c", "developer_instructions=" + json.dumps(text)]  # a TOML string accepts the same escapes

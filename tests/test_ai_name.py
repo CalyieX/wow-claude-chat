@@ -378,3 +378,12 @@ def test_cli_mode_gets_the_same_harness_as_chat_mode(monkeypatch):
     monkeypatch.setenv("WOWCLAUDE_BACKEND", "codex")
     monkeypatch.setattr(cli_mode.shutil, "which", lambda n: "C:/x/codex.exe")
     assert any(a.startswith("developer_instructions=") for a in cli_mode.command())
+
+
+def test_codex_cli_mode_trusts_the_neutral_folder(monkeypatch):
+    from wowclaude import cli_mode, claude
+    monkeypatch.setenv("WOWCLAUDE_BACKEND", "codex")
+    monkeypatch.setattr(cli_mode.shutil, "which", lambda n: "C:/x/codex.exe")
+    monkeypatch.setattr(claude, "computer_access", lambda: False)
+    cmd = cli_mode.command()
+    assert any(a.endswith('.trust_level="trusted"') for a in cmd)
