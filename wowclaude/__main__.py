@@ -191,6 +191,8 @@ def main(argv=None) -> int:
     ph = sub.add_parser("harness", help="edit the harness text (what the AI is told) in its own window")
     ph.add_argument("tab", nargs="?", default="wow", choices=("wow", "own"))
     ph.set_defaults(fn=lambda a: __import__("wowclaude.harness_window", fromlist=["run"]).run(a.tab))
+    pm = sub.add_parser("models", help="pick the model of the loaded AI (live list)")
+    pm.set_defaults(fn=lambda a: __import__("wowclaude.models_window", fromlist=["run"]).run())
     pp = sub.add_parser("panel", help="the panel window where the AI shows lists and plans (no browser)")
     pp.set_defaults(fn=lambda a: __import__("wowclaude.panel_window", fromlist=["run"]).run())
     args = ap.parse_args(argv)

@@ -64,8 +64,13 @@ def handle_command(text: str) -> str | None:
     if cmd == "!model":
         b = backends.name()
         shown = lambda: config.model_for(b) or "the AI's own default"  # noqa: E731
-        if not arg:
-            return f"Model ({b}): {shown()}. Change: /model <name>  -  back to the default: /model reset."
+        if not arg:  # no name: the popup with the models this AI can use right now (read live)
+            import subprocess
+            import sys
+            from pathlib import Path
+            exe = Path(sys.executable).with_name("pythonw.exe")
+            subprocess.Popen([str(exe if exe.exists() else sys.executable), "-m", "wowclaude", "models"], creationflags=0x08000000)
+            return f"Model ({b}): {shown()}. The list of models opened in its own window (or /model <name>, /model reset)."
         cfg = config.load()
         models = dict(cfg.get("models") or {})
         if arg.strip().lower() in ("reset", "default", "off"):

@@ -515,8 +515,27 @@ def test_model_command_sets_and_resets(tmp_path, monkeypatch):
     monkeypatch.setattr(config, "load", lambda: dict(store))
     monkeypatch.setattr(config, "save", lambda c: (store.clear(), store.update(c)))
     monkeypatch.setenv("WOWCLAUDE_BACKEND", "codex")
-    assert "own default" in bridge.handle_command("!model")
+    import subprocess
+    opened = []
+    monkeypatch.setattr(subprocess, "Popen", lambda *a, **k: opened.append(a))
+    assert "own default" in bridge.handle_command("!model") and opened  # no name: the model popup opens
     assert "gpt-mini" in bridge.handle_command("!model gpt-mini")
     assert store["models"]["codex"] == "gpt-mini"
     assert "own default" in bridge.handle_command("!model reset")
     assert "codex" not in store["models"]
+
+
+def test_model_lists_come_from_the_ai_itself(tmp_path, monkeypatch):
+    import json
+    from wowclaude import config, models
+    monkeypatch.setattr(config, "load", lambda: {})
+    (tmp_path / ".claude.json").write_text(json.dumps({"additionalModelOptionsCache": [{"value": "fable-x", "label": "Fable", "description": "big"}]}), encoding="utf-8")
+    ids = [i for i, _ in models.claude_models(tmp_path)]
+    assert ids[:3] == ["sonnet", "opus", "haiku"] and "fable-x" in ids
+    (tmp_path / ".codex").mkdir()
+    (tmp_path / ".codex" / "models_cache.json").write_text(json.dumps({"models": [
+        {"slug": "b", "display_name": "B", "visibility": "list", "priority": 2},
+        {"slug": "a", "display_name": "A", "visibility": "list", "priority": 1},
+        {"slug": "h", "display_name": "H", "visibility": "hide", "priority": 3}]}), encoding="utf-8")
+    monkeypatch.delenv("CODEX_HOME", raising=False)
+    assert [i for i, _ in models.codex_models(tmp_path)] == ["a", "b"]
