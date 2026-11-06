@@ -241,3 +241,25 @@ def overview(src: Source) -> str:
         if len(src.skills) > 40:
             lines.append(f"    ... {len(src.skills) - 40} more")
     return "\n".join(lines)
+
+
+def model_of(backend: str, cfg: dict, home: Path | None = None) -> str:
+    """The model that AI answers with: from its own settings (Codex config.toml, Claude settings.json) or the Setup page."""
+    home = home or Path.home()
+    if cfg.get("model"):
+        return str(cfg["model"])
+    if backend == "codex":
+        text = _read(Path(os.environ.get("CODEX_HOME") or (home / ".codex")) / "config.toml")
+        m = re.search(r'^model\s*=\s*"([^"]+)"', text, re.M)
+        return m.group(1) if m else "Codex default"
+    if backend == "claude":
+        import json
+        cfg_dir = Path(cfg.get("own_config_dir") or os.environ.get("CLAUDE_CONFIG_DIR") or (home / ".claude"))
+        try:
+            m = json.loads(_read(cfg_dir / "settings.json") or "{}").get("model")
+        except ValueError:
+            m = None
+        return str(m) if m else "Claude Code default"
+    from . import backends
+    preset = backends.PRESETS.get(backend)
+    return preset[1] if preset else backend

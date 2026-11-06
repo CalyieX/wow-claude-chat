@@ -38,7 +38,7 @@ def run(tab: str = "wow") -> None:
     tk.Label(own, text="Which AI answers (WoW chat and CLI):", bg="#15130e", fg=gold, anchor="w").pack(side="top", fill="x")
     choice = tk.Frame(own, bg="#15130e")
     choice.pack(side="top", fill="x", pady=(0, 6))
-    pick_var = tk.StringVar(value=backends.name())
+    pick_var = tk.StringVar(value=str(config.load().get("backend") or ""))
     dir_var = tk.StringVar(value=str(config.load().get("own_config_dir") or ""))
     dirs = tk.Frame(own, bg="#15130e")
     info = tk.Text(own, bg="#15130e", fg="#f0e6c8", font=("Consolas", 10), wrap="word", bd=1, relief="solid")
@@ -130,18 +130,30 @@ def run(tab: str = "wow") -> None:
         for w in choice.winfo_children():
             w.destroy()
         for b in backends.detect():
-            tk.Radiobutton(choice, text=b["label"], value=b["backend"], variable=pick_var, command=choose, anchor="w",
-                           bg="#15130e", fg="#f0e6c8", selectcolor="#3a2a10", activebackground="#15130e",
-                           activeforeground=gold).pack(side="top", fill="x")
+            on = b["backend"] == pick_var.get()
+            line = tk.Frame(choice, bg="#15130e")
+            line.pack(side="top", fill="x", pady=1)
+            tk.Button(line, text="Loaded" if on else "Load", width=8, state="disabled" if on else "normal",
+                      command=lambda v=b["backend"]: (pick_var.set(v), choose()), bg="#5c1a10", fg=gold, activebackground="#7d2417",
+                      activeforeground=gold, disabledforeground="#7fd17f", relief="solid", bd=1).pack(side="left", padx=(0, 8))
+            tk.Label(line, text=b["label"], bg="#15130e", fg=gold if on else "#f0e6c8", anchor="w").pack(side="left", fill="x")
         info.config(state="normal")
         info.delete("1.0", "end")
-        active = pick_var.get()
-        ordered = sorted(found, key=lambda s: 0 if s.kind == active else 1)
-        body = ("\n\n".join(harness_import.overview(s) + ("   <== answers now" if s.kind == active else "") for s in ordered) if found else
-                "Nothing found yet. Click Search (all AI programs on this computer) or Pick folder.")
-        if active not in {s.kind for s in found}:
-            body = f"Active AI: {active} (no folder with instructions, memory or skills - it answers as the bare model).\n\n" + body
-        info.insert("1.0", head + body)
+        cfg = config.load()
+        active = cfg.get("backend")
+        if not active:
+            body = "Nothing loaded yet. Click Load next to the AI you want (or Search first)."
+        else:
+            label = next((x["label"] for x in backends.detect() if x["backend"] == active), active)
+            body = f"LOADED: {label}\nModel: {harness_import.model_of(active, cfg)}\n"
+            src = next((s for s in found if s.kind == active), None)
+            if src:
+                body += ("Live access: this AI runs with its own folder, login, memory and skills - nothing is copied.\n"
+                         "Set the switch in the Harness menu to Own to talk to it in the game.\n\n" + harness_import.overview(src))
+            else:
+                body += ("No folder with instructions, memory or skills - it answers as the bare model.\n"
+                         "Model, API address and keys: AI Setup (game menu).")
+        info.insert("1.0", body)
         info.config(state="disabled")
         rebuild_row()
 
@@ -156,10 +168,6 @@ def run(tab: str = "wow") -> None:
             tk.Button(row, text=label, command=cmd, bg="#5c1a10", fg=gold, activebackground="#7d2417", activeforeground=gold,
                       relief="solid", bd=1, padx=12).pack(side="left", padx=(0, 8))
 
-    head = ("LIVE ACCESS: pick the AI above, then set the switch in the Harness menu to Own. That AI runs with its normal\n"
-            "folder, login, memory and skills - nothing is copied. Search lists every AI setup found on this computer.\n"
-            "AIs without a folder (API key, local program) answer as the bare model.\n"
-            "Model, API address and keys: AI Setup (game menu).\n\n")
     refresh()
     msg.pack(fill="x", padx=6, side="bottom")
     load()
