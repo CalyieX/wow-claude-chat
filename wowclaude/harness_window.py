@@ -24,8 +24,10 @@ def run() -> None:
     win = FramedWindow("Harness", 760, 560, key="harness")
     root = win.root
     gold = "#ffd100"
+    tabs = tk.Frame(win.inner, bg="#15130e")
+    tabs.pack(fill="x", padx=4, pady=(4, 0))
     box = tk.Frame(win.inner, bg="#15130e")
-    box.pack(fill="both", expand=True, padx=4, pady=(4, 2))
+    own = tk.Frame(win.inner, bg="#15130e")
     text = tk.Text(box, bg="#15130e", fg="#f0e6c8", insertbackground=gold, font=("Consolas", 10), wrap="word", bd=1,
                    relief="solid", undo=True)
     bar = WowScrollbar(box, text.yview)
@@ -33,6 +35,26 @@ def run() -> None:
     bar.pack(side="right", fill="y")
     text.pack(side="left", fill="both", expand=True)
     text.bind("<Button-1>", lambda e: (win.focus(), text.focus_set()))
+    info = tk.Text(own, bg="#15130e", fg="#f0e6c8", font=("Consolas", 10), wrap="word", bd=1, relief="solid", height=10)
+    ibar = WowScrollbar(own, info.yview)
+    info.configure(yscrollcommand=ibar.set)
+    ibar.pack(side="right", fill="y")
+    info.pack(side="left", fill="both", expand=True)
+    shown = {"tab": "wow"}
+
+    def show(tab: str) -> None:
+        shown["tab"] = tab
+        box.pack_forget()
+        own.pack_forget()
+        (box if tab == "wow" else own).pack(fill="both", expand=True, padx=4, pady=(2, 2))
+        for name, b in tab_buttons.items():
+            b.config(fg=gold if name == tab else "#8a8470")
+        rebuild_row()
+
+    tab_buttons = {n: tk.Button(tabs, text=t, command=lambda n=n: show(n), bg="#2a2418", activebackground="#3a3222",
+                                relief="solid", bd=1, padx=14) for n, t in (("wow", "WoW AI"), ("own", "Own AI"))}
+    for b in tab_buttons.values():
+        b.pack(side="left", padx=(0, 4))
     msg = tk.Label(win.inner, text="", bg="#15130e", fg="#7fd17f", anchor="w")
     row = tk.Frame(win.inner, bg="#15130e")
     row.pack(fill="x", padx=6, pady=(2, 4), side="bottom")
@@ -54,15 +76,26 @@ def run() -> None:
         load(False)
         msg.config(text="Back to the built-in harness.")
 
-    buttons = [("Save", do_save)]
     found = harness_import.sources()
-    buttons += [(f"Import {s.label}", (lambda s=s: do_import(s))) for s in found]
-    if not found:
-        buttons.append(("Import (nothing found)", lambda: msg.config(text="No Claude Code or Codex setup found in the normal folders.")))
-    buttons += [("Reset to built-in", do_reset), ("Close", win.close)]
-    for label, cmd in buttons:
-        tk.Button(row, text=label, command=cmd, bg="#5c1a10", fg=gold, activebackground="#7d2417", activeforeground=gold,
-                  relief="solid", bd=1, padx=12).pack(side="left", padx=(0, 8))
+
+    def rebuild_row() -> None:
+        for w in row.winfo_children():
+            w.destroy()
+        if shown["tab"] == "wow":
+            buttons = [("Save", do_save), ("Reset to built-in", do_reset), ("Close", win.close)]
+        else:
+            buttons = [(f"Load {s.label} into WoW AI text", (lambda s=s: (do_import(s), show("wow")))) for s in found]
+            buttons.append(("Close", win.close))
+        for label, cmd in buttons:
+            tk.Button(row, text=label, command=cmd, bg="#5c1a10", fg=gold, activebackground="#7d2417", activeforeground=gold,
+                      relief="solid", bd=1, padx=12).pack(side="left", padx=(0, 8))
+
+    head = ("Own AI = your real AI with its normal folder, login, memory and skills (used live when a switch is on Own;\n"
+            "nothing is copied). Found on this computer:\n\n")
+    info.insert("1.0", head + ("\n\n".join(harness_import.overview(s) for s in found) if found else
+                               "Nothing found: no Claude Code or Codex setup in the normal folders."))
+    info.config(state="disabled")
     msg.pack(fill="x", padx=6, side="bottom")
     load()
+    show("wow")
     root.mainloop()

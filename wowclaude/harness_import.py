@@ -145,3 +145,22 @@ def summary(src: Source) -> str:
     if src.skills:
         bits.append(f"{len(src.skills)} skills")
     return f"{src.label}: " + (", ".join(bits) or "nothing found")
+
+
+def overview(src: Source) -> str:
+    """What the own AI consists of, for the "Own AI" tab: paths, sizes, skills. Read-only, nothing is copied."""
+    lines = [src.label]
+    if src.instructions_file:
+        lines.append(f"  Instructions: {src.instructions_file} ({len(_read(src.instructions_file)) // 1000} KB)")
+    if src.memory_dir:
+        try:
+            n = sum(1 for p in src.memory_dir.glob("*.md"))
+        except OSError:
+            n = 0
+        lines.append(f"  Memory: {src.memory_dir} ({n} notes)")
+    if src.skills:
+        lines.append(f"  Skills: {len(src.skills)}")
+        lines += [f"    - {name}" for name, _d, _p in src.skills[:40]]
+        if len(src.skills) > 40:
+            lines.append(f"    ... {len(src.skills) - 40} more")
+    return "\n".join(lines)
