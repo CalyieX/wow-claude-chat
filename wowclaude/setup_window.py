@@ -161,6 +161,8 @@ def run() -> None:
     persona.pack(side="left", fill="both", expand=True)
     persona.insert("1.0", st["persona"] or "")
     persona.bind("<Button-1>", lambda e: (win.focus(), persona.focus_set()))
+    persona.bind("<Tab>", lambda e: (persona.tk_focusNext().focus_set(), "break")[1])  # Tab leaves the text box (keyboard and automation users would be stuck otherwise)
+    persona.bind("<Shift-Tab>", lambda e: (persona.tk_focusPrev().focus_set(), "break")[1])
     for var, text in ((access_var, "Let the AI use this computer (files, commands; Claude Code / Codex only)"),
                       (input_var, "Allow the AI to use mouse and keyboard in the game")):
         tk.Checkbutton(outer, text=text, variable=var, bg=bg, fg=fg, selectcolor="#2a2418", activebackground=bg, activeforeground=gold,
