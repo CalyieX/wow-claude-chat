@@ -205,9 +205,12 @@ class Dock:
         self.h = 0
         self._layered()
         self.sprites = {s: overlay.slot_sprite(s) for s in ("", "hover", "down")}
+        for s in self.sprites.values():
+            self.add_gear(s)
         self.pos = (-200, -200)
         self.shown = False
         self.drag: dict = {}
+        self.drag_start = (99, 99)
         self.busy = 0.0
         self.n = 0
         self.win.bind("<Button-1>", self._down)
@@ -218,6 +221,27 @@ class Dock:
         self.win.update()  # mapped from the start: a layered window that was withdrawn first refuses UpdateLayeredWindow
         self._layered()
         self._park()
+
+    GEAR = 18  # the gear in the top left corner of the button opens the addon menu
+
+    @staticmethod
+    def add_gear(img) -> None:
+        """A small gear (top left): 4x supersampled, gold with a dark outline."""
+        import math
+        from PIL import Image, ImageDraw
+        k = 4
+        g = Image.new("RGBA", (Dock.GEAR * k, Dock.GEAR * k), (0, 0, 0, 0))
+        d = ImageDraw.Draw(g)
+        c, r = Dock.GEAR * k / 2, Dock.GEAR * k / 2 - 2
+        pts = []
+        for i in range(16):  # 8 teeth
+            ang = i * math.pi / 8
+            rad = r if i % 2 == 0 else r * 0.72
+            for a2 in (ang - math.pi / 16, ang + math.pi / 16):
+                pts.append((c + rad * math.cos(a2), c + rad * math.sin(a2)))
+        d.polygon(pts, fill=(255, 210, 40, 255), outline=(30, 20, 0, 255))
+        d.ellipse((c - r * 0.3, c - r * 0.3, c + r * 0.3, c + r * 0.3), fill=(40, 26, 0, 255))
+        img.alpha_composite(g.resize((Dock.GEAR, Dock.GEAR), Image.LANCZOS), (0, 0))
 
     def _park(self) -> None:
         from PIL import Image
@@ -270,6 +294,7 @@ class Dock:
             self._draw()
 
     def _down(self, e) -> None:
+        self.drag_start = (e.x, e.y)
         self.drag = {"dx": e.x_root - self.pos[0], "dy": e.y_root - self.pos[1], "sx": e.x_root, "sy": e.y_root, "moved": False}
         self._draw("down")
 
@@ -290,6 +315,10 @@ class Dock:
         if moved and g:
             overlay.save_state(bx=self.pos[0], by=self.pos[1], brel=overlay.to_rel(g, self.pos[0], self.pos[1], 64, 64)[:2])
             self._draw()
+        elif not moved and self.drag_start[0] < self.GEAR and self.drag_start[1] < self.GEAR:  # the gear: open the addon menu
+            import threading
+            from . import vinput
+            threading.Thread(target=lambda: vinput.run("keys {Enter}/wac{Enter}"), daemon=True).start()
         elif not moved and time.time() - self.busy > 45:  # the browser needs a while to start: no second click starts a second one
             self.busy = time.time()
             import threading

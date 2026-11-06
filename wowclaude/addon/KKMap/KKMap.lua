@@ -609,7 +609,7 @@ local function buildMenu()
     stripBtn:SetText(stripLabel())
     if applyVisible then applyVisible() end
   end)
-  button("AI mode (chat/CLI)", function() sendToClaude("!aimode") end)
+  button("Chat mode: WoW / CLI", function() sendToClaude("!aimode") end)
   button("AI access (on/off)", function() sendToClaude("!access") end)
   button("Tools", function() if KKToolsFrame:IsShown() then KKToolsFrame:Hide() else KKToolsFrame:Show() end end)
   button("Tips", function() if KKTipFrame:IsShown() then KKTipFrame:Hide() else KKTipFrame:Show() end end)

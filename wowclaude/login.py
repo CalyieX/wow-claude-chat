@@ -37,12 +37,12 @@ def command() -> list[str] | None:
 
 def no_browser_env() -> dict:
     """The login must open ONLY in the game browser: the tool is told to use a do-nothing 'browser' (BROWSER variable)."""
-    noop = config.HOME / "nobrowser.cmd"
-    if not noop.exists():
-        config.HOME.mkdir(parents=True, exist_ok=True)
-        noop.write_text("@echo off" + chr(13) + chr(10) + "exit /b 0" + chr(13) + chr(10), encoding="ascii")
+    import sys
+    from pathlib import Path
+    exe = Path(sys.executable).with_name("pythonw.exe")  # a windowless program that ignores the address: no black pop-up
+    noop = str(exe if exe.exists() else sys.executable)
     env = claude._clean_env()
-    env["BROWSER"] = str(noop)
+    env["BROWSER"] = noop
     return env
 
 
