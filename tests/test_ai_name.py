@@ -608,3 +608,21 @@ def test_provider_requests_send_a_custom_user_agent():
     import inspect
     from wowclaude import backends
     assert "User-Agent" in inspect.getsource(backends)
+
+
+def test_cli_window_input_restarts_a_dead_session(monkeypatch, tmp_path):
+    """A typed key must not vanish when the tool behind the window has ended: the session starts again."""
+    import threading, time
+    from wowclaude import cli_mode, config
+    monkeypatch.setattr(config, "HOME", tmp_path)
+    (tmp_path / "win_in.jsonl").write_text("", encoding="utf-8")
+    m = cli_mode.CliMode(window=True)
+    started = threading.Event()
+    monkeypatch.setattr(m, "running", lambda: False)
+    monkeypatch.setattr(m, "start", lambda: started.set() or "")
+    t = threading.Thread(target=m._input_loop, args=(m.gen,), daemon=True)
+    t.start()
+    time.sleep(0.2)
+    with open(tmp_path / "win_in.jsonl", "a", encoding="utf-8") as f:
+        f.write('{"raw": "x"}\n')
+    assert started.wait(3)

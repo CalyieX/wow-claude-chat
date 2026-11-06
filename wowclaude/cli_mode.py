@@ -255,7 +255,7 @@ class CliMode:
         """Keys typed in the CLI window go straight into the tool."""
         path = config.HOME / "win_in.jsonl"
         pos = path.stat().st_size if path.exists() else 0
-        while not self.stop_flag and self.gen == gen and self.running():
+        while not self.stop_flag and self.gen == gen:
             time.sleep(0.05)
             try:
                 size = path.stat().st_size
@@ -270,6 +270,9 @@ class CliMode:
             except OSError:
                 continue
             raw = "".join(json.loads(ln).get("raw", "") for ln in chunk.decode("utf-8", "replace").splitlines() if ln.strip())
+            if raw and not self.running():  # the tool ended or never came up: a typed key starts it again instead of vanishing
+                self.start()
+                return  # start() runs a fresh input loop
             if raw:
                 try:
                     self.proc.write(raw)
