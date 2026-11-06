@@ -63,12 +63,13 @@ def handle_command(text: str) -> str | None:
         return cli_mode.set_mode("cli" if want == "cli" else "chat")
     if cmd == "!harness":
         words = arg.lower().split()
-        if words and words[0] == "edit":  # the harness text lives here (menu Harness), not on the Connect AI page
+        if words and words[0] in ("edit", "load"):  # the harness text lives here (menu Harness), not on the Connect AI page
             import subprocess
             import sys
             from pathlib import Path
             exe = Path(sys.executable).with_name("pythonw.exe")
-            subprocess.Popen([str(exe if exe.exists() else sys.executable), "-m", "wowclaude", "harness"], creationflags=0x08000000)
+            subprocess.Popen([str(exe if exe.exists() else sys.executable), "-m", "wowclaude", "harness"] + (["own"] if words[0] == "load" else []),
+                             creationflags=0x08000000)
             return "Harness editor opened in its own window."
         mode = words[0] if words and words[0] in ("wow", "cli", "win") else ""
         if not mode:

@@ -18,7 +18,7 @@ def save(text: str) -> str:
     return "Saved. Used from the next question on."
 
 
-def run() -> None:
+def run(tab: str = "wow") -> None:
     import tkinter as tk
     from .wowframe import FramedWindow, WowScrollbar
     win = FramedWindow("Harness", 760, 560, key="harness")
@@ -97,5 +97,5 @@ def run() -> None:
     info.config(state="disabled")
     msg.pack(fill="x", padx=6, side="bottom")
     load()
-    show("wow")
+    show(tab)
     root.mainloop()
