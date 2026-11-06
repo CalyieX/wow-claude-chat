@@ -393,12 +393,14 @@ end
 SLASH_KKMEMORY1 = "/memos"
 SLASH_KKMEMORY2 = "/memory"
 SlashCmdList["KKMEMORY"] = function(msg) sendToClaude((("!memos " .. (msg or "")):gsub("%s+$", ""))) end
+local setOwnFlag  -- defined below
+local function ownKey(which) return which == "cli" and "ownCli" or (which == "win" and "ownWin" or "ownWow") end
 SLASH_KKHARNESS1 = "/harness"
 SlashCmdList["KKHARNESS"] = function(msg)
   local w, v = strtrim(msg or ""):lower():match("^(%a+)%s*(%a*)$")
-  if w == "wow" or w == "cli" then
+  if w == "wow" or w == "cli" or w == "win" then
     setOwnFlag(w, v)
-    sendToClaude("!harness " .. w .. (v ~= "" and (" " .. v) or (KKMapDB and KKMapDB[w == "cli" and "ownCli" or "ownWow"] and " own" or " wow")))
+    sendToClaude("!harness " .. w .. (v ~= "" and (" " .. v) or (KKMapDB and KKMapDB[ownKey(w)] and " own" or " wow")))
   elseif KKHarnessFrame then
     if KKHarnessFrame:IsShown() then KKHarnessFrame:Hide() else KKHarnessFrame:Show() end
   end
@@ -415,8 +417,8 @@ local function stateOf(name)
   if KKMapDB and KKMapDB[name] == nil then KKMapDB[name] = (KKMapState and KKMapState[name]) and true or false end
   return KKMapDB and KKMapDB[name]
 end
-local function setOwnFlag(which, msg)
-  local key = which == "cli" and "ownCli" or "ownWow"
+setOwnFlag = function(which, msg)
+  local key = ownKey(which)
   local m = strtrim(msg or ""):lower()
   if KKMapDB then
     if m == "own" then KKMapDB[key] = true elseif m == "wow" then KKMapDB[key] = false else KKMapDB[key] = not stateOf(key) end
@@ -637,7 +639,7 @@ toolsFrame:Hide()
 
 -- Harness submenu: WoW AI harness or the AI's own setup, separately for the game chat and the CLI
 local harnessFrame = CreateFrame("Frame", "KKHarnessFrame", UIParent, "BackdropTemplate")
-harnessFrame:SetSize(300, 236); harnessFrame:SetPoint("CENTER", UIParent, "CENTER", 0, 60)
+harnessFrame:SetSize(300, 268); harnessFrame:SetPoint("CENTER", UIParent, "CENTER", 0, 60)
 harnessFrame:SetFrameStrata("DIALOG"); harnessFrame:SetMovable(true); harnessFrame:EnableMouse(true)
 harnessFrame:RegisterForDrag("LeftButton"); harnessFrame:SetScript("OnDragStart", harnessFrame.StartMoving)
 harnessFrame:SetScript("OnDragStop", harnessFrame.StopMovingOrSizing); harnessFrame:SetClampedToScreen(true)
@@ -645,23 +647,26 @@ harnessFrame:SetBackdrop({ bgFile = "Interface\\DialogFrame\\UI-DialogBox-Backgr
   tile = true, tileSize = 32, edgeSize = 24, insets = { left = 6, right = 6, top = 6, bottom = 6 } })
 local hft = harnessFrame:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge"); hft:SetPoint("TOPLEFT", 18, -14); hft:SetText("Harness")
 local hfc = CreateFrame("Button", nil, harnessFrame, "UIPanelCloseButton"); hfc:SetPoint("TOPRIGHT", -4, -4)
-local hfnA = harnessFrame:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall"); hfnA:SetPoint("TOPLEFT", 20, -148)
+local hfnA = harnessFrame:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall"); hfnA:SetPoint("TOPLEFT", 20, -180)
 hfnA:SetWidth(260); hfnA:SetJustifyH("LEFT")
 hfnA:SetText("|cffffd100WoW AI|r = the Warcraft harness (game version, macros, tools).")
-local hfnB = harnessFrame:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall"); hfnB:SetPoint("TOPLEFT", 20, -180)
+local hfnB = harnessFrame:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall"); hfnB:SetPoint("TOPLEFT", 20, -212)
 hfnB:SetWidth(260); hfnB:SetJustifyH("LEFT")
 hfnB:SetText("|cffffd100Own|r = your AI's own memory files, settings and tools. In the CLI: work on your own projects.")
 local hWow = CreateFrame("Button", nil, harnessFrame, "UIPanelButtonTemplate"); hWow:SetSize(260, 26); hWow:SetPoint("TOP", 0, -42)
 local hCli = CreateFrame("Button", nil, harnessFrame, "UIPanelButtonTemplate"); hCli:SetSize(260, 26); hCli:SetPoint("TOP", 0, -74)
-local hEdit = CreateFrame("Button", nil, harnessFrame, "UIPanelButtonTemplate"); hEdit:SetSize(260, 26); hEdit:SetPoint("TOP", 0, -106)
+local hWin = CreateFrame("Button", nil, harnessFrame, "UIPanelButtonTemplate"); hWin:SetSize(260, 26); hWin:SetPoint("TOP", 0, -106)
+local hEdit = CreateFrame("Button", nil, harnessFrame, "UIPanelButtonTemplate"); hEdit:SetSize(260, 26); hEdit:SetPoint("TOP", 0, -138)
 hEdit:SetText("Edit WoW harness"); hEdit:SetScript("OnClick", function() sendToClaude("!harness edit") end)
 hWow:SetScript("OnClick", function() SlashCmdList["KKHARNESS"]("wow") end)
 hCli:SetScript("OnClick", function() SlashCmdList["KKHARNESS"]("cli") end)
+hWin:SetScript("OnClick", function() SlashCmdList["KKHARNESS"]("win") end)
 local function harnessLabels()
   local Y, G = "|cffffd100", "|cff808080"
-  local w, c = stateOf("ownWow"), stateOf("ownCli")
+  local w, c, x = stateOf("ownWow"), stateOf("ownCli"), stateOf("ownWin")
   hWow:SetText("WoW chat:  " .. (w and G or Y) .. "WoW AI|r / " .. (w and Y or G) .. "Own|r")
-  hCli:SetText("CLI:  " .. (c and G or Y) .. "WoW AI|r / " .. (c and Y or G) .. "Own|r")
+  hCli:SetText("CLI chat:  " .. (c and G or Y) .. "WoW AI|r / " .. (c and Y or G) .. "Own|r")
+  hWin:SetText("CLI window:  " .. (x and G or Y) .. "WoW AI|r / " .. (x and Y or G) .. "Own|r")
 end
 harnessFrame:SetScript("OnShow", harnessLabels)
 harnessFrame:Hide()

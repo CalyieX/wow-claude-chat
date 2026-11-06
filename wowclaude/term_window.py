@@ -1,7 +1,7 @@
 """A real window for CLI mode: scroll with the mouse wheel, select + copy, paste, type directly.
 
 The command line tool itself runs inside the game's AI program (cli_mode.py). This window only shows its screen
-(cli_screen.json, with the scrollback) and sends what you type back (cli_in.jsonl). It opens with /term (or the menu
+(win_screen.json, with the scrollback) and sends what you type back (win_in.jsonl). It opens with /term (or the menu
 button "CLI window") and has no console window. Click into it to type; click the game to play on.
 """
 from __future__ import annotations
@@ -11,8 +11,8 @@ import time
 
 from . import config
 
-SCREEN = config.HOME / "cli_screen.json"
-INPUT = config.HOME / "cli_in.jsonl"
+SCREEN = config.HOME / "win_screen.json"
+INPUT = config.HOME / "win_in.jsonl"
 SIZE = config.HOME / "termsize.json"
 BEAT = config.HOME / "term.alive"
 
@@ -47,7 +47,7 @@ def run() -> None:
         BEAT.unlink(missing_ok=True)
         SIZE.unlink(missing_ok=True)
 
-    win = FramedWindow("WoW AI - CLI", 900, 540, on_close=cleanup, key="cli")
+    win = FramedWindow("WoW AI - CLI", 900, 540, on_close=cleanup, key="win")
     root = win.root
     font = tkfont.Font(family="Consolas", size=11)
     text = tk.Text(win.inner, bg="#15130e", fg="#e6e6e6", insertbackground="#e6e6e6", font=font, wrap="none", bd=0,

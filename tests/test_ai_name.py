@@ -440,3 +440,13 @@ def test_prepare_config_uses_the_tools_own_config_folder(tmp_path, monkeypatch):
     cli_mode.prepare_config(r"D:\work\proj")
     data = json.loads((tmp_path / ".claude.json").read_text(encoding="utf-8"))
     assert data["hasCompletedOnboarding"] and data["projects"]["D:/work/proj"]["hasTrustDialogAccepted"]
+
+
+def test_cli_gets_game_state_once_and_on_change(monkeypatch):
+    from wowclaude import cli_mode
+    monkeypatch.setattr(cli_mode.claude, "own_harness", lambda mode: False)
+    cli_mode._last_context[0] = ""
+    first = cli_mode.with_state("hi", "Gorel, Warrior, Classic Era")
+    assert first.startswith("[Game state: Gorel, Warrior, Classic Era]") and first.endswith("hi")
+    assert cli_mode.with_state("again", "Gorel, Warrior, Classic Era") == "again"
+    assert "Mage" in cli_mode.with_state("x", "Lia, Mage, Classic Era")

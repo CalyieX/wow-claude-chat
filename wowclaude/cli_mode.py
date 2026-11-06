@@ -33,6 +33,15 @@ def available() -> tuple[bool, str]:
     return True, ""
 
 
+def window_size() -> tuple[int, int]:
+    """Columns and rows of the CLI window (written by the window itself)."""
+    try:
+        d = json.loads((config.HOME / "termsize.json").read_text(encoding="utf-8"))
+        return max(20, min(200, int(d["cols"]))), max(5, min(60, int(d["rows"])))
+    except (OSError, ValueError, KeyError):
+        return 110, 30
+
+
 def tab_size() -> tuple[int, int]:
     """Columns and rows that fit into the AI tab (written by the chat overlay), else a small default."""
     try:
@@ -48,33 +57,39 @@ def tab_size() -> tuple[int, int]:
         return DEFAULT_SIZE
 
 
-def harness_text() -> str:
+def harness_text(window: bool = False) -> str:
     """The same harness the chat mode uses (name, game knowledge, tools, memos rules), plus a note for the terminal."""
+    if window:
+        return claude.persona()[1] + (
+            "\n\nYou run inside a real terminal window next to the World of Warcraft window. You are the AI of the WoW AI addon, "
+            "with the name given above: never say you are Claude, Codex or ChatGPT. Here the player works with you like in any command "
+            "line tool; the game chat is a separate conversation.")
     return claude.persona()[1] + (
         "\n\nYou run inside a terminal that is shown in a small tab of the World of Warcraft chat window. You are the AI of the "
         "WoW AI addon, with the name given above: never say you are Claude, Codex or ChatGPT; if asked who you are, give that name. "
-        "Keep answers short, the tab is small. The player types in the game chat; the game state line is not added here, "
-        "so ask when you need the character or zone.")
+        "Keep answers short, the tab is small. The player types in the game chat; a [Game state: ...] line "
+        "comes in front of the first message and whenever it changes: use it, never ask for what it tells you.")
 
 
-def harness_file():
+def harness_file(window: bool = False):
     """The harness as a file (a command line is too short for it)."""
-    path = config.HOME / "cli_harness.txt"
-    path.write_text(harness_text(), encoding="utf-8")
+    path = config.HOME / ("win_harness.txt" if window else "cli_harness.txt")
+    path.write_text(harness_text(window), encoding="utf-8")
     return path
 
 
-def command() -> list[str] | None:
+def command(window: bool = False) -> list[str] | None:
     """The command line of the tool in use (None: this backend has no command line tool)."""
     from . import backends
+    key = "win" if window else "cli"  # the CLI chat (tab) and the CLI window have their own WoW AI / Own switch
     b = backends.name()
     if b == "claude":
         exe = claude.claude_path()
         if not exe:
             return None
-        if claude.own_harness("cli"):  # the AI's own setup (memory files, settings, tools): work on your own projects
+        if claude.own_harness(key):  # the AI's own setup (memory files, settings, tools): work on your own projects
             return [exe]
-        cmd = [exe, "--setting-sources", "", "--append-system-prompt-file", str(harness_file())]  # not the player's own settings
+        cmd = [exe, "--setting-sources", "", "--append-system-prompt-file", str(harness_file(window))]  # not the player's own settings
         if not claude.computer_access():
             cmd += ["--tools", claude.WEB_TOOLS, "--allowedTools", claude.WEB_TOOLS]
         return cmd
@@ -82,12 +97,12 @@ def command() -> list[str] | None:
         exe = shutil.which("codex")
         if not exe:
             return None
-        if claude.own_harness("cli"):
+        if claude.own_harness(key):
             return [exe, "--search", "-c", "projects." + json.dumps(str(Path.home())) + '.trust_level="trusted"']
         cmd = [exe, "--search"] + ([] if claude.computer_access() else ["-s", "read-only"])
         folder = str(Path.home()) if claude.computer_access() else claude.neutral_cwd()  # chosen by the "AI access" switch
         cmd += ["-c", "projects." + json.dumps(folder) + '.trust_level="trusted"']  # no "trust this folder?" question
-        text = harness_text()
+        text = harness_text(window)
         if len(text) < 20000:  # Windows command lines are limited: a longer harness is left out rather than breaking the start
             cmd += ["-c", "developer_instructions=" + json.dumps(text)]  # a TOML string accepts the same escapes
         return cmd
@@ -124,7 +139,10 @@ def prepare_config(cwd: str) -> None:
 
 
 class CliMode:
-    def __init__(self) -> None:
+    def __init__(self, window: bool = False) -> None:
+        self.window = window  # False: the tab in the game chat; True: its own session in the CLI window
+        self.key = "win" if window else "cli"
+        self.stem = "win" if window else "cli"
         self.proc = None
         self.screen = None
         self.stream = None
@@ -141,7 +159,7 @@ class CliMode:
         ok, why = available()
         if not ok:
             return why
-        cmd = command()
+        cmd = command(self.window)
         if not cmd:
             return "CLI mode needs the Claude Code or Codex login (Connect AI). Other AIs have no command line tool."
         if self.running():
@@ -152,20 +170,22 @@ class CliMode:
         import pyte
         import winpty
         from pathlib import Path
-        cols, rows = tab_size()
+        cols, rows = window_size() if self.window else tab_size()
         self.size = (cols, rows)
         self.screen = pyte.HistoryScreen(cols, rows, history=2000)  # keeps what scrolled off the top
         self.offset = 0
         self.stream = pyte.Stream(self.screen)
-        cwd = str(Path.home()) if claude.computer_access() or claude.own_harness("cli") else claude.neutral_cwd()
+        cwd = str(Path.home()) if claude.computer_access() or claude.own_harness(self.key) else claude.neutral_cwd()
         prepare_config(cwd)
         from . import login
         env = login.no_browser_env()  # a /login inside the tool must not open the normal browser
         self.proc = winpty.PtyProcess.spawn(cmd, dimensions=(rows, cols), cwd=cwd, env=env)
         self.stop_flag = False
         threading.Thread(target=self._read, daemon=True).start()
+        self.started = time.time()
         threading.Thread(target=self._paint_loop, daemon=True).start()
-        threading.Thread(target=self._input_loop, daemon=True).start()
+        if self.window:
+            threading.Thread(target=self._input_loop, daemon=True).start()
         return ""
 
     def stop(self) -> None:
@@ -176,7 +196,8 @@ class CliMode:
         except Exception:  # noqa: BLE001 - already gone
             pass
         self.proc = None
-        self._post(None)
+        if not self.window:
+            self._post(None)
 
     # -- terminal -> screen -------------------------------------------------------------------------------------
     def _read(self) -> None:
@@ -221,14 +242,14 @@ class CliMode:
         while disp and not disp[-1]:
             disp.pop()
         try:
-            (config.HOME / "cli_screen.json").write_text(json.dumps({"text": "\n".join(hist + disp), "time": time.time()}),
+            (config.HOME / "win_screen.json").write_text(json.dumps({"text": "\n".join(hist + disp), "time": time.time()}),
                                                          encoding="utf-8")
         except OSError:
             pass
 
     def _input_loop(self) -> None:
         """Keys typed in the CLI window go straight into the tool."""
-        path = config.HOME / "cli_in.jsonl"
+        path = config.HOME / "win_in.jsonl"
         pos = path.stat().st_size if path.exists() else 0
         while not self.stop_flag and self.running():
             time.sleep(0.05)
@@ -269,13 +290,32 @@ class CliMode:
         self.dirty.set()
         return ""
 
-    def _paint_loop(self) -> None:
-        last = ""
+    def _window_loop(self) -> None:
+        """The CLI window's own session: feed its screen file; end the tool when the window is gone."""
+        seen = False
         while not self.stop_flag:
             self.dirty.wait(0.5)
             self.dirty.clear()
             self._resize_if_needed()
             self._dump()
+            from . import term_window
+            if term_window.alive(6):
+                seen = True
+            elif seen or time.time() - self.started > 25:
+                self.stop()
+                break
+            if not self.running():
+                break
+            time.sleep(0.1)
+
+    def _paint_loop(self) -> None:
+        if self.window:
+            return self._window_loop()
+        last = ""
+        while not self.stop_flag:
+            self.dirty.wait(0.5)
+            self.dirty.clear()
+            self._resize_if_needed()
             text = self._lines()
             if "Enter to confirm" in text or "Esc to cancel" in text:  # the tool waits for an answer
                 text += chr(10) + "[It asks a question: open the CLI window (/term) or use /k up|down|enter]"
@@ -291,7 +331,7 @@ class CliMode:
                 break
 
     def _resize_if_needed(self) -> None:
-        cols, rows = tab_size()
+        cols, rows = window_size() if self.window else tab_size()
         if (cols, rows) != self.size and self.running():
             self.size = (cols, rows)
             try:
@@ -333,6 +373,7 @@ class CliMode:
 
 
 _cli = CliMode()
+_win = CliMode(window=True)
 
 
 def open_window() -> str:
@@ -344,6 +385,9 @@ def open_window() -> str:
     if term_window.alive():
         return "The CLI window is already open."
     (config.HOME / "term.close").unlink(missing_ok=True)  # an old close request must not shut the new window
+    why = _win.start()  # the window has its own tool session (its own WoW AI / Own switch)
+    if why:
+        return why
     exe = Path(sys.executable).with_name("pythonw.exe")
     subprocess.Popen([str(exe if exe.exists() else sys.executable), "-m", "wowclaude", "term"], creationflags=0x08000000)
     return "CLI window opened. Click into it to type, copy and paste; click the game to play on."
@@ -375,24 +419,34 @@ def set_mode(mode: str) -> str:
         why = _cli.start()
         if why:
             return why
-        try:  # the tool asks things (trust this folder? ...) that need arrow keys and scrolling: the real window does that
-            open_window()
-        except Exception:  # noqa: BLE001 - the tab still works with /k
-            pass
-        return ("CLI mode on. The CLI window opened: answer questions there (arrow keys, Enter, scroll, copy, paste). "
-                "/aimode chat leaves CLI mode.")
+        return ("CLI mode on. The tab works as before; for arrow keys, scrolling and copy/paste open the CLI window "
+                "(menu: CLI window). /aimode chat leaves CLI mode.")
     cfg.pop("ai_mode", None)
     config.save(cfg)
     _write_state()
     _cli.stop()
-    try:
-        (config.HOME / "term.close").write_text("1")  # closes the CLI window if it is open
-    except OSError:
-        pass
     return "Chat mode on."
 
 
-def handle(text: str) -> str | None:
+_last_context = [""]
+
+
+def with_state(text: str, context: str) -> str:
+    """The tool gets no game-state line like the chat mode: put it in front of the message when it is new or changed,
+    with the WoW AI memos (not with the AI's own harness)."""
+    if not context or context == _last_context[0] or claude.own_harness("cli"):
+        return text
+    _last_context[0] = context
+    memos = ""
+    try:
+        from . import memory
+        memos = memory.prompt_block(context).replace("\n", " ")
+    except Exception:  # noqa: BLE001 - memos are a convenience
+        pass
+    return f"[Game state: {context}] {memos}{text}"
+
+
+def handle(text: str, context: str = "") -> str | None:
     """A message from the game while CLI mode is on. Returns a short note for the chat, or None (it went to the tool)."""
     t = text.strip()
     if t.lower().startswith("!term"):
@@ -401,4 +455,4 @@ def handle(text: str) -> str | None:
         return _cli.scroll(t[7:]) or None
     if t.lower().startswith("!k "):
         return _cli.send_key(t[3:].strip()) or None
-    return _cli.send_line(t) or None
+    return _cli.send_line(with_state(t, context)) or None

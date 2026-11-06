@@ -70,9 +70,9 @@ def handle_command(text: str) -> str | None:
             exe = Path(sys.executable).with_name("pythonw.exe")
             subprocess.Popen([str(exe if exe.exists() else sys.executable), "-m", "wowclaude", "harness"], creationflags=0x08000000)
             return "Harness editor opened in its own window."
-        mode = words[0] if words and words[0] in ("wow", "cli") else ""
+        mode = words[0] if words and words[0] in ("wow", "cli", "win") else ""
         if not mode:
-            return "Harness: /harness wow  or  /harness cli  switches between the WoW AI harness and your AI's own setup."
+            return "Harness: /harness wow, /harness cli or /harness win switches between the WoW AI harness and your AI's own setup."
         cfg = config.load()
         own = (words[1] in ("own", "mine", "on")) if len(words) > 1 else not cfg.get("own_harness_" + mode)
         if own:
@@ -85,9 +85,10 @@ def handle_command(text: str) -> str | None:
             installer.write_state()
         except Exception:  # noqa: BLE001
             pass
-        what = "WoW chat" if mode == "wow" else "CLI"
+        what = {"wow": "WoW chat", "cli": "CLI chat", "win": "CLI window"}[mode]
         return (f"{what}: " + ("your AI's own harness (its own memory files and settings)" if own else "the WoW AI harness") +
-                (". Applies to the next question." if mode == "wow" else ". Applies when CLI mode starts again (/aimode chat, then /aimode cli)."))
+                (". Applies to the next question." if mode == "wow" else ". Applies when CLI mode starts again (/aimode chat, then /aimode cli)."
+                 if mode == "cli" else ". Applies the next time the CLI window opens."))
     if cmd == "!ol":
         from . import panel_window
         panel_window.open_empty()
@@ -270,7 +271,7 @@ def run(root: Path, poll: float = 0.6) -> None:
             from . import cli_mode
             if cli_mode.active() and not state.message.lstrip().lower().startswith(CLI_BYPASS):
                 try:  # CLI mode: the original command line tool answers in the tab by itself
-                    note = cli_mode.handle(state.message.strip())
+                    note = cli_mode.handle(state.message.strip(), state.context)
                 except Exception as exc:  # noqa: BLE001
                     note = "CLI mode: " + str(exc)[:100]
                 if note:
