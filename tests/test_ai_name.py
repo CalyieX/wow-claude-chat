@@ -347,3 +347,22 @@ def test_cli_first_run_is_prepared_so_the_token_is_used(monkeypatch, tmp_path):
     d = json.loads((tmp_path / ".claude.json").read_text(encoding="utf-8"))
     assert d["hasCompletedOnboarding"] is True
     assert list(d["projects"].values())[0]["hasTrustDialogAccepted"] is True
+
+
+def test_memory_saves_forgets_and_never_ships(monkeypatch, tmp_path):
+    import pathlib
+    from wowclaude import memory
+    monkeypatch.setattr(memory, "DIR", tmp_path / "memory")
+    ctx = "Gorel | Level 10 | Warlock | Undercity"
+    reply, acts = memory.extract("Alles klar [[remember plays solo]] [[remember all: likes short answers]] [[remember my password is x]]")
+    assert "[[" not in reply and len(acts) == 3
+    notes = memory.apply(ctx, acts)
+    assert notes.count("saved to memory") == 2  # the password line is refused
+    block = memory.prompt_block(ctx)
+    assert "plays solo" in block and "likes short answers" in block and "password" not in block
+    assert "plays solo" not in memory.prompt_block("Other | Level 5")  # per character
+    memory.apply(ctx, [("forget", "solo")])
+    assert "plays solo" not in memory.prompt_block(ctx)
+    # nothing of the author's own memory is part of the program
+    root = pathlib.Path(__file__).resolve().parent.parent
+    assert not list((root / "wowclaude").glob("**/memory/*.md")) and not (root / "memory").exists()

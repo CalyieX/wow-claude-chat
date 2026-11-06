@@ -37,10 +37,19 @@ def _post(kind: str, text: str) -> None:
         pass
 
 
+_last_context = [""]  # the game state line of the latest question (for /memory)
+
+
 def handle_command(text: str) -> str | None:
     """In-game slash commands that the addon sends as "!name args" (never forwarded to the AI)."""
     parts = text.strip().split(None, 1)
     cmd, arg = parts[0].lower(), (parts[1].strip() if len(parts) > 1 else "")
+    if cmd == "!memory":
+        from . import memory
+        if arg.lower() == "clear":
+            memory.clear(memory.character(_last_context[0]))
+            return "Memory of this character deleted (the shared 'all characters' memory stays)."
+        return memory.show(_last_context[0])
     if cmd == "!browser":
         from . import overlay
         closing = arg in ("off", "close")
@@ -110,6 +119,9 @@ def deliver(state: decode.GameState, reply: str) -> None:
     reply, play = claude.extract_play(reply)
     from . import vinput
     reply, acts = vinput.extract(reply) if vinput.available() else (reply, [])
+    from . import memory
+    reply, mem_acts = memory.extract(reply)
+    mem_notes = memory.apply(state.context, mem_acts) if mem_acts else []
     for act in acts:
         try:
             print(f"input {act}: {'ok' if vinput.run(act) else 'failed'}", flush=True)
@@ -131,6 +143,8 @@ def deliver(state: decode.GameState, reply: str) -> None:
             text += f"\n(macro '{m['name']}' created - find it in /macro)"
         else:
             text += f"\nMacro '{m['name']}': type  {cmd}"
+    if mem_notes:
+        text += "\n(" + mem_notes[0] + ")"
     _post("ai", claude.persona()[0] + ": " + text.strip())
 
 
@@ -189,6 +203,9 @@ def run(root: Path, poll: float = 0.6) -> None:
             last_seq = state.message_seq
             question = state.message.strip()
             if state.context:
+                _last_context[0] = state.context
+                from . import memory as _mem
+                question = _mem.prompt_block(state.context) + question
                 ver = claude.flavor(state.context)
                 question = "[Game state: " + state.context + (" | Game version: " + ver if ver else "") + "]\n" + question
             from . import vinput

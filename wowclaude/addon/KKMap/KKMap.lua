@@ -390,6 +390,8 @@ SlashCmdList["KKTAB"] = function()  -- bring the AI tab to the front (used by to
     if tab and FCF_Tab_OnClick then pcall(FCF_Tab_OnClick, tab, "LeftButton") end
   end
 end
+SLASH_KKMEMORY1 = "/memory"
+SlashCmdList["KKMEMORY"] = function(msg) sendToClaude((("!memory " .. (msg or "")):gsub("%s+$", ""))) end
 SLASH_KKAIMODE1 = "/aimode"
 SlashCmdList["KKAIMODE"] = function(msg) sendToClaude((("!aimode " .. (msg or "")):gsub("%s+$", ""))) end
 SLASH_KKKEY1 = "/k"
@@ -463,6 +465,7 @@ local COMMANDS = {
   "/nameme name  -  what the AI calls you (empty = no name)",
   "/browser [url]  -  open the browser  (/browser off = close)",
   "/aimode [chat|cli]  -  CLI mode: the tab shows the original Claude/Codex CLI",
+  "/memory  -  what the AI remembers about you  (/memory clear)",
   "/k up|down|enter|esc|tab|ctrl-c  -  send a key to the CLI",
   "/access [on|off]  -  let the AI use this computer (default: off)",
   "/login [code]  -  renew the AI login (page opens in the browser)",
