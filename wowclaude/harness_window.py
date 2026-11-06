@@ -35,6 +35,10 @@ def run(tab: str = "wow") -> None:
     bar.pack(side="right", fill="y")
     text.pack(side="left", fill="both", expand=True)
     text.bind("<Button-1>", lambda e: (win.focus(), text.focus_set()))
+    tk.Label(own, text="Which AI answers (WoW chat and CLI):", bg="#15130e", fg=gold, anchor="w").pack(side="top", fill="x")
+    choice = tk.Frame(own, bg="#15130e")
+    choice.pack(side="top", fill="x", pady=(0, 6))
+    pick_var = tk.StringVar(value=backends.name())
     info = tk.Text(own, bg="#15130e", fg="#f0e6c8", font=("Consolas", 10), wrap="word", bd=1, relief="solid")
     ibar = WowScrollbar(own, info.yview)
     info.configure(yscrollcommand=ibar.set)
@@ -92,16 +96,23 @@ def run(tab: str = "wow") -> None:
         refresh()
         msg.config(text=f"Search done: {len(found)} setup(s) found.", fg="#7fd17f")
 
+    def choose() -> None:
+        cfg = config.load()
+        cfg["backend"] = pick_var.get()
+        config.save(cfg)
+        msg.config(text=f"AI: {pick_var.get()}. Used from the next question on.", fg="#7fd17f")
+
     def refresh() -> None:
+        for w in choice.winfo_children():
+            w.destroy()
+        for b in backends.detect():
+            tk.Radiobutton(choice, text=b["label"], value=b["backend"], variable=pick_var, command=choose, anchor="w",
+                           bg="#15130e", fg="#f0e6c8", selectcolor="#3a2a10", activebackground="#15130e",
+                           activeforeground=gold).pack(side="top", fill="x")
         info.config(state="normal")
         info.delete("1.0", "end")
         body = ("\n\n".join(harness_import.overview(s) for s in found) if found else
                 "Nothing found yet. Click Search (all AI programs on this computer) or Pick folder.")
-        plain = [b for b in backends.detect() if b["backend"] not in ("claude", "codex")]
-        if plain:
-            body += ("\n\nRUNS HERE WITHOUT AN OWN FOLDER (API key or local program): choose it on the AI Setup page. Own then means\n"
-                     "the model itself without the WoW AI role; there is no memory or skill folder to show.\n"
-                     + "\n".join("  - " + b["label"] for b in plain))
         info.insert("1.0", head + body)
         info.config(state="disabled")
         rebuild_row()
@@ -117,8 +128,9 @@ def run(tab: str = "wow") -> None:
             tk.Button(row, text=label, command=cmd, bg="#5c1a10", fg=gold, activebackground="#7d2417", activeforeground=gold,
                       relief="solid", bd=1, padx=12).pack(side="left", padx=(0, 8))
 
-    head = ("LIVE ACCESS: set the switch in the Harness menu to Own. Your real AI then runs with its normal folder, login,\n"
-            "memory and skills - nothing is copied. Search lists every AI setup found on this computer.\n\n")
+    head = ("LIVE ACCESS: pick the AI above, then set the switch in the Harness menu to Own. That AI runs with its normal\n"
+            "folder, login, memory and skills - nothing is copied. Search lists every AI setup found on this computer.\n"
+            "AIs without a folder (API key, local program) answer as the bare model.\n\n")
     refresh()
     msg.pack(fill="x", padx=6, side="bottom")
     load()
