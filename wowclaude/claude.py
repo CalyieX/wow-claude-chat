@@ -319,7 +319,7 @@ def _clean_env(mode: str = "wow") -> dict:
     if token:
         env["CLAUDE_CODE_OAUTH_TOKEN"] = str(token)
     home = config.load().get("claude_home")  # optional own login folder: other Claude apps cannot overwrite this login
-    if home:
+    if home and not own_harness(mode):  # the AI's own setup lives in its normal config folder (its CLAUDE.md, memory, settings)
         env["CLAUDE_CONFIG_DIR"] = str(home)
     return env
 
