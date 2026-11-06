@@ -168,8 +168,14 @@ def run() -> None:
 
         def work() -> None:
             c = setup_ui._check()
+            def show() -> None:
+                msg.config(text=c["status"], fg="#7fd17f" if c["ok"] else "#ff8a80")
+                if c["ok"]:
+                    load_btn.pack_forget()
+                elif not load_btn.winfo_ismapped():  # the AI did not load: offer to try again without restarting anything
+                    load_btn.pack(side="left", padx=(0, 8), before=close_btn)
             try:
-                win.root.after(0, lambda: msg.config(text=c["status"], fg="#7fd17f" if c["ok"] else "#ff8a80"))
+                win.root.after(0, show)
             except Exception:  # noqa: BLE001
                 pass
         threading.Thread(target=work, daemon=True).start()
@@ -179,7 +185,10 @@ def run() -> None:
         win.root.clipboard_append(setup_ui.ai_prompt())
         msg.config(text="Copied: paste it into an AI that can edit files (Claude Code, Codex ...) and it sets this up for you.", fg="#7fd17f")
 
-    for label, cmd in (("Save and test", save), ("Search", do_search), ("Let my own AI set this up (copy text)", copy_prompt), ("Close", win.close)):
+    for label, cmd in (("Save and test", save), ("Search", do_search), ("Let my own AI set this up (copy text)", copy_prompt)):
         btn(bottom, label, cmd).pack(side="left", padx=(0, 8))
+    close_btn = btn(bottom, "Close", win.close)
+    close_btn.pack(side="left", padx=(0, 8))
+    load_btn = btn(bottom, "Load AI again", save)  # only shown when the last check failed
     draw_found()
     win.root.mainloop()
