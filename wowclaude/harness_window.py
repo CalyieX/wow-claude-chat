@@ -20,15 +20,15 @@ def save(text: str) -> str:
 
 def run() -> None:
     import tkinter as tk
-    from .wowframe import FramedWindow
-    win = FramedWindow("Harness", 760, 560)
+    from .wowframe import FramedWindow, WowScrollbar
+    win = FramedWindow("Harness", 760, 560, key="harness")
     root = win.root
     gold = "#ffd100"
     box = tk.Frame(win.inner, bg="#15130e")
     box.pack(fill="both", expand=True, padx=4, pady=(4, 2))
     text = tk.Text(box, bg="#0e0d09", fg="#f0e6c8", insertbackground=gold, font=("Consolas", 10), wrap="word", bd=1,
                    relief="solid", undo=True)
-    bar = tk.Scrollbar(box, command=text.yview)
+    bar = WowScrollbar(box, text.yview)
     text.configure(yscrollcommand=bar.set)
     bar.pack(side="right", fill="y")
     text.pack(side="left", fill="both", expand=True)

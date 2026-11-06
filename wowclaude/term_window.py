@@ -41,18 +41,18 @@ def run() -> None:
     import tkinter.font as tkfont
     if alive():
         return  # one window is enough
-    from .wowframe import FramedWindow
+    from .wowframe import FramedWindow, WowScrollbar
 
     def cleanup() -> None:
         BEAT.unlink(missing_ok=True)
         SIZE.unlink(missing_ok=True)
 
-    win = FramedWindow("WoW AI - CLI", 900, 540, on_close=cleanup)
+    win = FramedWindow("WoW AI - CLI", 900, 540, on_close=cleanup, key="cli")
     root = win.root
     font = tkfont.Font(family="Consolas", size=11)
     text = tk.Text(win.inner, bg="#101418", fg="#e6e6e6", insertbackground="#e6e6e6", font=font, wrap="none", bd=0,
                    highlightthickness=0, selectbackground="#3a5a8c", cursor="xterm")
-    bar = tk.Scrollbar(win.inner, command=text.yview)
+    bar = WowScrollbar(win.inner, text.yview)
     text.configure(yscrollcommand=bar.set)
     bar.pack(side="right", fill="y")
     text.pack(side="left", fill="both", expand=True)

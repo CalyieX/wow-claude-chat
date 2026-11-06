@@ -62,17 +62,17 @@ def run() -> None:
     import tkinter as tk
     if alive():
         return
-    from .wowframe import FramedWindow
+    from .wowframe import FramedWindow, WowScrollbar
     bg = "#15130e"
 
     def cleanup() -> None:
         BEAT.unlink(missing_ok=True)
 
-    win = FramedWindow("WoW AI", 560, 420, on_close=cleanup)
+    win = FramedWindow("WoW AI", 560, 420, on_close=cleanup, key="panel")
     root = win.root
     body = tk.Text(win.inner, bg=bg, fg="#f0e6c8", font=("Segoe UI", 11), wrap="word", bd=0, highlightthickness=0,
                    padx=10, pady=8, cursor="arrow", spacing1=2)
-    sb = tk.Scrollbar(win.inner, command=body.yview)
+    sb = WowScrollbar(win.inner, body.yview)
     body.configure(yscrollcommand=sb.set)
     sb.pack(side="right", fill="y")
     body.pack(side="left", fill="both", expand=True)
@@ -99,17 +99,6 @@ def run() -> None:
                     body.insert("end", text, tag if col else ())
                 body.insert("end", "\n")
         body.configure(state="disabled")
-        if not seen["placed"]:
-            seen["placed"] = True
-            x, y = 80, 80
-            try:
-                from . import overlay
-                g = overlay.game_rect()
-                if g:
-                    x, y = g[2] - 560 - 30, g[1] + 80
-            except Exception:  # noqa: BLE001 - placement is a convenience
-                pass
-            root.geometry(f"+{max(0, x)}+{max(0, y)}")
 
     def tick() -> None:
         try:
