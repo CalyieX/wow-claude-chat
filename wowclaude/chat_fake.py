@@ -265,7 +265,7 @@ class Dock:
         self._park()
 
     GEAR = 14  # the gear inside the button (top left of the dark slot) opens the addon menu
-    OFF = 15
+    OFF = 10  # 4 px of the gear stick out over the corner of the dark slot (which starts at 14)
 
     @staticmethod
     def add_gear(img) -> None:
