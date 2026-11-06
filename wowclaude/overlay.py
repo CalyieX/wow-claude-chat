@@ -624,7 +624,7 @@ def _button_art(kind: str, on: bool = False):
 
 
 def compose(fw: int, fh: int, top: int, hover: str = "", down: str = "", ghost: bool = False,
-            names: tuple = (), label: str = ""):
+            names: tuple = (), label: str = "", tile_bg: bool = True):
     """Render the whole frame as an RGBA image; the content window area is fully transparent."""
     from PIL import Image, ImageChops, ImageDraw
 
@@ -632,7 +632,7 @@ def compose(fw: int, fh: int, top: int, hover: str = "", down: str = "", ghost: 
     # background only in the top strip (the page fills everything else, no grey seam beside the border)
     tile = _art("UI-DialogBox-Background.png").resize((32, 32))
     bg = Image.new("RGBA", (fw, fh), (0, 0, 0, 0))
-    for yy in range(INSET, top, 32):
+    for yy in range(INSET, top if tile_bg else INSET, 32):  # (other windows paint their own window colour instead)
         for xx in range(INSET, fw - INSET, 32):
             bg.paste(tile, (xx, yy))
     mask = Image.new("L", (fw, fh), 0)

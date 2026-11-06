@@ -50,7 +50,7 @@ def run() -> None:
     win = FramedWindow("WoW AI - CLI", 900, 540, on_close=cleanup, key="cli")
     root = win.root
     font = tkfont.Font(family="Consolas", size=11)
-    text = tk.Text(win.inner, bg="#101418", fg="#e6e6e6", insertbackground="#e6e6e6", font=font, wrap="none", bd=0,
+    text = tk.Text(win.inner, bg="#15130e", fg="#e6e6e6", insertbackground="#e6e6e6", font=font, wrap="none", bd=0,
                    highlightthickness=0, selectbackground="#3a5a8c", cursor="xterm")
     bar = WowScrollbar(win.inner, text.yview)
     text.configure(yscrollcommand=bar.set)

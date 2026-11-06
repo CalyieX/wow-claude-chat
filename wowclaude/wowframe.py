@@ -7,7 +7,7 @@ from __future__ import annotations
 
 from typing import Callable
 
-DARK = "#0e0d09"
+DARK = "#15130e"  # the window colour: title strip, margins and content all use it (no black bands)
 STATE = None  # ~/.wowclaude/windows.json: position and size of every window, as fractions of the game window
 
 
@@ -35,6 +35,7 @@ def _save(key: str, rel) -> None:
     f.parent.mkdir(parents=True, exist_ok=True)
     f.write_text(json.dumps(data), encoding="utf-8")
 MIN_W, MIN_H = 320, 200
+THUMB = "red"  # "red" (like the frame buttons) or "gold" (WoW yellow)
 
 
 class FramedWindow:
@@ -142,15 +143,11 @@ class FramedWindow:
         from PIL import Image, ImageTk
         from . import overlay
         self._pending = None
-        frame = overlay.compose(self.w, self.h, overlay.TOP, names=("close",), label=self.title)
-        # outside the rounded border: a key colour the window treats as see-through (no black corners); inside: the
-        # dialog's own dark texture like the browser frame, not flat black
+        frame = overlay.compose(self.w, self.h, overlay.TOP, names=("close",), label=self.title, tile_bg=False)
+        # outside the rounded border: a key colour the window treats as see-through (no black corners); inside: one window colour
         base = Image.new("RGB", (self.w, self.h), overlay.KEY_RGB)
-        tile = overlay._art("UI-DialogBox-Background.png").convert("RGB").resize((32, 32))
         inset = overlay.INSET
-        for yy in range(inset, self.h - inset, 32):
-            for xx in range(inset, self.w - inset, 32):
-                base.paste(tile.crop((0, 0, min(32, self.w - inset - xx), min(32, self.h - inset - yy))), (xx, yy))
+        base.paste((21, 19, 14), (inset, inset, self.w - inset, self.h - inset))  # window colour, also under the title strip
         alpha = frame.getchannel("A").point(lambda v: 255 if v >= 110 else 0)  # hard edge: no key-colour fringe
         base.paste(frame.convert("RGB"), (0, 0), alpha)
         self._photo = ImageTk.PhotoImage(base)
@@ -186,111 +183,80 @@ class FramedWindow:
             self.root.geometry(f"{nw}x{nh}")
 
 
-_ART: dict = {}
-
-
-def _scroll_art(w: int):
-    """Scroll bar parts in the frame's own colours: the thumb is a rounded, shaded steel rod like the frame rim, the arrow buttons are the frame's red buttons with a gold arrow. None if the art is missing."""
-    if w in _ART:
-        return _ART[w]
-    _ART[w] = None
-    try:
-        from PIL import Image, ImageChops, ImageDraw, ImageTk
-        from . import overlay
-        S = 4  # draw big, scale down: smooth round ends
-
-        def thumb(h: int):
-            h = max(h, w * 2 + 2)
-            W2, H2 = w * S, h * S
-            tex = Image.new("RGBA", (W2, H2), (150, 148, 150, 255))  # the frame border is steel grey: same metal, shaded below
-            # 3D: cylinder shading across the width, a bright reflection line left of centre, darker rim
-            shade = Image.new("L", (W2, H2))
-            sd = ImageDraw.Draw(shade)
-            for x in range(W2):
-                u = x / (W2 - 1) * 2 - 1  # -1 .. 1
-                v = 0.62 + 0.38 * (1 - u * u) ** 0.5 - 0.18 * max(0.0, u)  # light from the left
-                sd.line((x, 0, x, H2), fill=max(0, min(255, int(v * 255))))
-            lit = ImageChops.multiply(tex.convert("RGB"), Image.merge("RGB", (shade, shade, shade)))
-            hl = ImageDraw.Draw(lit)
-            hx = int(W2 * 0.3)
-            hl.line((hx, W2 // 2, hx, H2 - W2 // 2), fill=(235, 235, 240), width=max(2, S))  # reflection
-            mask = Image.new("L", (W2, H2), 0)
-            ImageDraw.Draw(mask).rounded_rectangle((0, 0, W2 - 1, H2 - 1), radius=W2 // 2, fill=255)  # round ends
-            edge = Image.new("L", (W2, H2), 0)
-            ImageDraw.Draw(edge).rounded_rectangle((0, 0, W2 - 1, H2 - 1), radius=W2 // 2, outline=255, width=S)
-            out = Image.new("RGBA", (W2, H2), (0, 0, 0, 0))
-            out.paste(lit.convert("RGBA"), (0, 0), mask)
-            out.paste(Image.new("RGBA", (W2, H2), (12, 11, 10, 255)), (0, 0), edge)  # dark outline
-            return ImageTk.PhotoImage(out.resize((w, h), Image.LANCZOS))
-
-        def button(up: bool):
-            base = overlay._art("UI-Panel-MinimizeButton-Up.png").crop(overlay.CB).convert("RGBA")
-            px = base.load()
-            for yy in range(base.height):  # wipe the gold X, keep the red button
-                for xx in range(base.width):
-                    r, g, b, a = px[xx, yy]
-                    if a and g > 55 and r > g:
-                        px[xx, yy] = (112, 22, 16, a)
-            big = base.resize((base.width * 4, base.height * 4), Image.LANCZOS)
-            d = ImageDraw.Draw(big)
-            cx, cy, s = big.width // 2, big.height // 2, big.width // 5
-            pts = [(cx - s, cy + s // 2), (cx + s, cy + s // 2), (cx, cy - s // 2 - 2)] if up else                 [(cx - s, cy - s // 2), (cx + s, cy - s // 2), (cx, cy + s // 2 + 2)]
-            d.polygon(pts, fill=(255, 209, 0, 255))
-            return ImageTk.PhotoImage(big.resize((w, round(w * base.height / base.width)), Image.LANCZOS))
-
-        _ART[w] = {"up": button(True), "down": button(False), "thumb": thumb}
-    except Exception:  # noqa: BLE001 - fall back to the drawn bar
-        pass
-    return _ART[w]
+def scroll_image(w: int, h: int, first: float, last: float):
+    """The whole scroll bar as one image (drawn 4x big, scaled down: smooth, exactly symmetric, no corners): a pill-shaped
+    dark track with a thin transparent-yellow edge, round red buttons with a gold arrow at both ends, a gold thumb with
+    round ends, a 3D shading and a reflection. Everything is centred on the same axis."""
+    from PIL import Image, ImageDraw
+    S = 4
+    W2, H2 = w * S, h * S
+    im = Image.new("RGBA", (W2, H2), (0, 0, 0, 0))
+    d = ImageDraw.Draw(im)
+    d.rounded_rectangle((0, 0, W2 - 1, H2 - 1), radius=W2 // 2, fill=(12, 11, 9, 255), outline=(97, 80, 9, 255), width=S)  # gold at ~35 %
+    bd = (w - 4) * S  # button diameter, 2 px of track around it
+    for cy in (w * S // 2, H2 - w * S // 2):
+        x0, y0 = (W2 - bd) // 2, cy - bd // 2
+        d.ellipse((x0, y0, x0 + bd - 1, y0 + bd - 1), fill=(128, 24, 16, 255), outline=(201, 162, 39, 255), width=S // 2)
+        d.ellipse((x0 + S, y0 + S, x0 + bd - 1 - S, y0 + bd // 2), outline=None, fill=(160, 40, 28, 255))  # upper sheen
+    s = bd // 5
+    cx = W2 // 2
+    cy1, cy2 = w * S // 2, H2 - w * S // 2
+    d.polygon([(cx - s, cy1 + s // 2), (cx + s, cy1 + s // 2), (cx, cy1 - s // 2 - 1)], fill=(255, 209, 0, 255))
+    d.polygon([(cx - s, cy2 - s // 2), (cx + s, cy2 - s // 2), (cx, cy2 + s // 2 + 1)], fill=(255, 209, 0, 255))
+    t0, t1 = w, h - w
+    if last - first < 0.999 and t1 - t0 > 8:  # thumb only when there is something to scroll
+        y0 = t0 + round(first * (t1 - t0))
+        y1 = max(y0 + w + 4, t0 + round(last * (t1 - t0)))
+        y1 = min(y1, t1)
+        y0 = max(t0, min(y0, y1 - (w + 4)))
+        tw = (w - 6) * S
+        x0 = (W2 - tw) // 2
+        th = (y1 - y0) * S
+        thumb = Image.new("RGBA", (tw, th), (0, 0, 0, 0))
+        px = thumb.load()
+        for x in range(tw):  # cylinder shading across the width: dark gold at the edges, bright gold in the middle
+            u = x / (tw - 1) * 2 - 1
+            k = (1 - u * u) ** 0.5
+            if THUMB == "gold":
+                col = (int(110 + 145 * k), int(78 + 131 * k), int(0 + 10 * k), 255)
+            else:  # red, shaded like the frame's red buttons: dark at the edges, bright in the middle
+                col = (int(70 + 150 * k), int(10 + 38 * k), int(6 + 28 * k), 255)
+            for y in range(th):
+                px[x, y] = col
+        td = ImageDraw.Draw(thumb)
+        hx = int(tw * 0.3)
+        td.line((hx, tw // 2, hx, th - tw // 2), fill=(255, 245, 190, 255) if THUMB == "gold" else (255, 170, 150, 255), width=max(2, S))  # reflection
+        mask = Image.new("L", (tw, th), 0)
+        ImageDraw.Draw(mask).rounded_rectangle((0, 0, tw - 1, th - 1), radius=tw // 2, fill=255)
+        edge = Image.new("L", (tw, th), 0)
+        ImageDraw.Draw(edge).rounded_rectangle((0, 0, tw - 1, th - 1), radius=tw // 2, outline=255, width=S)
+        im.paste(thumb, (x0, y0 * S), mask)
+        im.paste(Image.new("RGBA", (tw, th), (58, 40, 0, 255) if THUMB == "gold" else (45, 5, 3, 255)), (x0, y0 * S), edge)
+    return im.resize((w, h), Image.LANCZOS)
 
 
 class WowScrollbar:
-    """A scroll bar drawn like the game's: dark track, gold-edged arrow buttons, brown thumb with a light edge.
+    """A scroll bar in the frame's style (see scroll_image).
 
     Use like tk.Scrollbar: ``sb = WowScrollbar(parent, text.yview)``, ``text.configure(yscrollcommand=sb.set)``, ``sb.pack(...)``.
     """
-    WIDTH = 14
+    WIDTH = 16
 
     def __new__(cls, parent, command):
         import tkinter as tk
-        c = tk.Canvas(parent, width=cls.WIDTH, bg="#120d07", highlightthickness=1, highlightbackground="#4a4846", bd=0)
-        state = {"first": 0.0, "last": 1.0, "drag": None}
+        from PIL import ImageTk
         W = cls.WIDTH
+        c = tk.Canvas(parent, width=W, bg=DARK, highlightthickness=0, bd=0)
+        state = {"first": 0.0, "last": 1.0, "drag": None}
 
         def track() -> tuple[int, int]:
             return W, max(W + 10, c.winfo_height() - W)
 
-        art = _scroll_art(W)
-
         def draw(*_a) -> None:
-            c.delete("all")
             h = max(c.winfo_height(), 2 * W + 10)
-            if art:  # the Blender-rendered parts (rounded brass thumb, red buttons with a gold arrow)
-                c.create_rectangle(2, W, W - 2, h - W, fill="#0c0b09", outline="")
-                c.create_image(0, 0, image=art["up"], anchor="nw")
-                c.create_image(0, h - W, image=art["down"], anchor="nw")
-                t0, t1 = W, max(W + 10, h - W)
-                if state["last"] - state["first"] < 0.999:
-                    y0 = t0 + int(state["first"] * (t1 - t0))
-                    y1 = max(y0 + 2 * W, t0 + int(state["last"] * (t1 - t0)))
-                    c.thumb_img = art["thumb"](y1 - y0)  # keep a reference
-                    c.create_image(0, y0, image=c.thumb_img, anchor="nw")
-                return
-            for y, up in ((0, True), (h - W, False)):  # arrow buttons (drawn in code when the art is missing)
-                c.create_rectangle(1, y + 1, W - 1, y + W - 1, fill="#3a1a10", outline="#c9a227")
-                cx, cy = W // 2, y + W // 2
-                pts = (cx - 4, cy + 2, cx + 4, cy + 2, cx, cy - 3) if up else (cx - 4, cy - 2, cx + 4, cy - 2, cx, cy + 3)
-                c.create_polygon(*pts, fill="#ffd100", outline="")
-            t0, t1 = track()
-            span = t1 - t0
-            y0 = t0 + int(state["first"] * span)
-            y1 = max(y0 + 14, t0 + int(state["last"] * span))
-            if state["last"] - state["first"] < 0.999:  # thumb only when there is something to scroll
-                c.create_rectangle(2, y0, W - 2, y1, fill="#6b4a1c", outline="#e6cf8a")
-                c.create_line(4, y0 + 2, W - 4, y0 + 2, fill="#a8823a")
-                mid = (y0 + y1) // 2
-                for dy in (-3, 0, 3):
-                    c.create_line(6, mid + dy, W - 6, mid + dy, fill="#2a1a08")
+            c.delete("all")
+            c.photo = ImageTk.PhotoImage(scroll_image(W, h, state["first"], state["last"]))
+            c.create_image(0, 0, image=c.photo, anchor="nw")
 
         def set_(first, last) -> None:
             state["first"], state["last"] = float(first), float(last)

@@ -26,7 +26,7 @@ def run() -> None:
     gold = "#ffd100"
     box = tk.Frame(win.inner, bg="#15130e")
     box.pack(fill="both", expand=True, padx=4, pady=(4, 2))
-    text = tk.Text(box, bg="#0e0d09", fg="#f0e6c8", insertbackground=gold, font=("Consolas", 10), wrap="word", bd=1,
+    text = tk.Text(box, bg="#15130e", fg="#f0e6c8", insertbackground=gold, font=("Consolas", 10), wrap="word", bd=1,
                    relief="solid", undo=True)
     bar = WowScrollbar(box, text.yview)
     text.configure(yscrollcommand=bar.set)
