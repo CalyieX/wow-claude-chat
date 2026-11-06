@@ -509,6 +509,9 @@ class Session:
         if model:
             cmd += ["--model", model]
         left = max(5.0, t_end - time.time()) if t_end else TIMEOUT  # (a retry only starts with >= 20 s left)
+        env_dir = _clean_env().get("CLAUDE_CONFIG_DIR") or "normal folder"
+        print(f"[ask] harness={'own' if own_harness('wow') else 'wow'} session={'resume' if self.started else 'new'} config={env_dir} "
+              f"system_prompt={'--append-system-prompt-file' in cmd}", flush=True)  # one line in bridge.log: what this question really ran with
         code, out, err = _exec(cmd, prompt, left)
         out = (out or "").strip()
         if code != 0 or not out:
