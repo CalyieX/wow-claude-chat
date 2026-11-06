@@ -9,7 +9,7 @@ description = "Chat with Claude inside the World of Warcraft chat window (WoW Fo
 readme = "README.md"
 requires-python = ">=3.9"
 license = { text = "MIT" }
-dependencies = ["Pillow>=10"]
+dependencies = ["Pillow>=10", "pywinpty>=2; sys_platform == 'win32'", "pyte>=0.8"]
 
 [project.optional-dependencies]
 dev = ["pytest", "lupa"]
