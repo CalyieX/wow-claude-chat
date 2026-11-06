@@ -607,8 +607,10 @@ local TOOLS = {
   "Mouse and keyboard  -  the AI clicks and types for you",
   "    (switch on: AI setup page, Mouse and keyboard)",
   "Web research  -  looks facts up before it answers",
-  "CLI mode  -  the tab runs your AI's own CLI",
+  "CLI chat  -  the tab runs your AI's command line tool (Chat mode)",
   "    (/aimode cli; keys: /k up|down|enter|esc|tab|ctrl-c)",
+  "CLI window  -  a real terminal window with its own session:",
+  "    scroll, copy, paste, arrow keys (menu: CLI window, /term)",
   "Login helper  -  /login renews an expired AI login",
   "Computer access  -  YOUR choice (menu: AI access): the AI may",
   "    read/change files and run commands, like the original CLI",
@@ -619,7 +621,8 @@ local TOOLS = {
   "Character aware  -  notices when you switch characters",
   "Leveling macros, class builds, quest and trainer help",
   "Video guides  -  finds and opens them in the browser window",
-  "Your own harness  -  edit what the AI is told: menu Harness",
+  "Harness  -  what the AI is told. Per WoW chat, CLI chat and CLI",
+  "    window: WoW AI harness or your AI's own setup (menu Harness)",
 }
 local toolsFrame = CreateFrame("Frame", "KKToolsFrame", UIParent, "BackdropTemplate")
 toolsFrame:SetSize(430, 44 + #TOOLS * 16)
