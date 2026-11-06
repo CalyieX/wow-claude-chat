@@ -140,3 +140,19 @@ def test_bridge_login_command(monkeypatch):
     from wowclaude import bridge, login
     monkeypatch.setattr(login, "start", lambda: "opened")
     assert bridge.handle_command("!login") == "opened"
+
+
+def test_custom_harness_replaces_builtin_and_reset(tmp_path):
+    from wowclaude import claude, config, setup_ui
+    assert claude.custom_harness() is None
+    assert "GAME VERSION" in claude.persona()[1] and "MACROS" in claude.persona()[1]
+    setup_ui.apply({"backend": "claude", "harness": "You are a pirate. Be brief."})
+    p = claude.persona()[1]
+    assert p.startswith("You are a pirate") and "GAME VERSION" not in p and "Your name is" in p
+    state = setup_ui._state()
+    assert state["harness_custom"] and state["harness"].startswith("You are a pirate")
+    setup_ui.apply({"backend": "claude", "harness": claude.builtin_harness()})  # unchanged text = built-in again
+    assert claude.custom_harness() is None
+    setup_ui.apply({"backend": "claude", "harness": "x y z"})
+    setup_ui.apply({"backend": "claude", "harness_reset": True})
+    assert claude.custom_harness() is None and not config.HARNESS.exists()

@@ -48,6 +48,10 @@ button.small{margin:3px 4px 0 0;padding:4px 10px;font-size:12px}
 <label>Extra instructions (optional, e.g. how it should talk)</label>
 <textarea id="persona"></textarea>
 </details>
+<details><summary>Harness (what your AI is told)</summary>
+<small>This is the text your AI receives before every question: game version, research rule, macros, browser window ... Edit it as you like; the AI reads it fresh each time. "Reset" goes back to the built-in version that comes with the program.</small>
+<textarea id="harness" style="height:240px"></textarea>
+<button id="hreset" type="button" class="small">Reset to built-in</button><small id="hstate"></small></details>
 <details><summary>Let my own AI set this up</summary>
 <small>Copy this text into an AI that can edit files on your PC (Claude Code, Codex ...). It writes the settings for you.</small>
 <textarea id="aiprompt" readonly style="height:130px"></textarea><button id="copy" type="button">Copy</button></details>
@@ -77,13 +81,15 @@ function show(){const b=$("backend").value,isApi=!["claude","codex","command"].i
  s.backends.filter(b=>!have.includes(b)&&b!=="command").forEach(b=>{const x=document.createElement("button");x.className="small";x.textContent=b;
   x.onclick=()=>{sel.value=b;show();$("adv").open=true;$("api_key").focus()};O.appendChild(x)});
  $("model").value=s.model||"";$("base_url").value=s.base_url||"";$("command").value=s.command||"";
+ $("harness").value=s.harness;$("hstate").textContent=s.harness_custom?"Using your edited harness.":"Using the built-in harness.";
+ $("hreset").onclick=async()=>{const r=await api("/save",{backend:$("backend").value,harness_reset:true});$("msg").textContent=r.status;const s2=await api("/state");$("harness").value=s2.harness;$("hstate").textContent="Using the built-in harness."};
  $("aiprompt").value=s.prompt;$("copy").onclick=()=>{$("aiprompt").select();document.execCommand("copy")};$("persona").value=s.persona||"";$("ainame").value=s.name||"";$("keystate").textContent=s.has_key?"(saved)":"";show();sel.onchange=show;
  recheck()})();
 async function recheck(){$("msg").textContent="Checking the AI ...";$("msg").className="";
  try{const r=await api("/check");$("msg").textContent=r.status;$("msg").className=r.ok?"ok":"bad"}catch(e){$("msg").textContent="Check failed: "+e;$("msg").className="bad"}}
 $("save").onclick=async()=>{$("msg").textContent="Saving ...";$("msg").className="";
  const r=await api("/save",{backend:$("backend").value,model:$("model").value,base_url:$("base_url").value,
-  api_key:$("api_key").value,command:$("command").value,name:$("ainame").value,persona:$("persona").value});
+  api_key:$("api_key").value,command:$("command").value,name:$("ainame").value,persona:$("persona").value,harness:$("harness").value});
  $("msg").textContent=r.status;$("msg").className=r.ok?"ok":"bad";if(r.has_key)$("keystate").textContent="(saved)";$("api_key").value="";await recheck()};
 </script></body></html>"""
 
@@ -116,7 +122,8 @@ def _state() -> dict:
     return {"backends": ["claude", "codex", "command", "openai-compatible", *backends.PRESETS],
             "backend": backends.name(), "model": cfg.get("model", ""), "base_url": cfg.get("base_url", ""),
             "command": cfg.get("command", ""), "has_key": bool(cfg.get("api_key")),
-            "name": name, "persona": rest.strip("\n"), "found": backends.detect(), "prompt": ai_prompt()}
+            "name": name, "persona": rest.strip("\n"), "found": backends.detect(), "prompt": ai_prompt(),
+            "harness": claude.custom_harness() or claude.builtin_harness(), "harness_custom": claude.custom_harness() is not None}
 
 
 def _check() -> dict:
@@ -154,6 +161,15 @@ def apply(data: dict) -> dict:
             installer.write_name(root, name)
     except OSError:
         pass
+    if data.get("harness_reset"):
+        config.HARNESS.unlink(missing_ok=True)
+    elif "harness" in data:  # text equal to the built-in one (or empty) means: no custom harness
+        text = str(data.get("harness", "")).strip()
+        if not text or text == claude.builtin_harness().strip():
+            config.HARNESS.unlink(missing_ok=True)
+        else:
+            config.HOME.mkdir(parents=True, exist_ok=True)
+            config.HARNESS.write_text(text + "\n", encoding="utf-8")
     persona = str(data.get("persona", "")).strip("\n")
     config.HOME.mkdir(parents=True, exist_ok=True)
     if persona and not name:  # no name set: persona() reads the first line as the name, so keep "Claude" there

@@ -88,6 +88,33 @@ def clean_name(raw) -> str:
     return "" if name.lower() in RESERVED_TABS else name  # a real game tab (General ...) must never be taken over
 
 
+def builtin_tools() -> str:
+    """The built-in tool texts that follow the general instructions (macros, browser window, background input)."""
+    out = ""
+    try:
+        out += "\n\n" + (Path(__file__).parent / "macro_skill.md").read_text(encoding="utf-8")
+    except OSError:
+        pass
+    from . import vinput
+    if vinput.available():
+        out += "\n\n" + vinput.SKILL
+    return out
+
+
+def builtin_harness() -> str:
+    """The harness that ships with the program: what the AI is told about the game, the research rule and its tools."""
+    return DEFAULT_SYSTEM + builtin_tools()
+
+
+def custom_harness() -> str | None:
+    """The player's own edited harness (AI setup page), or None to use the built-in one."""
+    try:
+        text = config.HARNESS.read_text(encoding="utf-8").strip()
+    except OSError:
+        return None
+    return text or None
+
+
 def persona() -> tuple[str, str]:
     """(name shown in the chat, system prompt). The name comes from config.json "name" (AI setup page); persona.txt is
     then all extra instructions. Old style without a name in config.json: the first line of persona.txt is the name.
@@ -103,17 +130,13 @@ def persona() -> tuple[str, str]:
     except OSError:
         pass
     name = name or DEFAULT_NAME
-    base = DEFAULT_SYSTEM + f"\nYour name is {name}. Answer as {name}."
+    custom = custom_harness()
+    base = (custom if custom is not None else DEFAULT_SYSTEM) + f"\nYour name is {name}. Answer as {name}."
     player = clean_name(config.load().get("player"))
     if player:
         base += f"\nThe player's name is {player}. Call them {player}."
-    try:
-        base += "\n\n" + (Path(__file__).parent / "macro_skill.md").read_text(encoding="utf-8")
-    except OSError:
-        pass
-    from . import vinput
-    if vinput.available():
-        base += "\n\n" + vinput.SKILL
+    if custom is None:
+        base += builtin_tools()
     return name, (base + "\n\n" + extra) if extra else base
 
 

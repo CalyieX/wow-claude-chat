@@ -9,6 +9,7 @@ from pathlib import Path
 HOME = Path.home() / ".wowclaude"
 CONFIG = HOME / "config.json"
 PERSONA = HOME / "persona.txt"
+HARNESS = HOME / "harness.txt"  # optional: replaces the built-in instructions (edited on the AI setup page)
 SESSION = HOME / "session.txt"
 
 FLAVOURS = ("_forever_", "_classic_era_", "_classic_", "_anniversary_")

@@ -8,7 +8,7 @@ local CELL, COLS, ROWS = 1, 128, 40
 local MAGIC = {{255,0,255},{0,255,255},{255,255,0},{0,0,0},{255,255,255},{255,0,0},{0,255,0},{0,0,255}}
 KKMapDB = KKMapDB or {}
 local pending  -- set while a question waits for its answer (declared early: the frame scan reads it)
-local DE = GetLocale() == "deDE"
+local DE = false  -- the whole addon speaks English
 local function L(de, en) if DE then return de end return en end
 local host = CreateFrame("Frame", "KKMapHost", UIParent)
 host:SetFrameStrata("TOOLTIP"); host:SetFrameLevel(10000)
@@ -420,7 +420,7 @@ local function setAiName(n)
   say(L("KI-Name: ", "AI name: ") .. aiName(), 1, 0.82, 0)
 end
 StaticPopupDialogs["KKAINAME"] = {
-  text = "Name der KI (leer = WoW AI):", button1 = ACCEPT, button2 = CANCEL, hasEditBox = 1, maxLetters = 20,
+  text = "Name of the AI (empty = WoW AI):", button1 = ACCEPT, button2 = CANCEL, hasEditBox = 1, maxLetters = 20,
   OnShow = function(self) local eb = self.editBox or self.EditBox; if eb then eb:SetText(KKMapDB.aiName or ""); eb:SetFocus() end end,
   OnAccept = function(self) local eb = self.editBox or self.EditBox; if eb then setAiName(eb:GetText()) end end,
   EditBoxOnEnterPressed = function(eb) setAiName(eb:GetText()); eb:GetParent():Hide() end,
@@ -433,7 +433,7 @@ local function setPlayerName(n)
   sendToClaude("!me " .. n)
 end
 StaticPopupDialogs["KKPLAYERNAME"] = {
-  text = "Wie soll die KI dich nennen? (leer = kein Name)", button1 = ACCEPT, button2 = CANCEL, hasEditBox = 1, maxLetters = 20,
+  text = "What should the AI call you? (empty = no name)", button1 = ACCEPT, button2 = CANCEL, hasEditBox = 1, maxLetters = 20,
   OnShow = function(self) local eb = self.editBox or self.EditBox; if eb then eb:SetText(KKMapDB.playerName or UnitName("player") or ""); eb:HighlightText(); eb:SetFocus() end end,
   OnAccept = function(self) local eb = self.editBox or self.EditBox; if eb then setPlayerName(eb:GetText()) end end,
   EditBoxOnEnterPressed = function(eb) setPlayerName(eb:GetText()); eb:GetParent():Hide() end,
@@ -447,19 +447,19 @@ SLASH_KKNAME1 = "/nameai"
 SLASH_KKNAME2 = "/kkname"  -- old name, still works
 SlashCmdList["KKNAME"] = function(m) setAiName(m) end
 
--- List of all commands (button "Befehle" in the menu)
+-- List of all commands (button "Commands" in the menu)
 local COMMANDS = {
-  "/wac  -  Menue",
-  "/ai Text  (oder /c Text)  -  die KI fragen",
-  "/nameai Name  -  KI umbenennen (leer = WoW AI)",
-  "/nameme Name  -  wie die KI dich nennt (leer = kein Name)",
-  "/browser [url]  -  Browser oeffnen  (/browser off = zu)",
-  "/login [code]  -  KI-Login erneuern (Seite oeffnet im Browser)",
-  "/wm Name~Zeile1\\nZeile2  -  Makro anlegen",
-  "/strip always|auto|off  -  AI strip on/auto/off",
-  "/strip move X Y  -  AI Strip an Pixel X,Y setzen  |  /strip reset = Ecke",
-  "/aitab  -  KI-Tab anzeigen",
-  "Im KI-Tab: einfach schreiben, ohne /",
+  "/wac  -  menu",
+  "/ai text  (or /c text)  -  ask the AI",
+  "/nameai name  -  rename the AI (empty = WoW AI)",
+  "/nameme name  -  what the AI calls you (empty = no name)",
+  "/browser [url]  -  open the browser  (/browser off = close)",
+  "/login [code]  -  renew the AI login (page opens in the browser)",
+  "/wm Name~Line1\nLine2  -  create a macro",
+  "/strip always|auto|off  -  AI Bridge on / auto / off",
+  "/strip move X Y  -  put the AI Bridge at pixel X,Y  |  /strip reset = corner",
+  "/aitab  -  show the AI tab",
+  "In the AI tab: just type, no /",
 }
 local cmdFrame = CreateFrame("Frame", "KKCmdFrame", UIParent, "BackdropTemplate")
 cmdFrame:SetSize(420, 40 + #COMMANDS * 18)
@@ -469,7 +469,7 @@ cmdFrame:RegisterForDrag("LeftButton"); cmdFrame:SetScript("OnDragStart", cmdFra
 cmdFrame:SetScript("OnDragStop", cmdFrame.StopMovingOrSizing); cmdFrame:SetClampedToScreen(true)
 cmdFrame:SetBackdrop({ bgFile = "Interface\\DialogFrame\\UI-DialogBox-Background", edgeFile = "Interface\\DialogFrame\\UI-DialogBox-Border",
   tile = true, tileSize = 32, edgeSize = 24, insets = { left = 6, right = 6, top = 6, bottom = 6 } })
-local ct = cmdFrame:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge"); ct:SetPoint("TOPLEFT", 18, -14); ct:SetText("Befehle")
+local ct = cmdFrame:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge"); ct:SetPoint("TOPLEFT", 18, -14); ct:SetText("Commands")
 for i, line in ipairs(COMMANDS) do
   local fs = cmdFrame:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
   fs:SetPoint("TOPLEFT", 20, -34 - (i - 1) * 18); fs:SetJustifyH("LEFT"); fs:SetText(line)
@@ -477,23 +477,23 @@ end
 local cc = CreateFrame("Button", nil, cmdFrame, "UIPanelCloseButton"); cc:SetPoint("TOPRIGHT", -4, -4)
 cmdFrame:Hide()
 
--- Tips (button "Tipps" in the menu)
+-- Tips (button "Tips" in the menu)
 local TIPS = {
-  "Die AI Bridge (Text oben, bunte Pixel darunter) und die drei Farbpunkte",
-  "am KI-Tab duerfen NIE verdeckt werden: kein Fenster, kein",
-  "Browser, keine Karte, kein Tooltip darueber. Sonst kommt",
-  "keine Frage an und die Antwort verschwindet.",
+  "The AI Bridge (text on top, coloured pixels below) and the three",
+  "colour dots at the AI tab must NEVER be covered: no window,",
+  "browser, map or tooltip on top. Otherwise your question does",
+  "not arrive and the answer disappears.",
   " ",
-  "AI Strip verschieben: am Textbalken ueber den Pixeln",
-  "ziehen (mit gedrueckter linker Maustaste). Zurueck: /strip reset.",
-  "Er liegt am besten ganz oben, ausserhalb deiner Fenster.",
+  "Move the AI Bridge: drag its text bar (above the pixels) with",
+  "the left mouse button. Back to the corner: /strip reset.",
+  "Best place: the very top, outside your windows.",
   " ",
-  "Der KI-Tab darf frei bewegt und vergroessert werden.",
-  "Spiel im Fenster- oder Rahmenlos-Modus, nicht Vollbild.",
+  "The AI tab can be moved and resized freely.",
+  "Play in windowed or borderless mode, not fullscreen.",
   " ",
-  "Login laeuft ab? Mit Claude Code einmal `claude setup-token`",
-  "ausfuehren: das ist ein Jahres-Login. Oder auf der KI-Seite den",
-  "Eintrag 'Let my own AI set this up' nutzen: die KI macht es.",
+  "Login expired? Run `claude setup-token` once with Claude Code:",
+  "that is a one-year login. Or use 'Let my own AI set this up' on",
+  "the AI setup page: your AI does it for you.",
 }
 local tipFrame = CreateFrame("Frame", "KKTipFrame", UIParent, "BackdropTemplate")
 tipFrame:SetSize(430, 44 + #TIPS * 16)
@@ -503,7 +503,7 @@ tipFrame:RegisterForDrag("LeftButton"); tipFrame:SetScript("OnDragStart", tipFra
 tipFrame:SetScript("OnDragStop", tipFrame.StopMovingOrSizing); tipFrame:SetClampedToScreen(true)
 tipFrame:SetBackdrop({ bgFile = "Interface\\DialogFrame\\UI-DialogBox-Background", edgeFile = "Interface\\DialogFrame\\UI-DialogBox-Border",
   tile = true, tileSize = 32, edgeSize = 24, insets = { left = 6, right = 6, top = 6, bottom = 6 } })
-local tt = tipFrame:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge"); tt:SetPoint("TOPLEFT", 18, -14); tt:SetText("Tipps")
+local tt = tipFrame:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge"); tt:SetPoint("TOPLEFT", 18, -14); tt:SetText("Tips")
 for i, line in ipairs(TIPS) do
   local fs = tipFrame:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
   fs:SetPoint("TOPLEFT", 20, -36 - (i - 1) * 16); fs:SetJustifyH("LEFT"); fs:SetText(line)
@@ -545,20 +545,20 @@ local function buildMenu()
     y = y - 32
     return bt
   end
-  button("KI verbinden", function() sendToClaude("!setup") end)
+  button("Connect AI", function() sendToClaude("!setup") end)
   button("Browser", function() sendToClaude("!browser") end)
-  button("KI-Name", function() StaticPopup_Show("KKAINAME") end)
-  button("Dein Name", function() StaticPopup_Show("KKPLAYERNAME") end)
+  button("AI name", function() StaticPopup_Show("KKAINAME") end)
+  button("Your name", function() StaticPopup_Show("KKPLAYERNAME") end)
   local stripBtn
-  local function stripLabel() return "AI Strip: " .. (KKMapDB.always and "immer an" or "auto") end
+  local function stripLabel() return "AI Bridge: " .. (KKMapDB.always and "always on" or "auto") end
   stripBtn = button(stripLabel(), function()
     KKMapDB.always = not KKMapDB.always
     KKMapDB.off = false
     stripBtn:SetText(stripLabel())
     if applyVisible then applyVisible() end
   end)
-  button("Tipps", function() if KKTipFrame:IsShown() then KKTipFrame:Hide() else KKTipFrame:Show() end end)
-  button("Befehle", function() if KKCmdFrame:IsShown() then KKCmdFrame:Hide() else KKCmdFrame:Show() end end)
+  button("Tips", function() if KKTipFrame:IsShown() then KKTipFrame:Hide() else KKTipFrame:Show() end end)
+  button("Commands", function() if KKCmdFrame:IsShown() then KKCmdFrame:Hide() else KKCmdFrame:Show() end end)
   f:Hide()
   menu = f
   return f
