@@ -366,3 +366,15 @@ def test_memory_saves_forgets_and_never_ships(monkeypatch, tmp_path):
     # nothing of the author's own memory is part of the program
     root = pathlib.Path(__file__).resolve().parent.parent
     assert not list((root / "wowclaude").glob("**/memos/*.md")) and not (root / "memos").exists() and not (root / "memory").exists()
+
+
+def test_cli_mode_gets_the_same_harness_as_chat_mode(monkeypatch):
+    from wowclaude import cli_mode, claude
+    text = cli_mode.harness_text()
+    assert claude.persona()[1] in text and "never say you are Claude" in text
+    cmd = cli_mode.command()
+    assert "--append-system-prompt-file" in cmd
+    assert cli_mode.harness_file().read_text(encoding="utf-8") == text
+    monkeypatch.setenv("WOWCLAUDE_BACKEND", "codex")
+    monkeypatch.setattr(cli_mode.shutil, "which", lambda n: "C:/x/codex.exe")
+    assert any(a.startswith("developer_instructions=") for a in cli_mode.command())

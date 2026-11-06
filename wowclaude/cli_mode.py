@@ -42,6 +42,22 @@ def tab_size() -> tuple[int, int]:
         return DEFAULT_SIZE
 
 
+def harness_text() -> str:
+    """The same harness the chat mode uses (name, game knowledge, tools, memos rules), plus a note for the terminal."""
+    return claude.persona()[1] + (
+        "\n\nYou run inside a terminal that is shown in a small tab of the World of Warcraft chat window. You are the AI of the "
+        "WoW AI addon, with the name given above: never say you are Claude, Codex or ChatGPT; if asked who you are, give that name. "
+        "Keep answers short, the tab is small. The player types in the game chat; the game state line is not added here, "
+        "so ask when you need the character or zone.")
+
+
+def harness_file():
+    """The harness as a file (a command line is too short for it)."""
+    path = config.HOME / "cli_harness.txt"
+    path.write_text(harness_text(), encoding="utf-8")
+    return path
+
+
 def command() -> list[str] | None:
     """The command line of the tool in use (None: this backend has no command line tool)."""
     from . import backends
@@ -50,13 +66,19 @@ def command() -> list[str] | None:
         exe = claude.claude_path()
         if not exe:
             return None
-        cmd = [exe, "--setting-sources", ""]  # not the player's own Claude settings (they may allow everything)
+        cmd = [exe, "--setting-sources", "", "--append-system-prompt-file", str(harness_file())]  # not the player's own settings
         if not claude.computer_access():
             cmd += ["--tools", claude.WEB_TOOLS, "--allowedTools", claude.WEB_TOOLS]
         return cmd
     if b == "codex":
         exe = shutil.which("codex")
-        return [exe, "--search"] + ([] if claude.computer_access() else ["-s", "read-only"]) if exe else None
+        if not exe:
+            return None
+        cmd = [exe, "--search"] + ([] if claude.computer_access() else ["-s", "read-only"])
+        text = harness_text()
+        if len(text) < 20000:  # Windows command lines are limited: a longer harness is left out rather than breaking the start
+            cmd += ["-c", "developer_instructions=" + json.dumps(text)]  # a TOML string accepts the same escapes
+        return cmd
     return None
 
 
