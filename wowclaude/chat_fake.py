@@ -222,8 +222,10 @@ class Dock:
         self.h = 0
         self._layered()
         self.sprites = {s: overlay.slot_sprite(s) for s in ("", "hover", "down")}
-        for s in self.sprites.values():
-            self.add_gear(s)
+        self.sprites["gear"] = overlay.slot_sprite("hover")  # pointer on the gear: the badge turns light blue
+        for name, s in self.sprites.items():
+            self.add_gear(s, hot=name == "gear")
+        self.on_gear = False
         self.pos = (-200, -200)
         self.shown = False
         self.drag: dict = {}
@@ -234,32 +236,48 @@ class Dock:
         self.win.bind("<B1-Motion>", self._move)
         self.win.bind("<ButtonRelease-1>", self._up)
         self.win.bind("<Enter>", lambda e: self._draw("hover") if not self.drag else None)
-        self.win.bind("<Leave>", lambda e: self._draw("") if not self.drag else None)
+        self.win.bind("<Motion>", self._hover)
+        self.win.bind("<Leave>", lambda e: (setattr(self, 'on_gear', False), self._draw("")) if not self.drag else None)
         self.win.update()  # mapped from the start: a layered window that was withdrawn first refuses UpdateLayeredWindow
         self._layered()
         self._park()
 
-    GEAR = 14  # the gear inside the button (top left of the dark slot) opens the addon menu
-    OFF = 10  # 4 px of the gear stick out over the corner of the dark slot (which starts at 14)
+    GEAR = 18  # diameter of the round gear badge on the button (top left) that opens the addon menu
+    OFF = 7  # 4 px of the gear stick out over the corner of the dark slot (which starts at 14)
 
     @staticmethod
-    def add_gear(img) -> None:
-        """A small gear (top left): 4x supersampled, gold with a dark outline."""
+    def add_gear(img, hot: bool = False) -> None:
+        """The gear badge (top left): a round dark blue button with a gold ring and a small gold gear, light blue while the
+        pointer is on it. 4x supersampled."""
         import math
         from PIL import Image, ImageDraw
-        k = 4
-        g = Image.new("RGBA", (Dock.GEAR * k, Dock.GEAR * k), (0, 0, 0, 0))
+        k, n = 4, Dock.GEAR
+        g = Image.new("RGBA", (n * k, n * k), (0, 0, 0, 0))
         d = ImageDraw.Draw(g)
-        c, r = Dock.GEAR * k / 2, Dock.GEAR * k / 2 - 2
+        fill = (70, 150, 235, 255) if hot else (16, 34, 92, 255)
+        d.ellipse((1, 1, n * k - 2, n * k - 2), fill=fill, outline=(235, 190, 40, 255), width=2 * k // 2)
+        c, r = n * k / 2, n * k / 2 - 5 * k / 2
         pts = []
         for i in range(16):  # 8 teeth
             ang = i * math.pi / 8
             rad = r if i % 2 == 0 else r * 0.72
             for a2 in (ang - math.pi / 16, ang + math.pi / 16):
                 pts.append((c + rad * math.cos(a2), c + rad * math.sin(a2)))
-        d.polygon(pts, fill=(255, 210, 40, 255), outline=(30, 20, 0, 255))
-        d.ellipse((c - r * 0.3, c - r * 0.3, c + r * 0.3, c + r * 0.3), fill=(40, 26, 0, 255))
-        img.alpha_composite(g.resize((Dock.GEAR, Dock.GEAR), Image.LANCZOS), (Dock.OFF, Dock.OFF))
+        d.polygon(pts, fill=(255, 210, 40, 255))
+        d.ellipse((c - r * 0.3, c - r * 0.3, c + r * 0.3, c + r * 0.3), fill=fill)
+        img.alpha_composite(g.resize((n, n), Image.LANCZOS), (Dock.OFF, Dock.OFF))
+
+    def _over_gear(self, e) -> bool:
+        c = self.OFF + self.GEAR / 2
+        return (e.x - c) ** 2 + (e.y - c) ** 2 <= (self.GEAR / 2) ** 2
+
+    def _hover(self, e) -> None:
+        if self.drag:
+            return
+        on = self._over_gear(e)
+        if on != self.on_gear:
+            self.on_gear = on
+            self._draw("gear" if on else "hover")
 
     def _park(self) -> None:
         from PIL import Image
@@ -333,7 +351,7 @@ class Dock:
         if moved and g:
             overlay.save_state(bx=self.pos[0], by=self.pos[1], brel=overlay.to_rel(g, self.pos[0], self.pos[1], 64, 64)[:2])
             self._draw()
-        elif not moved and self.OFF <= self.drag_start[0] < self.OFF + self.GEAR and self.OFF <= self.drag_start[1] < self.OFF + self.GEAR:  # the gear: open the addon menu
+        elif not moved and (self.drag_start[0] - self.OFF - self.GEAR / 2) ** 2 + (self.drag_start[1] - self.OFF - self.GEAR / 2) ** 2 <= (self.GEAR / 2) ** 2:  # the gear: open the addon menu
             g = overlay.game_rect()
             if g:  # a click into the addon's invisible field in the bottom left corner of the game opens the menu
                 import threading
