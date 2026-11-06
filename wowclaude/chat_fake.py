@@ -224,7 +224,17 @@ def type_into_game(text: str) -> None:
     u = ctypes.windll.user32
     u.GetForegroundWindow.restype = ctypes.c_void_p
     game = u.FindWindowW("GxWindowClass", None)
-    if not game or u.GetForegroundWindow() != game:  # never type into another program: the game must have the focus
+    if not game:
+        return
+    if u.GetForegroundWindow() != game:  # the player clicked our button: bring the game forward first
+        fg = u.GetForegroundWindow()
+        me, cur = u.GetWindowThreadProcessId(ctypes.c_void_p(fg), None), ctypes.windll.kernel32.GetCurrentThreadId()
+        u.AttachThreadInput(cur, me, True)
+        u.ShowWindow(ctypes.c_void_p(game), 9)  # SW_RESTORE
+        u.SetForegroundWindow(ctypes.c_void_p(game))
+        u.AttachThreadInput(cur, me, False)
+        time.sleep(0.4)
+    if u.GetForegroundWindow() != game:  # never type into another program: only when the game really has the focus
         return
     send(vk=0x0D)
     time.sleep(0.15)
