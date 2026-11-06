@@ -216,6 +216,38 @@ def apply(data: dict) -> dict:
 _running: dict = {}
 
 
+TERM_PAGE = """<!doctype html><html><head><meta charset="utf-8"><title>WoW AI - CLI</title><style>
+html,body{margin:0;height:100%;background:#101418;color:#e6e6e6;overflow:hidden}
+#s{margin:0;padding:6px 8px;height:100%;box-sizing:border-box;overflow:auto;white-space:pre;font:15px/18px Consolas,monospace;outline:none;cursor:text}
+#m{position:absolute;visibility:hidden;font:15px/18px Consolas,monospace;white-space:pre}
+::selection{background:#3a5a8c}
+</style></head><body><pre id="s" tabindex="0"></pre><span id="m">0000000000</span><script>
+const T=new URLSearchParams(location.search).get("t"),S=document.getElementById("s"),M=document.getElementById("m");
+async function post(p,b){try{await fetch(p+"?t="+T,{method:"POST",body:JSON.stringify(b)})}catch(e){}}
+const send=raw=>post("/term/in",{raw});
+const KEYS={Enter:"\\r",Backspace:"\\x7f",Tab:"\\t",Escape:"\\x1b",ArrowUp:"\\x1b[A",ArrowDown:"\\x1b[B",ArrowRight:"\\x1b[C",ArrowLeft:"\\x1b[D",
+ Home:"\\x1b[H",End:"\\x1b[F",PageUp:"\\x1b[5~",PageDown:"\\x1b[6~",Delete:"\\x1b[3~"};
+S.addEventListener("keydown",e=>{
+ const sel=String(getSelection());
+ if(e.ctrlKey&&!e.altKey&&e.key.toLowerCase()==="c"&&sel){return}   // selected text: normal copy
+ if(e.ctrlKey&&!e.altKey&&e.key.toLowerCase()==="v"){return}      // paste event below
+ if(e.ctrlKey&&e.key.length===1&&/[a-z]/i.test(e.key)){e.preventDefault();send(String.fromCharCode(e.key.toLowerCase().charCodeAt(0)-96));return}
+ if(e.shiftKey&&e.key==="Tab"){e.preventDefault();send("\\x1b[Z");return}
+ if(e.key in KEYS){e.preventDefault();send(KEYS[e.key]);return}
+ if(e.key.length===1&&!e.ctrlKey&&!e.metaKey){e.preventDefault();send(e.key)}});
+S.addEventListener("paste",e=>{e.preventDefault();const t=(e.clipboardData||window.clipboardData).getData("text");send(t.replace(/\\r\\n/g,"\\n").replace(/\\n/g,"\\r"))});
+S.addEventListener("contextmenu",e=>{e.preventDefault();navigator.clipboard.readText().then(t=>send(t.replace(/\\r?\\n/g,"\\r"))).catch(()=>{})});
+let last=null,lastSize="";
+async function tick(){try{
+ const r=await (await fetch("/term/screen?t="+T)).json();
+ if(r.text!==last){last=r.text;const end=S.scrollTop+S.clientHeight>=S.scrollHeight-4;S.textContent=r.text;if(end)S.scrollTop=S.scrollHeight}
+ const cw=M.getBoundingClientRect().width/10,cols=Math.max(20,Math.min(200,Math.floor((S.clientWidth-18)/cw))),rows=Math.max(5,Math.min(60,Math.floor(S.clientHeight/18)));
+ const k=cols+"x"+rows+(Math.floor(Date.now()/2000));if(k!==lastSize){lastSize=k;post("/term/size",{cols,rows})}
+}catch(e){}setTimeout(tick,200)}
+tick();S.focus();document.addEventListener("click",()=>{if(!String(getSelection()))S.focus()});
+</script></body></html>"""
+
+
 def start_background() -> str:
     """Start the setup page server inside this process (once) and return its URL (with the one-time token)."""
     if "url" in _running:
@@ -248,9 +280,32 @@ def start_background() -> str:
                 return self._send(200, json.dumps(_check()).encode(), "application/json")
             if urlparse(self.path).path == "/state":
                 return self._send(200, json.dumps(_state()).encode(), "application/json")
+            if urlparse(self.path).path == "/term/screen":  # CLI mode window: screen + scrollback (written by cli_mode)
+                try:
+                    body = (config.HOME / "cli_screen.json").read_bytes()
+                except OSError:
+                    body = b'{"text": "CLI mode is off. Type /aimode cli in the game chat."}'
+                return self._send(200, body, "application/json")
+            if parse_qs(urlparse(self.path).query).get("view") == ["term"]:
+                return self._send(200, TERM_PAGE.encode("utf-8"), "text/html; charset=utf-8")
             self._send(200, PAGE.encode("utf-8"), "text/html; charset=utf-8")
 
         def do_POST(self):
+            path = urlparse(self.path).path
+            if self._ok() and path in ("/term/in", "/term/size"):  # keys and window size of the CLI window
+                n = int(self.headers.get("Content-Length", "0") or 0)
+                try:
+                    data = json.loads(self.rfile.read(min(n, 200000)).decode("utf-8"))
+                    if path == "/term/in":
+                        with open(config.HOME / "cli_in.jsonl", "a", encoding="utf-8") as f:
+                            f.write(json.dumps({"raw": str(data.get("raw", ""))}) + "\n")
+                    else:
+                        import time as _t
+                        (config.HOME / "termsize.json").write_text(json.dumps(
+                            {"cols": int(data["cols"]), "rows": int(data["rows"]), "time": _t.time()}), encoding="utf-8")
+                except (ValueError, OSError, KeyError):
+                    pass
+                return self._send(200, b"{}", "application/json")
             if not self._ok() or urlparse(self.path).path != "/save":
                 return self._send(403, b"forbidden", "text/plain")
             n = int(self.headers.get("Content-Length", "0") or 0)
