@@ -37,7 +37,7 @@ def run(tab: str = "wow") -> None:
     text.bind("<Button-1>", lambda e: (win.focus(), text.focus_set()))
     info = tk.Text(own, bg="#15130e", fg="#f0e6c8", font=("Consolas", 9), wrap="word", bd=1, relief="solid", height=6)
     info.pack(side="top", fill="x")
-    tk.Label(own, text="Own AI text (used when a switch is on Own - separate from the WoW AI text):", bg="#15130e", fg=gold,
+    tk.Label(own, text="Extra text (optional; only needed if your AI has no config folder of its own). Load fills it, Save own text keeps it:", bg="#15130e", fg=gold,
              anchor="w").pack(side="top", fill="x", pady=(4, 0))
     obox = tk.Frame(own, bg="#15130e")
     obox.pack(side="top", fill="both", expand=True)
@@ -137,9 +137,8 @@ def run(tab: str = "wow") -> None:
             tk.Button(row, text=label, command=cmd, bg="#5c1a10", fg=gold, activebackground="#7d2417", activeforeground=gold,
                       relief="solid", bd=1, padx=12).pack(side="left", padx=(0, 8))
 
-    head = ("Own AI = your real AI with its normal folder, login, memory and skills (used live when a switch is on Own;\n"
-            "nothing is copied). Search finds every AI setup on this computer; Load puts the chosen one into the\n"
-            "own text below (then Save own text).\n\n")
+    head = ("LIVE ACCESS: set the switch in the Harness menu to Own. Your real AI then runs with its normal folder, login,\n"
+            "memory and skills - nothing is copied. Search lists every AI setup found on this computer.\n\n")
     refresh()
     msg.pack(fill="x", padx=6, side="bottom")
     load()
