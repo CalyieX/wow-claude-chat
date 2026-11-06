@@ -244,7 +244,7 @@ class Dock:
         self._park()
 
     GEAR = 14  # diameter of the round gear badge on the button (top left) that opens the addon menu
-    OFF = 7  # 4 px of the gear stick out over the corner of the dark slot (which starts at 14)
+    OFF = 9  # 5 px of the gear stick out over the corner of the dark slot (which starts at 14)
 
     @staticmethod
     def add_gear(img, hot: bool = False) -> None:
