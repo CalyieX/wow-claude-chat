@@ -169,7 +169,8 @@ def run(root: Path, poll: float = 0.6) -> None:
             last_seq = state.message_seq
             question = state.message.strip()
             if state.context:
-                question = "[Game state: " + state.context + "]\n" + question
+                ver = claude.flavor(state.context)
+                question = "[Game state: " + state.context + (" | Game version: " + ver if ver else "") + "]\n" + question
             from . import vinput
             if vinput.available() and state.frames:
                 question = vinput.frames_hint(state.frames) + question

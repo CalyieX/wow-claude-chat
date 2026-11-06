@@ -136,9 +136,112 @@ def _make_window():
     return root, hwnd
 
 
+class Dock:
+    """The always-on WAC button: shown whenever the browser window is not running, click opens it, drag moves it.
+    (While the browser window runs it draws its own frame / minimized button, using the same remembered spot.)"""
+
+    def __init__(self, root) -> None:
+        import tkinter as tk
+        self.win = tk.Toplevel(root)
+        self.win.overrideredirect(True)
+        self.win.attributes("-topmost", True)
+        self.win.geometry("64x64+-200+-200")
+        self.h = 0
+        self._layered()
+        self.sprites = {s: overlay.slot_sprite(s) for s in ("", "hover", "down")}
+        self.pos = (-200, -200)
+        self.shown = False
+        self.drag: dict = {}
+        self.busy = 0.0
+        self.n = 0
+        self.win.bind("<Button-1>", self._down)
+        self.win.bind("<B1-Motion>", self._move)
+        self.win.bind("<ButtonRelease-1>", self._up)
+        self.win.bind("<Enter>", lambda e: self._draw("hover") if not self.drag else None)
+        self.win.bind("<Leave>", lambda e: self._draw("") if not self.drag else None)
+        self.win.update()  # mapped from the start: a layered window that was withdrawn first refuses UpdateLayeredWindow
+        self._layered()
+        self._park()
+
+    def _park(self) -> None:
+        from PIL import Image
+        overlay.update_layered(self.h, Image.new("RGBA", (1, 1), (0, 0, 0, 0)), -200, -200)
+
+    def _layered(self) -> None:
+        """(Re)apply the layered style: Tk may create a new native window when it is shown again."""
+        self.win.update_idletasks()
+        u = overlay.user32  # same calls as the browser overlay's own minimized button, which is known to draw
+        u.GetAncestor.restype = ctypes.c_void_p  # GetParent would return the owner (our own root window) for an owned popup
+        u.GetAncestor.argtypes = [ctypes.c_void_p, ctypes.c_uint]
+        u.GetWindowLongW.restype = ctypes.c_long
+        self.h = u.GetAncestor(self.win.winfo_id(), 2) or self.win.winfo_id()  # GA_ROOT
+        u.SetWindowLongW(ctypes.c_void_p(self.h), overlay.GWL_EXSTYLE,
+                         u.GetWindowLongW(ctypes.c_void_p(self.h), overlay.GWL_EXSTYLE) | overlay.WS_EX_LAYERED | overlay.WS_EX_TOOLWINDOW)
+
+    def _draw(self, state: str = "") -> None:
+        self._layered()  # a Tk window that was moved or re-mapped may have lost the layered style: ask again every time
+        overlay.update_layered(self.h, self.sprites[state], *self.pos)
+
+    def _spot(self, g) -> tuple[int, int]:
+        st = overlay.load_state()
+        if g and st.get("brel"):
+            return round(g[0] + st["brel"][0] * (g[2] - g[0])), round(g[1] + st["brel"][1] * (g[3] - g[1]))
+        return int(st.get("bx", g[2] - 150)), int(st.get("by", g[1] + 80))
+
+    def update(self) -> None:
+        g = overlay.game_rect()
+        want = bool(g) and not overlay.game_minimized() and not overlay.overlay_alive()
+        if self.drag:
+            return
+        if not want:
+            if self.shown:
+                self._park()
+                self.shown = False
+            return
+        x, y = self._spot(g)
+        if not (g[0] - 20 <= x <= g[2] - 44 and g[1] - 20 <= y <= g[3] - 44):
+            x, y = g[2] - 150, g[1] + 80
+        if not self.shown or (x, y) != self.pos:
+            self.pos = (x, y)
+            self.shown = True
+            self._draw()
+        ctypes.windll.user32.SetWindowPos(ctypes.c_void_p(self.h), ctypes.c_void_p(-1), 0, 0, 0, 0, 0x53)
+        self.n += 1
+        if self.n % 8 == 0 and not self.drag:  # Tk may paint its plain background over the picture after (re)mapping: repaint
+            self._draw()
+
+    def _down(self, e) -> None:
+        self.drag = {"dx": e.x_root - self.pos[0], "dy": e.y_root - self.pos[1], "sx": e.x_root, "sy": e.y_root, "moved": False}
+        self._draw("down")
+
+    def _move(self, e) -> None:
+        d = self.drag
+        if not d:
+            return
+        if abs(e.x_root - d["sx"]) + abs(e.y_root - d["sy"]) > 4:
+            d["moved"] = True
+        if d["moved"]:
+            self.pos = (e.x_root - d["dx"], e.y_root - d["dy"])
+            self._draw("down")
+
+    def _up(self, _e) -> None:
+        moved = self.drag.get("moved")
+        self.drag = {}
+        g = overlay.game_rect()
+        if moved and g:
+            overlay.save_state(bx=self.pos[0], by=self.pos[1], brel=overlay.to_rel(g, self.pos[0], self.pos[1], 64, 64)[:2])
+            self._draw()
+        elif not moved and time.time() - self.busy > 10:
+            self.busy = time.time()
+            import threading
+            threading.Thread(target=lambda: overlay.play(""), daemon=True).start()
+            self._draw("")
+
+
 def run(poll: float = 0.25, find_every: float = 0.5) -> None:
     root, hwnd = _make_window()
     root.update()
+    dock = Dock(root) if hasattr(overlay, "slot_sprite") else None
     u = ctypes.windll.user32
     u.ShowWindow.argtypes = [ctypes.c_void_p, ctypes.c_int]
     u.SetWindowPos.argtypes = [ctypes.c_void_p, ctypes.c_void_p, ctypes.c_int, ctypes.c_int, ctypes.c_int,
@@ -160,6 +263,11 @@ def run(poll: float = 0.25, find_every: float = 0.5) -> None:
             HEART.write_text(str(time.time()))
         except OSError:
             pass
+        if dock:
+            try:
+                dock.update()
+            except Exception as exc:  # noqa: BLE001 - the button is a convenience, never stop the chat overlay
+                print(f'dock failed: {exc}', flush=True)
         events, offset = read_new(offset)
         if events:
             entries = apply_events(entries, events)

@@ -95,3 +95,25 @@ def test_player_name_comes_only_from_the_menu_and_the_ai_never_asks(monkeypatch)
     assert "Call them Bob" in claude.persona()[1]
     bridge.handle_command("!me")
     assert "player" not in config.load() and "briefly ask" not in claude.persona()[1]
+
+
+def test_flavor_from_interface_number():
+    from wowclaude import claude
+    assert "Forever" in claude.flavor("Client 1.16.1 iface 16001 deDE")
+    assert "Classic Era" in claude.flavor("x | Client 1.15.8 iface 11508 enUS")
+    assert "Wrath" in claude.flavor("iface 30403")
+    assert claude.flavor("no version here") == ""
+
+
+def test_system_prompt_has_version_research_and_tools():
+    from wowclaude import claude
+    p = claude.DEFAULT_SYSTEM
+    assert "GAME VERSION" in p and "RESEARCH FIRST" in p
+    for tool in ("[[macro", "[[overlay", "[[play", "/wac", "/browser"):
+        assert tool in p
+    assert not any(w in p.lower() for w in ("bor" + "ro", "caly" + "ie"))
+
+
+def test_claude_backend_gets_only_web_tools():
+    from wowclaude import claude
+    assert claude.WEB_TOOLS == "WebSearch,WebFetch"

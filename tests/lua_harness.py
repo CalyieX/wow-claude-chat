@@ -53,6 +53,7 @@ NUM_CHAT_WINDOWS = 0
 KKMapDB = nil
 KKMapState = nil
 function GetLocale() return "enUS" end
+function GetBuildInfo() return "1.16.1", "60000", "Jan 1 2026", 16001 end
 function GetPhysicalScreenSize() return 2560, 1440 end
 function GetTime() return 1000 end
 function time() return 1700000000 end

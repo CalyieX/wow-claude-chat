@@ -13,6 +13,7 @@ from . import config
 from .winproc import hidden
 
 CREATE_NO_WINDOW = 0x08000000  # Windows: no console window for the child process
+WEB_TOOLS = "WebSearch,WebFetch"  # the only tools the AI gets: it can look things up, never touch files or run commands
 TIMEOUT = 100  # seconds; the addon gives up after 120, so one run must fit in that
 
 
@@ -28,8 +29,46 @@ DEFAULT_SYSTEM = (
     "arrive in square brackets in front of the question. Use it, do not repeat it.\n"
     "If an answer needs more room (a list, a plan, a build), append a window to your reply:\n"
     "[[overlay Title]]\nplain line\n|cff00ff00green line|r\n[bar 0.6 00ff00] label (bar from 0 to 1, colour RRGGBB)\n[[/overlay]]\n"
-    "Keep the sentence in the chat short and put the details into the window."
+    "Keep the sentence in the chat short and put the details into the window.\n\n"
+    "GAME VERSION: every question starts with [Game state: ...] including 'Client <version> iface <number> <locale>' and the "
+    "name of the game version. Answer for exactly that version. WoW Forever, Classic Era, Season of Discovery, Hardcore, "
+    "Burning Crusade, Wrath, Cataclysm, Mists Classic and Retail differ in talents, trainers, quests, spells, drops and "
+    "even macro rules. Never assume Classic Era knowledge for another version, and never guess from memory.\n"
+    "RESEARCH FIRST: game data goes out of date within days (patches, hotfixes, new seasons, changed talents). Before you "
+    "answer a factual question (builds, talents, rotations, trainers, quests, drops, prices, patch changes, events) search "
+    "the web for the player's game version and prefer sources updated recently. Name the source in a few words. If you "
+    "cannot search, say your answer may be out of date instead of presenting it as certain.\n"
+    "YOUR TOOLS IN THIS ADDON (use them instead of describing what the player should do by hand):\n"
+    "- macro: [[macro Name]]lines[[/macro]] creates a real macro on the player's cursor.\n"
+    "- overlay window: [[overlay Title]]...[[/overlay]] for lists, builds, plans.\n"
+    "- browser window over the game: [[play https://...]] (video, guide, wiki); [[play off]] closes it. In that window the "
+    "ghost button makes it see-through and click-through, the dash minimizes it into the WAC button, X closes it.\n"
+    "- addon menu and commands the player can use: /wac opens the menu (connect AI, browser, AI name, own name, strip, tips, "
+    "commands); /ai <text> asks you; /browser [address]; /nameai <name>; /nameme <name>; /aitab; /strip always|auto|off.\n"
+    "- when background input is available you can also click and type in the game window (see below).\n"
+    "Be honest about limits: you cannot cast, target or move for the player (protected by the game), you do not see the "
+    "screen unless the game state says so, and you never ask for passwords or personal data."
 )
+
+# interface number (from GetBuildInfo) -> what the player is running
+FLAVORS = (
+    (16000, 16999, "WoW Forever (Blizzard's Forever client, not Classic Era)"),
+    (11500, 11599, "Classic Era (Season of Discovery / Hardcore / Anniversary use this client too)"),
+    (20500, 20599, "Burning Crusade Classic"),
+    (30400, 30499, "Wrath of the Lich King Classic"),
+    (40400, 40499, "Cataclysm Classic"),
+    (50500, 50599, "Mists of Pandaria Classic"),
+    (100000, 999999, "Retail (current expansion)"),
+)
+
+
+def flavor(context: str) -> str:
+    """Name of the game version from the 'iface N' part of the game state ('' when it is not there)."""
+    m = re.search(r"iface (\d{4,6})", context or "")
+    if not m:
+        return ""
+    n = int(m.group(1))
+    return next((label for lo, hi, label in FLAVORS if lo <= n <= hi), "unknown version")
 
 OVERLAY_RE = re.compile(r"\[\[overlay(?: ([^\]\n]*))?\]\](.*?)\[\[/overlay\]\]", re.S)
 CHUNK = 380
@@ -162,7 +201,7 @@ def check_login() -> tuple[bool, str]:
                        "(https://claude.com/claude-code), then run `claude` once in a terminal and log in.")
     config.HOME.mkdir(parents=True, exist_ok=True)
     try:
-        code, out, err = _exec([exe, "-p", "--output-format", "text", "--tools", "", "--strict-mcp-config",
+        code, out, err = _exec([exe, "-p", "--output-format", "text", "--tools", WEB_TOOLS, "--allowedTools", WEB_TOOLS, "--strict-mcp-config",
                                 *ISOLATION, "--no-session-persistence"], "Reply with the word ok.", 90)
     except (OSError, AskTimeout) as exc:
         return False, f"Could not run Claude Code: {exc}"
@@ -262,7 +301,7 @@ class Session:
         sysfile = config.HOME / "system_prompt.txt"
         config.HOME.mkdir(parents=True, exist_ok=True)
         sysfile.write_text(persona()[1], encoding="utf-8")
-        cmd = [exe, "-p", "--output-format", "text", "--tools", "", "--strict-mcp-config", *ISOLATION,
+        cmd = [exe, "-p", "--output-format", "text", "--tools", WEB_TOOLS, "--allowedTools", WEB_TOOLS, "--strict-mcp-config", *ISOLATION,
                "--append-system-prompt-file", str(sysfile)]
         cmd += ["--resume" if self.started else "--session-id", self.id]
         if model:

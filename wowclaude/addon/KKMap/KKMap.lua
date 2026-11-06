@@ -84,6 +84,7 @@ local function ctxLine()
     "Kupfer " .. c(GetMoney()),
     UnitAffectingCombat("player") and "im Kampf" or "ruhig",
     "Pet " .. c(UnitName("pet") or "keins"),
+    "Client " .. c((GetBuildInfo())) .. " iface " .. c(select(4, GetBuildInfo())) .. " " .. c(GetLocale()),
   }
   return "#ctx|" .. table.concat(parts, "|")
 end

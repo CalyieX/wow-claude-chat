@@ -384,6 +384,23 @@ def load_state() -> dict:
         return {}
 
 
+ALIVE_FILE = STATE_FILE.parent / "overlay.alive"
+
+
+def touch_alive() -> None:
+    try:
+        ALIVE_FILE.write_text(str(time.time()))
+    except OSError:
+        pass
+
+
+def overlay_alive(max_age: float = 2.5) -> bool:
+    try:
+        return time.time() - float(ALIVE_FILE.read_text()) < max_age
+    except (OSError, ValueError):
+        return False
+
+
 def save_state(**kw) -> None:
     st = load_state()
     st.update(kw)
@@ -977,6 +994,7 @@ def frame_loop(hwnd: int, x: int, y: int, w: int, h: int, opacity: int, click_th
             root.after(500, tick)
 
     def _tick():
+        touch_alive()  # tells the always-on WAC button (chat_fake) that the browser window is up
         if not user32.IsWindow(wintypes.HWND(hwnd)):
             persist()
             root.destroy()
