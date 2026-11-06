@@ -218,6 +218,8 @@ REMINDER = (
 )
 
 def reminder() -> str:
+    if own_harness("cli" if config.load().get("ai_mode") == "cli" else "wow"):
+        return ""  # Own: no WoW reminder - the player talks to their own AI as in its own program
     from . import vinput
     extra = ("\n[You also have background input: [[click X Y]] / [[keys TEXT]] act in the game window without interrupting the player.]"
              if vinput.available() else "")

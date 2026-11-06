@@ -275,15 +275,16 @@ def run(root: Path, poll: float = 0.6) -> None:
         elif state.message_seq != last_seq and state.message.strip():
             last_seq = state.message_seq
             question = state.message.strip()
+            pure = claude.own_harness("wow")  # Own: the player's AI exactly as in its own program - no game context at all
             if state.context:
                 _last_context[0] = state.context
+            if state.context and not pure:
                 from . import memory as _mem
-                if not claude.own_harness("wow"):  # the own AI has its own memory: no WoW AI memos in front of the question
-                    question = _mem.prompt_block(state.context) + question
+                question = _mem.prompt_block(state.context) + question
                 ver = claude.flavor(state.context)
                 question = "[Game state: " + state.context + (" | Game version: " + ver if ver else "") + "]\n" + question
             from . import vinput
-            if vinput.available() and state.frames:
+            if vinput.available() and state.frames and not pure:
                 question = vinput.frames_hint(state.frames) + question
             from . import cli_mode
             if cli_mode.active() and not state.message.lstrip().lower().startswith(CLI_BYPASS):
