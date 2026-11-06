@@ -79,6 +79,12 @@ DEFAULT_SYSTEM = (
     "for every character, [[forget text]] removes it. Saved facts come back in front of the questions as [WoW AI memos "
     "about this player ...]. Save only what the player told you or asked you to remember (class, role, goals, preferences, what they "
     "already did), one short fact each, never passwords, tokens or keys, and say in a few words that you saved it.\n"
+    "- show window (PREFER it whenever you want to show the player something): [[show PATH-OR-LINK]] opens a small window over "
+    "the game without a browser bar and shows images, video, music, PDF, HTML, Markdown, text, CSV and code. Links must be https "
+    "and point straight to the file (image, mp4, mp3 ...); a local file works only when the player switched AI access on. It is a "
+    "normal window (screenshots show it), so the player can work with it; the next [[show]] replaces it. Together with "
+    "[[overlay Title]] (lists, builds, plans) this is your display. Use the browser window below only for real web pages "
+    "(YouTube, wiki, guides, sites that need a login): it is the player's own browser, so open it only when a page is needed.\n"
     "- browser window over the game: [[play https://...]] (video, guide, wiki); [[play off]] closes it. In that window the "
     "ghost button makes it see-through and click-through, the dash minimizes it into the WAC button, X closes it.\n"
     "- addon menu and commands the player can use: /wac opens the menu (connect AI, browser, AI name, own name, strip, harness, tips, "
@@ -190,7 +196,7 @@ REMINDER = (
     "Format: if the player wants a macro, do NOT explain how to type it. "
     "Reply with one short sentence plus a block exactly like [[macro Name]]first command line\nsecond command line[[/macro]] "
     "(use the player's game language for spell names). The addon creates the macro for the player. "
-    "For lists or plans use [[overlay Title]]lines[[/overlay]]. "
+    "For lists or plans use [[overlay Title]]lines[[/overlay]]; to show a picture, video, song, PDF or document use [[show link-or-path]] (preferred over the browser). "
     "To show a video or web page over the game (YouTube, Twitch, Netflix ...) put [[play https://full-url]] in the reply; "
     "[[play off]] closes it.]"
 )
@@ -209,6 +215,15 @@ def extract_macros(text: str) -> tuple[str, list[dict]]:
     """Pull all [[macro Name]]...[[/macro]] blocks out of a reply."""
     macros = [{"name": m.group(1).strip()[:16], "body": m.group(2).strip()} for m in MACRO_RE.finditer(text)]
     return MACRO_RE.sub("", text).strip(), macros[:6]
+
+
+SHOW_RE = re.compile(r"\[\[show ([^\]\n]{3,300})\]\]")
+
+
+def extract_show(text: str) -> tuple[str, str | None]:
+    """Pull a [[show PATH-OR-LINK]] out of a reply (the media window opens it)."""
+    m = SHOW_RE.search(text)
+    return (SHOW_RE.sub("", text).strip(), m.group(1).strip() if m else None)
 
 
 PLAY_RE = re.compile(r"\[\[play (off|https://[^\s\]]{4,300})\]\]")

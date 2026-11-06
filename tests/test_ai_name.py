@@ -415,3 +415,19 @@ def test_panel_parse_line_colors_and_bars():
     assert kind == "text" and ("green", "00ff00") in parts and parts[0] == ("a ", None) and parts[-1] == (" b", None)
     assert p.parse_line("[bar 0.6 FF0000] Mana") == ("bar", (0.6, "ff0000", "Mana"))
     assert p.parse_line("[bar 5 00ff00] x")[1][0] == 1.0
+
+
+def test_show_tag_and_media_pages(tmp_path, monkeypatch):
+    from wowclaude import claude, media_window as m
+    assert claude.extract_show("Hi [[show https://x.org/a.png]] there") == ("Hi  there", "https://x.org/a.png")
+    assert claude.extract_show("nothing")[1] is None
+    assert [m.kind(x) for x in ("a.PNG", "b.mp4", "c.mp3", "d.pdf", "e.md", "f.csv", "g.py")] == \
+        ["image", "video", "audio", "pdf", "md", "csv", "text"]
+    monkeypatch.setattr(claude, "computer_access", lambda: False)
+    f = tmp_path / "n.md"
+    f.write_text("# Titel\n- a\n- **b**\n| x | y |\n|---|---|\n| 1 | 2 |\n", encoding="utf-8")
+    assert m.page(str(f)) is None  # a local file needs AI access
+    monkeypatch.setattr(claude, "computer_access", lambda: True)
+    html = m.page(str(f))
+    assert "<h1>Titel</h1>" in html and "<li><b>b</b></li>" in html and "<th>x</th>" in html
+    assert "<video" in m.page("https://x.org/v.mp4") and m.page("https://x.org/notes.md") is None

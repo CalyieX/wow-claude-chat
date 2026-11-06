@@ -594,7 +594,9 @@ tipFrame:Hide()
 local TOOLS = {
   "TOOLS",
   "Macro maker  -  the AI writes a real macro onto your cursor",
-  "Overlay window  -  lists, builds and plans in its own small window",
+  "Overlay window  -  lists, builds, plans in its own window",
+  "Show window  -  pictures, video, music, PDF, text: the AI shows",
+  "    them in a small window without browser bar (screenshots work)",
   "Browser over the game  -  video, guide, wiki (ghost mode =",
   "    see-through and click-through; minimize = WAC button)",
   "Mouse and keyboard  -  the AI clicks and types for you",

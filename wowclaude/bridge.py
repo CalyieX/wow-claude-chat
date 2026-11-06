@@ -153,6 +153,7 @@ def deliver(state: decode.GameState, reply: str) -> None:
     reply, macros = claude.extract_macros(reply)
     reply, overlay = claude.extract_overlay(reply)
     reply, play = claude.extract_play(reply)
+    reply, show = claude.extract_show(reply)
     from . import vinput
     reply, acts = vinput.extract(reply) if vinput.available() else (reply, [])
     from . import memory
@@ -169,7 +170,17 @@ def deliver(state: decode.GameState, reply: str) -> None:
             ov.play(play)
         except Exception as exc:  # noqa: BLE001 - the text answer must still arrive
             print(f"overlay failed: {exc}", flush=True)
+    note = ""
+    if show:  # the media window (images, video, music, PDF, text ...), no browser
+        try:
+            from . import media_window
+            why = media_window.show(show)
+            note = f"\n(could not show it: {why})" if why else ""
+        except Exception as exc:  # noqa: BLE001 - the text answer must still arrive
+            print(f"show failed: {exc}", flush=True)
+            note = "\n(could not open the show window)"
     text = reply or "..."
+    text += note
     if overlay:  # lists, builds, plans: the panel window over the game (no browser); if it cannot open, the lines join the answer
         try:
             from . import panel_window
