@@ -153,7 +153,8 @@ def run(tab: str = "wow") -> None:
 
     head = ("LIVE ACCESS: pick the AI above, then set the switch in the Harness menu to Own. That AI runs with its normal\n"
             "folder, login, memory and skills - nothing is copied. Search lists every AI setup found on this computer.\n"
-            "AIs without a folder (API key, local program) answer as the bare model.\n\n")
+            "AIs without a folder (API key, local program) answer as the bare model.\n"
+            "Model, API address and keys: AI Setup (game menu).\n\n")
     refresh()
     msg.pack(fill="x", padx=6, side="bottom")
     load()
