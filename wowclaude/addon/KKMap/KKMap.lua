@@ -503,9 +503,11 @@ local TIPS = {
   "The AI tab can be moved and resized freely.",
   "Play in windowed or borderless mode, not fullscreen.",
   " ",
-  "Login expired? Run `claude setup-token` once with Claude Code:",
-  "that is a one-year login. Or use 'Let my own AI set this up' on",
-  "the AI setup page: your AI does it for you.",
+  "Login expired? The sign-in page opens by itself in the game",
+  "browser (or type /login). One login covers chat and CLI mode.",
+  "Longer lasting: run `claude setup-token` once with Claude Code",
+  "(valid for a year) and paste the token into the AI setup page",
+  "(Claude token). Or use 'Let my own AI set this up' there.",
 }
 local tipFrame = CreateFrame("Frame", "KKTipFrame", UIParent, "BackdropTemplate")
 tipFrame:SetSize(430, 44 + #TIPS * 16)

@@ -325,3 +325,25 @@ def test_every_helper_process_is_started_hidden():
             if not re.search(r"hidden\(\)|CREATE_NO_WINDOW|0x08000000", call):
                 bad.append(f"{f.name}: {call[:60]}")
     assert not bad, bad
+
+
+def test_claude_token_from_setup_page_reaches_chat_and_cli(monkeypatch):
+    from wowclaude import claude, config, login, setup_ui
+    monkeypatch.delenv("CLAUDE_CODE_OAUTH_TOKEN", raising=False)
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "stray")
+    setup_ui.apply({"backend": "claude", "claude_token": "tok-123"})
+    assert config.load().get("claude_token") == "tok-123"
+    env = claude._clean_env()
+    assert env["CLAUDE_CODE_OAUTH_TOKEN"] == "tok-123" and "ANTHROPIC_API_KEY" not in env
+    assert login.logged_in()  # signed in by token: no browser login needed
+    assert setup_ui._state()["has_token"] is True
+
+
+def test_cli_first_run_is_prepared_so_the_token_is_used(monkeypatch, tmp_path):
+    import json
+    from wowclaude import cli_mode, claude
+    monkeypatch.setenv("CLAUDE_CONFIG_DIR", str(tmp_path))
+    cli_mode.prepare_config(claude.neutral_cwd())
+    d = json.loads((tmp_path / ".claude.json").read_text(encoding="utf-8"))
+    assert d["hasCompletedOnboarding"] is True
+    assert list(d["projects"].values())[0]["hasTrustDialogAccepted"] is True

@@ -50,7 +50,7 @@ def command() -> list[str] | None:
         exe = claude.claude_path()
         if not exe:
             return None
-        cmd = [exe]
+        cmd = [exe, "--setting-sources", ""]  # not the player's own Claude settings (they may allow everything)
         if not claude.computer_access():
             cmd += ["--tools", claude.WEB_TOOLS, "--allowedTools", claude.WEB_TOOLS]
         return cmd
@@ -58,6 +58,35 @@ def command() -> list[str] | None:
         exe = shutil.which("codex")
         return [exe, "--search"] + ([] if claude.computer_access() else ["-s", "read-only"]) if exe else None
     return None
+
+
+def prepare_config(cwd: str) -> None:
+    """The tool's first-run screens ignore a token (it would ask to sign in again): mark the first run as done, and trust the
+    neutral working folder (it holds nothing). The folder of the player's own files (computer access) stays a real question."""
+    import os
+    from pathlib import Path
+    home = os.environ.get("CLAUDE_CONFIG_DIR") or ""
+    path = (Path(home) / ".claude.json") if home else (Path.home() / ".claude.json")
+    try:
+        data = json.loads(path.read_text(encoding="utf-8")) if path.exists() else {}
+    except (OSError, ValueError):
+        return
+    changed = False
+    if not data.get("hasCompletedOnboarding"):
+        data["hasCompletedOnboarding"] = True
+        data.setdefault("theme", "dark")
+        changed = True
+    if cwd == claude.neutral_cwd():
+        proj = data.setdefault("projects", {}).setdefault(cwd.replace("\\", "/"), {})
+        if not proj.get("hasTrustDialogAccepted"):
+            proj["hasTrustDialogAccepted"] = True
+            changed = True
+    if changed:
+        try:
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(json.dumps(data, indent=2), encoding="utf-8")
+        except OSError:
+            pass
 
 
 class CliMode:
@@ -94,6 +123,7 @@ class CliMode:
         self.screen = pyte.Screen(cols, rows)
         self.stream = pyte.Stream(self.screen)
         cwd = str(Path.home()) if claude.computer_access() else claude.neutral_cwd()
+        prepare_config(cwd)
         from . import login
         env = login.no_browser_env()  # a /login inside the tool must not open the normal browser
         self.proc = winpty.PtyProcess.spawn(cmd, dimensions=(rows, cols), cwd=cwd, env=env)

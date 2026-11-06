@@ -61,6 +61,8 @@ def logged_in() -> bool:
     exe = claude.claude_path()
     if not exe or backends.name() != "claude":
         return True
+    if claude._clean_env().get("CLAUDE_CODE_OAUTH_TOKEN"):  # signed in with a token: nothing to log in
+        return True
     try:
         out = subprocess.run([exe, "auth", "status"], capture_output=True, text=True, encoding="utf-8", errors="replace",
                              timeout=20, cwd=claude.neutral_cwd(), env=claude._clean_env(), **hidden()).stdout
@@ -69,8 +71,100 @@ def logged_in() -> bool:
         return True
 
 
+_TOKEN = re.compile(r"sk-ant-[A-Za-z0-9_-]{40,}")
+_tok: dict = {}  # the running one-year-token sign-in: {"pty": process, "screen": pyte screen, "token": str}
+
+
+def _token_signin() -> str:
+    """Claude: `claude setup-token` in a hidden terminal. It shows the sign-in page and asks for the code; when it has
+    printed the one-year token, the token is stored (config "claude_token") and works for chat AND CLI mode."""
+    import pyte
+    import winpty
+    from . import overlay
+    old = _tok.get("pty")
+    if old is not None and old.isalive():
+        return "The sign-in is already running: finish it in the browser window."
+    screen = pyte.Screen(600, 40)
+    stream = pyte.Stream(screen)
+    proc = winpty.PtyProcess.spawn([claude.claude_path(), "setup-token"], dimensions=(40, 600), cwd=claude.neutral_cwd(),
+                                   env=no_browser_env())
+    _tok.clear()
+    _tok.update({"pty": proc, "screen": screen, "token": ""})
+    opened = threading.Event()
+
+    def text() -> str:
+        return "\n".join(line.rstrip() for line in screen.display)
+
+    def reader() -> None:
+        shown = False
+        while True:
+            try:
+                data = proc.read(4096)
+            except Exception:  # noqa: BLE001 - the terminal closed
+                break
+            if not data:
+                continue
+            stream.feed(data)
+            body = text()
+            if not shown:
+                m = _URL.search(body)
+                if m:
+                    shown = True
+                    overlay.play(m.group(0).rstrip(".,)"), "640x560")  # the in-game browser shows the sign-in page
+                    opened.set()
+            m = _TOKEN.search(body.replace(chr(10), ""))
+            if m and not _tok.get("token"):
+                _tok["token"] = m.group(0)
+                _save_token(m.group(0))
+        opened.set()
+
+    threading.Thread(target=reader, daemon=True).start()
+    opened.wait(25)
+    return ("The sign-in page is open in the game browser: sign in there. The page shows a code: copy it and type "
+            "/login <code> in the game chat. That gives you a login that lasts a year, for chat and CLI mode.")
+
+
+def _save_token(token: str) -> None:
+    cfg = config.load()
+    cfg["claude_token"] = token
+    config.save(cfg)
+    try:
+        from . import chat_fake
+        chat_fake.post("sys", "Signed in for a year. Chat and CLI mode both use it.")
+    except Exception:  # noqa: BLE001 - the overlay is optional
+        pass
+    try:  # the token ends the waiting sign-in terminal
+        _tok["pty"].terminate(force=True)
+    except Exception:  # noqa: BLE001
+        pass
+
+
+def _token_submit(code: str) -> str:
+    import time
+    proc = _tok.get("pty")
+    if proc is None or not proc.isalive():
+        return "No sign-in is waiting for a code. Type /login to start one."
+    proc.write(code)
+    time.sleep(0.4)
+    proc.write(chr(13))
+    for _ in range(60):
+        if _tok.get("token"):
+            return "Signed in for a year. Ask your question again."
+        time.sleep(0.5)
+    return "Code sent, still working. Ask again in a moment."
+
+
+def _token_available() -> bool:
+    if backends.name() != "claude" or not claude.claude_path():
+        return False
+    from . import cli_mode
+    return cli_mode.available()[0]
+
+
 def start() -> str:
     """Start the login and open its page in the overlay browser. Returns the sentence for the chat."""
+    if _token_available():  # preferred: one-year token (no repeated sign-ins), shared by chat and CLI mode
+        return _token_signin()
     cmd = command()
     if not cmd:
         return "This AI uses a key, not a login: open the menu (/wac), choose Connect AI and check the key."
@@ -103,6 +197,8 @@ def start() -> str:
 def submit(code: str) -> str:
     """The code shown after signing in (Claude Code asks for it when no local callback is possible)."""
     code = (code or "").strip()
+    if _tok.get("pty") is not None and _tok["pty"].isalive():
+        return _token_submit(code)
     if not _running or _running[0].poll() is not None:
         return "No login is waiting for a code. Type /login to start one."
     try:

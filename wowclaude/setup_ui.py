@@ -42,6 +42,8 @@ button.small{margin:3px 4px 0 0;padding:4px 10px;font-size:12px}
 <div id="baserow"><label>API address (OpenAI-compatible)</label><input id="base_url"></div>
 <div id="keyrow"><label>API key <span id="keystate"></span></label><input id="api_key" type="password" autocomplete="off"
  placeholder="leave empty to keep the saved key"><small>Stored only in ~/.wowclaude/config.json on this computer.</small><small id="keylink"></small></div>
+<div id="tokrow"><label>Claude token <span id="tokstate"></span></label><input id="claude_token" type="password" autocomplete="off"
+ placeholder="optional: instead of the browser sign-in"><small>One token for chat AND CLI mode: run  claude setup-token  once, paste the result here. Stored only in ~/.wowclaude/config.json on this computer.</small></div>
 <div id="cmdrow"><label>Command (reads the prompt on stdin)</label><input id="command" placeholder="ollama run llama3.1"></div>
 <label>Extra instructions (optional, e.g. how it should talk)</label>
 <textarea id="persona"></textarea>
@@ -87,14 +89,14 @@ function show(){const b=$("backend").value,isApi=!["claude","codex","command"].i
  $("model").value=s.model||"";$("base_url").value=s.base_url||"";$("command").value=s.command||"";
  $("inputctl").checked=!!s.input_control;$("access").checked=!!s.computer_access;$("harness").value=s.harness;$("hstate").textContent=s.harness_custom?"Using your edited harness.":"Using the built-in harness.";
  $("hreset").onclick=async()=>{const r=await api("/save",{backend:$("backend").value,harness_reset:true});$("msg").textContent=r.status;const s2=await api("/state");$("harness").value=s2.harness;$("hstate").textContent="Using the built-in harness."};
- $("aiprompt").value=s.prompt;$("copy").onclick=()=>{$("aiprompt").select();document.execCommand("copy")};$("persona").value=s.persona||"";$("keystate").textContent=s.has_key?"(saved)":"";show();sel.onchange=show;
+ $("aiprompt").value=s.prompt;$("copy").onclick=()=>{$("aiprompt").select();document.execCommand("copy")};$("persona").value=s.persona||"";$("keystate").textContent=s.has_key?"(saved)":"";$("tokstate").textContent=s.has_token?"(saved)":"";show();sel.onchange=show;
  recheck()})();
 async function recheck(){$("msg").textContent="Checking the AI ...";$("msg").className="";
  try{const r=await api("/check");$("msg").textContent=r.status;$("msg").className=r.ok?"ok":"bad"}catch(e){$("msg").textContent="Check failed: "+e;$("msg").className="bad"}}
 $("save").onclick=async()=>{$("msg").textContent="Saving ...";$("msg").className="";
  const r=await api("/save",{backend:$("backend").value,model:$("model").value,base_url:$("base_url").value,
-  api_key:$("api_key").value,command:$("command").value,persona:$("persona").value,harness:$("harness").value,input_control:$("inputctl").checked,computer_access:$("access").checked});
- $("msg").textContent=r.status;$("msg").className=r.ok?"ok":"bad";if(r.has_key)$("keystate").textContent="(saved)";$("api_key").value="";await recheck()};
+  api_key:$("api_key").value,claude_token:$("claude_token").value,command:$("command").value,persona:$("persona").value,harness:$("harness").value,input_control:$("inputctl").checked,computer_access:$("access").checked});
+ $("msg").textContent=r.status;$("msg").className=r.ok?"ok":"bad";if(r.has_key)$("keystate").textContent="(saved)";$("api_key").value="";$("claude_token").value="";if(r.has_token)$("tokstate").textContent="(saved)";await recheck()};
 </script></body></html>"""
 
 
@@ -107,7 +109,8 @@ def ai_prompt() -> str:
             "that reads the prompt on stdin and prints the answer). Optional keys: \"model\". For API backends put the key "
             "in the environment variable named for the service (e.g. OPENROUTER_API_KEY) rather than in the file. "
             "Tip: set up a long-lived login so it does not expire every few weeks - for Claude Code run `claude setup-token` "
-            "(a login valid for a year) and store the token it prints in the environment variable CLAUDE_CODE_OAUTH_TOKEN; "
+            "(a login valid for a year) and put the token it prints into ~/.wowclaude/config.json as \"claude_token\" (the program then "
+            "uses it for the chat AND for CLI mode, so one token is enough); "
             "for other services create a long-lived API key. If my login has expired, set this up yourself: run the command, the user only has to confirm in the browser window it opens. "
             "Afterwards run: py -3 -m wowclaude doctor --deep  and tell me whether the AI answered.")
 
@@ -125,7 +128,7 @@ def _state() -> dict:
         pass
     return {"backends": ["claude", "codex", "command", "openai-compatible", *backends.PRESETS],
             "backend": backends.name(), "model": cfg.get("model", ""), "base_url": cfg.get("base_url", ""),
-            "command": cfg.get("command", ""), "has_key": bool(cfg.get("api_key")),
+            "command": cfg.get("command", ""), "has_key": bool(cfg.get("api_key")), "has_token": bool(cfg.get("claude_token")),
             "name": name, "persona": rest.strip("\n"), "found": backends.detect(), "prompt": ai_prompt(),
             "harness": claude.custom_harness() or claude.builtin_harness(), "harness_custom": claude.custom_harness() is not None,
             "input_control": bool(cfg.get("input_control")), "computer_access": bool(cfg.get("computer_access"))}
@@ -167,6 +170,9 @@ def apply(data: dict) -> dict:
             cfg["input_control"] = True
         else:
             cfg.pop("input_control", None)
+    tok = str(data.get("claude_token", "")).strip()
+    if tok:
+        cfg["claude_token"] = tok
     key = str(data.get("api_key", "")).strip()
     if key:
         cfg["api_key"] = key
@@ -195,7 +201,7 @@ def apply(data: dict) -> dict:
         config.PERSONA.write_text(persona + "\n", encoding="utf-8")
     elif config.PERSONA.exists():
         config.PERSONA.unlink()
-    return {"ok": True, "status": "Saved. Checking ...", "has_key": bool(cfg.get("api_key"))}
+    return {"ok": True, "status": "Saved. Checking ...", "has_key": bool(cfg.get("api_key")), "has_token": bool(cfg.get("claude_token"))}
 
 
 _running: dict = {}
