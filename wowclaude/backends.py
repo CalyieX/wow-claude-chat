@@ -19,15 +19,6 @@ CREATE_NO_WINDOW = 0x08000000  # Windows: no console window for child processes
 FLAGS = CREATE_NO_WINDOW if os.name == "nt" else 0
 
 
-LABELS = {"claude": "Claude", "codex": "ChatGPT", "command": "AI", "openai-compatible": "AI", "openai": "ChatGPT"}
-
-
-def label() -> str:
-    """The name the AI writes with when the player did not choose one: follows the backend (ChatGPT, Claude, Ollama ...)."""
-    b = name()
-    return LABELS.get(b, b.capitalize())
-
-
 def name() -> str:
     return (os.environ.get("WOWCLAUDE_BACKEND") or config.load().get("backend") or "claude").lower()
 

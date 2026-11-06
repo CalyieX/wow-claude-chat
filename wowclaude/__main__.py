@@ -44,7 +44,7 @@ def cmd_go(args) -> int:
     addon = root / "Interface" / "AddOns" / "KKMap" / "KKMap.lua"
     src = installer.ADDON_SRC / "KKMap.lua"
     if not addon.exists() or addon.read_bytes() != src.read_bytes():
-        installer.install(root, cfg.get("name", "") or backends.label())
+        installer.install(root, cfg.get("name", ""))
         print("Addon installed/updated. Restart the game completely (a new addon is only loaded at game start).", flush=True)
     cfg = config.load()
     cfg["wow_root"] = str(root)

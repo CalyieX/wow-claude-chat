@@ -1,1 +1,1 @@
-KKAiName = "AI"
+KKAiName = "WoW AI"

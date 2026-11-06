@@ -192,7 +192,7 @@ local TABNAME = "WoW AI"
 local function aiName()
   local n = KKAiName  -- Name.lua, written by the AI setup page (applies after /reload)
   if type(n) == "string" and n ~= "" then return n end
-  return "AI"
+  return "WoW AI"
 end
 local function renameTab(frame, new)
   if not frame or frame == DEFAULT_CHAT_FRAME then return end

@@ -19,6 +19,7 @@ TIMEOUT = 100  # seconds; the addon gives up after 120, so one run must fit in t
 class AskTimeout(RuntimeError):
     """Claude did not answer in time. Never retried: a second run would only answer after the addon gave up."""
 
+DEFAULT_NAME = "WoW AI"  # who writes when the player chose no name
 DEFAULT_SYSTEM = (
     "You are an AI assistant chatting with a World of Warcraft player inside the game's chat window. "
     "Reply in the player's language. Keep chat answers to at most 3 short sentences, with no markdown, "
@@ -48,8 +49,7 @@ def clean_name(raw) -> str:
 def persona() -> tuple[str, str]:
     """(name shown in the chat, system prompt). The name comes from config.json "name" (AI setup page); persona.txt is
     then all extra instructions. Old style without a name in config.json: the first line of persona.txt is the name.
-    With neither, the name follows the backend (ChatGPT, Claude, Ollama ...)."""
-    from . import backends
+    With neither, the name is "WoW AI"."""
     name = clean_name(config.load().get("name"))
     extra = ""
     try:
@@ -60,7 +60,7 @@ def persona() -> tuple[str, str]:
             name, extra = clean_name(lines[0]), "\n".join(lines[1:]).strip()
     except OSError:
         pass
-    name = name or backends.label()
+    name = name or DEFAULT_NAME
     base = DEFAULT_SYSTEM + f"\nYour name is {name}. Answer as {name}."
     try:
         base += "\n\n" + (Path(__file__).parent / "macro_skill.md").read_text(encoding="utf-8")
@@ -111,11 +111,11 @@ def extract_overlay(text: str) -> tuple[str, dict | None]:
     if not m:
         return text, None
     lines = [ln.rstrip() for ln in m.group(2).strip().splitlines()]
-    title = (m.group(1) or "AI").strip() or "AI"
+    title = (m.group(1) or DEFAULT_NAME).strip() or DEFAULT_NAME
     secs = 45
     tail = re.search(r"\|(\d{1,3})$", title)
     if tail:
-        secs, title = max(5, min(300, int(tail.group(1)))), title[:tail.start()].strip() or "AI"
+        secs, title = max(5, min(300, int(tail.group(1)))), title[:tail.start()].strip() or DEFAULT_NAME
     return (text[:m.start()] + text[m.end():]).strip(), {"title": title, "lines": lines[:60], "secs": secs}
 
 

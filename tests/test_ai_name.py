@@ -12,14 +12,14 @@ def _isolated(tmp_path, monkeypatch):
 
 def test_ai_name_is_used_in_prompt_prefix_and_reply_file(tmp_path, monkeypatch):
     _isolated(tmp_path, monkeypatch)
-    assert claude.persona()[0] == "Claude"  # default
+    assert claude.persona()[0] == "WoW AI"  # default: nothing chosen
     setup_ui.apply({"backend": "claude", "name": "  Gorel|\x01 der Weise, mit zu langem Namen dahinter ",
                     "persona": "Be brief."})
     name, system = claude.persona()
     assert name.startswith("Gorel") and "|" not in name and len(name) <= 20 and name == claude.clean_name(name)
     assert f"Your name is {name}" in system and "Be brief." in system
     setup_ui.apply({"backend": "claude", "name": "", "persona": ""})
-    assert claude.persona()[0] == "Claude" and "name" not in config.load()
+    assert claude.persona()[0] == "WoW AI" and "name" not in config.load()
 
 
 def test_old_persona_file_first_line_still_works_as_the_name(tmp_path, monkeypatch):
@@ -62,3 +62,14 @@ def test_state_offers_a_prompt_for_the_users_own_ai():
     from wowclaude import setup_ui
     p = setup_ui._state()["prompt"]
     assert "backend" in p and "doctor --deep" in p and "openrouter" in p
+
+
+def test_no_name_chosen_the_ai_writes_as_wow_ai_and_a_chosen_name_wins(monkeypatch):
+    from wowclaude import claude, config
+    for backend in ("claude", "codex", "openrouter"):
+        config.save({"backend": backend})
+        assert claude.persona()[0] == "WoW AI"
+    config.save({"backend": "codex", "name": "Gandalf"})
+    assert claude.persona()[0] == "Gandalf"
+    config.save({"backend": "codex"})  # name removed again: back to WoW AI
+    assert claude.persona()[0] == "WoW AI"

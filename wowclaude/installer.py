@@ -26,7 +26,7 @@ def _account_lists(root: Path) -> list[Path]:
 def write_name(root: Path, name: str) -> None:
     """The name the AI writes with: the addon reads Name.lua when the game (re)loads."""
     from . import claude
-    clean = claude.clean_name(name) or "AI"
+    clean = claude.clean_name(name) or claude.DEFAULT_NAME
     folder = _addons(root) / "KKMap"
     if folder.is_dir():
         (folder / "Name.lua").write_text('KKAiName = "' + clean.replace("\\", "").replace('"', "") + '"\n', encoding="utf-8")

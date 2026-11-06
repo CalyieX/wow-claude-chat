@@ -35,7 +35,7 @@ button.small{margin:3px 4px 0 0;padding:4px 10px;font-size:12px}
 <h1>AI setup</h1>
 <div id="found"></div>
 <label>Other AIs (you need an account or key there)</label><div id="others"></div>
-<label>Name the AI writes with (the tab itself is always called WoW AI)</label><input id="ainame" maxlength="20" placeholder="(automatic: ChatGPT, Claude ...)">
+<label>Name the AI writes with (the tab itself is always called WoW AI)</label><input id="ainame" maxlength="20" placeholder="WoW AI">
 <small>Applies after /reload (or the next game start).</small>
 <details id="adv"><summary>Choose by hand / more options</summary>
 <label>Backend</label><select id="backend"></select>
@@ -148,7 +148,7 @@ def apply(data: dict) -> dict:
         from . import installer
         root = config.client_root()
         if root:
-            installer.write_name(root, name or backends.label())
+            installer.write_name(root, name)
     except OSError:
         pass
     persona = str(data.get("persona", "")).strip("\n")
