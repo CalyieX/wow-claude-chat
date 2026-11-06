@@ -507,3 +507,16 @@ def test_model_is_chosen_per_ai(monkeypatch):
     assert config.model_for("claude") == "general"
     cfg.pop("model")
     assert config.model_for("claude") is None
+
+
+def test_model_command_sets_and_resets(tmp_path, monkeypatch):
+    from wowclaude import bridge, config
+    store = {}
+    monkeypatch.setattr(config, "load", lambda: dict(store))
+    monkeypatch.setattr(config, "save", lambda c: (store.clear(), store.update(c)))
+    monkeypatch.setenv("WOWCLAUDE_BACKEND", "codex")
+    assert "own default" in bridge.handle_command("!model")
+    assert "gpt-mini" in bridge.handle_command("!model gpt-mini")
+    assert store["models"]["codex"] == "gpt-mini"
+    assert "own default" in bridge.handle_command("!model reset")
+    assert "codex" not in store["models"]

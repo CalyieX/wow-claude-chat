@@ -61,6 +61,20 @@ def handle_command(text: str) -> str | None:
         from . import cli_mode
         want = arg.lower() if arg else ("chat" if cli_mode.active() else "cli")
         return cli_mode.set_mode("cli" if want == "cli" else "chat")
+    if cmd == "!model":
+        b = backends.name()
+        shown = lambda: config.model_for(b) or "the AI's own default"  # noqa: E731
+        if not arg:
+            return f"Model ({b}): {shown()}. Change: /model <name>  -  back to the default: /model reset."
+        cfg = config.load()
+        models = dict(cfg.get("models") or {})
+        if arg.strip().lower() in ("reset", "default", "off"):
+            models.pop(b, None)
+        else:
+            models[b] = arg.strip()
+        cfg["models"] = models
+        config.save(cfg)
+        return f"Model ({b}): {shown()}. Used from the next question on."
     if cmd == "!harness":
         words = arg.lower().split()
         if words and words[0] in ("edit", "load"):  # the harness text lives here (menu Harness), not on the Connect AI page
@@ -207,7 +221,7 @@ def deliver(state: decode.GameState, reply: str) -> None:
     _post("ai", claude.persona()[0] + ": " + text.strip())
 
 
-CLI_BYPASS = ("!ol", "!harness", "!aimode", "!access", "!setup", "!browser", "!login", "!name", "!me")  # still handled by the bridge in CLI mode
+CLI_BYPASS = ("!ol", "!harness", "!model", "!aimode", "!access", "!setup", "!browser", "!login", "!name", "!me")  # still handled by the bridge in CLI mode
 LOCK_PORT = 47831
 _lock_socket = None
 
