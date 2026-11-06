@@ -556,11 +556,16 @@ def slot_sprite(state: str = ""):
     from PIL import ImageDraw  # a yellow globe (the browser symbol), drawn 4x larger and scaled down for smooth lines
     big = Image.new("RGBA", (144, 144), (0, 0, 0, 0))
     g = ImageDraw.Draw(big)
-    gold, dark, c, r = (255, 209, 0, 255), (0, 0, 0, 255), 72, 52
-    for col, wd, rr in ((dark, 18, r), (gold, 11, r)):  # black outline under the yellow lines
-        g.ellipse((c - rr, c - rr, c + rr, c + rr), outline=col, width=wd)
-        g.ellipse((c - rr // 2 - 6, c - rr, c + rr // 2 + 6, c + rr), outline=col, width=wd - 3)  # meridian
-        g.line((c - rr, c, c + rr, c), fill=col, width=wd - 2)  # equator
+    gold, dark, c, r, L = (255, 209, 0, 255), (0, 0, 0, 255), 72, 34, 68
+    for col, grow in ((dark, 5), (gold, 0)):  # black outline first, then the yellow lines on top
+        for dx, dy in ((0, -1), (1, 0), (0, 1), (-1, 0)):  # four spikes (north, east, south, west) like a compass star
+            nx, ny, hw = -dy, dx, 9 + grow
+            bx, by = c + dx * (r - 2), c + dy * (r - 2)
+            g.polygon([(bx + nx * hw, by + ny * hw), (c + dx * (L + grow), c + dy * (L + grow)), (bx - nx * hw, by - ny * hw)], fill=col)
+        w = 8 + 2 * grow
+        g.ellipse((c - r, c - r, c + r, c + r), outline=col, width=w)
+        g.ellipse((c - r // 2, c - r, c + r // 2, c + r), outline=col, width=w - 2)  # meridian
+        g.line((c - r, c, c + r, c), fill=col, width=w - 2)  # equator
     out.alpha_composite(big.resize((36, 36), Image.LANCZOS), (14, 14))
     if state == "down":  # pressed: the icon dims slightly, like a pushed action button
         dim = Image.new("RGBA", (36, 36), (0, 0, 0, 90))
