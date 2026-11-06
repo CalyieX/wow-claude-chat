@@ -82,3 +82,25 @@ def submit(code: str) -> str:
         return "Code sent, the login is still working. Ask again in a moment."
     ok = _running[0].returncode == 0
     return "Logged in again. Ask your question again." if ok else "That code did not work. Type /login to start over."
+
+
+_NET = re.compile(r"timed? ?out|connection|could not resolve|getaddrinfo|network|unreachable|ssl|econn|enotfound|name or service", re.I)
+_KEY = re.compile(r"api key|invalid.*key|incorrect.*key|\b40[13]\b|forbidden|permission|quota|insufficient|billing|rate limit|\b429\b", re.I)
+
+
+def explain(exc: Exception) -> str:
+    """One plain sentence for the chat: what went wrong and what to do (never just 'it does not answer')."""
+    text = str(exc)
+    if isinstance(exc, claude.AskTimeout) or re.search(r"timed? ?out", text, re.I) and "connect" not in text.lower():
+        return "The AI took too long to answer. Ask again, or try a shorter question."
+    if is_auth_error(text):
+        if command():
+            return "Your AI login has expired. " + start()  # the login page opens by itself
+        return "The AI refused the login or key. Open /wac, choose Connect AI and check it."
+    if _KEY.search(text):
+        return "The AI service refused the request (key, quota or limit). Open /wac, choose Connect AI and check the key and your balance."
+    if _NET.search(text):
+        return "No connection to the AI service. Check your internet connection and ask again."
+    if "not found" in text.lower():
+        return "The AI program was not found. Open /wac and choose Connect AI to pick another one."
+    return "The AI did not answer (" + text.strip().replace(chr(10), " ")[:90] + "). Open /wac and choose Connect AI if it keeps happening."

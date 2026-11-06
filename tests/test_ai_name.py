@@ -196,3 +196,31 @@ def test_setup_page_has_no_name_field_and_keeps_menu_name():
     cfg = config.load(); cfg["name"] = "Gandalf"; config.save(cfg)
     setup_ui.apply({"backend": "claude"})
     assert config.load().get("name") == "Gandalf"
+
+
+def test_errors_are_explained_in_plain_words(monkeypatch):
+    from wowclaude import login, claude, backends
+    monkeypatch.setattr(login, "command", lambda: None)
+    assert "too long" in login.explain(claude.AskTimeout("x"))
+    assert "login or key" in login.explain(RuntimeError("401 Unauthorized"))
+    assert "balance" in login.explain(RuntimeError("HTTP 429 rate limit"))
+    assert "internet" in login.explain(RuntimeError("getaddrinfo failed"))
+    assert "not found" in login.explain(RuntimeError("the 'codex' command was not found"))
+    assert "did not answer" in login.explain(RuntimeError("something odd"))
+
+
+def test_login_code_is_sent_to_the_waiting_login(monkeypatch):
+    from wowclaude import login
+    class P:
+        returncode = 0
+        def __init__(self): self.got = ""; self.stdin = self
+        def poll(self): return None
+        def write(self, t): self.got += t
+        def flush(self): pass
+        def wait(self, t): self.returncode = 0
+    proc = P()
+    login._running[:] = [proc]
+    assert "Logged in" in login.submit("abc123")
+    assert proc.got == "abc123\n"
+    login._running[:] = []
+    assert "No login" in login.submit("x")

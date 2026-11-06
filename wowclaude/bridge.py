@@ -185,10 +185,7 @@ def run(root: Path, poll: float = 0.6) -> None:
                 reply = cmd_reply if cmd_reply is not None else session.ask(question, config.load().get("model"))
             except Exception as exc:  # noqa: BLE001 - tell the player, keep running
                 from . import login
-                if login.is_auth_error(str(exc)) and login.command():
-                    reply = "Your AI login has expired. " + login.start()  # the login page opens by itself
-                else:
-                    reply = "Die KI antwortet gerade nicht. Tippe /wac und klick auf KI verbinden. (" + str(exc)[:80] + ")"
+                reply = login.explain(exc)
             print(f"< {reply}", flush=True)
             try:
                 deliver(state, reply)
