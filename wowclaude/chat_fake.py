@@ -192,6 +192,48 @@ def _log(text: str) -> None:
         pass
 
 
+def type_into_game(text: str) -> None:
+    """Real keyboard input (SendInput) for the game: Enter, the text, Enter. The dock never takes the focus, so the game
+    still has it. Messages posted to the window are ignored by the game's chat box, real input is not."""
+    import ctypes
+    from ctypes import wintypes
+
+    class KI(ctypes.Structure):
+        _fields_ = [("wVk", wintypes.WORD), ("wScan", wintypes.WORD), ("dwFlags", wintypes.DWORD), ("time", wintypes.DWORD),
+                    ("dwExtraInfo", ctypes.c_size_t)]
+
+    class MI(ctypes.Structure):
+        _fields_ = [("dx", wintypes.LONG), ("dy", wintypes.LONG), ("mouseData", wintypes.DWORD), ("dwFlags", wintypes.DWORD),
+                    ("time", wintypes.DWORD), ("dwExtraInfo", ctypes.c_size_t)]
+
+    class IU(ctypes.Union):
+        _fields_ = [("ki", KI), ("mi", MI)]
+
+    class IN(ctypes.Structure):
+        _fields_ = [("type", wintypes.DWORD), ("u", IU)]
+
+    def send(vk: int = 0, ch: str = "") -> None:
+        for up in (0, 2):
+            if ch:
+                ki = KI(0, ord(ch), 0x4 | up, 0, 0)  # KEYEVENTF_UNICODE
+            else:
+                ki = KI(vk, 0x1C if vk == 0x0D else 0, up, 0, 0)
+            ctypes.windll.user32.SendInput(1, ctypes.byref(IN(1, IU(ki=ki))), ctypes.sizeof(IN))
+            time.sleep(0.03)
+
+    u = ctypes.windll.user32
+    u.GetForegroundWindow.restype = ctypes.c_void_p
+    game = u.FindWindowW("GxWindowClass", None)
+    if not game or u.GetForegroundWindow() != game:  # never type into another program: the game must have the focus
+        return
+    send(vk=0x0D)
+    time.sleep(0.15)
+    for c in text:
+        send(ch=c)
+    time.sleep(0.1)
+    send(vk=0x0D)
+
+
 class Dock:
     """The always-on WAC button: shown whenever the browser window is not running, click opens it, drag moves it.
     (While the browser window runs it draws its own frame / minimized button, using the same remembered spot.)"""
@@ -222,7 +264,8 @@ class Dock:
         self._layered()
         self._park()
 
-    GEAR = 18  # the gear in the top left corner of the button opens the addon menu
+    GEAR = 14  # the gear inside the button (top left of the dark slot) opens the addon menu
+    OFF = 15
 
     @staticmethod
     def add_gear(img) -> None:
@@ -241,7 +284,7 @@ class Dock:
                 pts.append((c + rad * math.cos(a2), c + rad * math.sin(a2)))
         d.polygon(pts, fill=(255, 210, 40, 255), outline=(30, 20, 0, 255))
         d.ellipse((c - r * 0.3, c - r * 0.3, c + r * 0.3, c + r * 0.3), fill=(40, 26, 0, 255))
-        img.alpha_composite(g.resize((Dock.GEAR, Dock.GEAR), Image.LANCZOS), (0, 0))
+        img.alpha_composite(g.resize((Dock.GEAR, Dock.GEAR), Image.LANCZOS), (Dock.OFF, Dock.OFF))
 
     def _park(self) -> None:
         from PIL import Image
@@ -315,10 +358,9 @@ class Dock:
         if moved and g:
             overlay.save_state(bx=self.pos[0], by=self.pos[1], brel=overlay.to_rel(g, self.pos[0], self.pos[1], 64, 64)[:2])
             self._draw()
-        elif not moved and self.drag_start[0] < self.GEAR and self.drag_start[1] < self.GEAR:  # the gear: open the addon menu
+        elif not moved and self.OFF <= self.drag_start[0] < self.OFF + self.GEAR and self.OFF <= self.drag_start[1] < self.OFF + self.GEAR:  # the gear: open the addon menu
             import threading
-            from . import vinput
-            threading.Thread(target=lambda: vinput.run("keys {Enter}/wac{Enter}"), daemon=True).start()
+            threading.Thread(target=lambda: type_into_game("/wac"), daemon=True).start()
         elif not moved and time.time() - self.busy > 45:  # the browser needs a while to start: no second click starts a second one
             self.busy = time.time()
             import threading
