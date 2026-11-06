@@ -117,3 +117,26 @@ def test_system_prompt_has_version_research_and_tools():
 def test_claude_backend_gets_only_web_tools():
     from wowclaude import claude
     assert claude.WEB_TOOLS == "WebSearch,WebFetch"
+
+
+def test_login_detects_expired_session_errors():
+    from wowclaude import login
+    assert login.is_auth_error("Failed to authenticate: OAuth session expired and could not be refreshed")
+    assert login.is_auth_error("Not logged in - please run codex login")
+    assert not login.is_auth_error("ssh: connect to host port 22: Connection timed out")
+
+
+def test_login_command_follows_backend(monkeypatch):
+    from wowclaude import login, backends, claude
+    monkeypatch.setattr(backends, "name", lambda: "claude")
+    monkeypatch.setattr(claude, "claude_path", lambda: "claude-exe")
+    assert login.command() == ["claude-exe", "auth", "login"]
+    monkeypatch.setattr(backends, "name", lambda: "openrouter")
+    assert login.command() is None
+    assert "key" in login.start()
+
+
+def test_bridge_login_command(monkeypatch):
+    from wowclaude import bridge, login
+    monkeypatch.setattr(login, "start", lambda: "opened")
+    assert bridge.handle_command("!login") == "opened"

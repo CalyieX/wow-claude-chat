@@ -390,6 +390,9 @@ SlashCmdList["KKTAB"] = function()  -- bring the AI tab to the front (used by to
     if tab and FCF_Tab_OnClick then pcall(FCF_Tab_OnClick, tab, "LeftButton") end
   end
 end
+SLASH_KKLOGIN1 = "/login"
+SlashCmdList["KKLOGIN"] = function(msg) sendToClaude((("!login " .. (msg or "")):gsub("%s+$", ""))) end
+
 SLASH_KKBROWSER1 = "/browser"
 SLASH_KKBROWSER2 = "/wb"
 SlashCmdList["KKBROWSER"] = function(msg)
@@ -451,6 +454,7 @@ local COMMANDS = {
   "/nameai Name  -  KI umbenennen (leer = WoW AI)",
   "/nameme Name  -  wie die KI dich nennt (leer = kein Name)",
   "/browser [url]  -  Browser oeffnen  (/browser off = zu)",
+  "/login [code]  -  KI-Login erneuern (Seite oeffnet im Browser)",
   "/wm Name~Zeile1\\nZeile2  -  Makro anlegen",
   "/strip always|auto|off  -  AI strip on/auto/off",
   "/strip move X Y  -  AI Strip an Pixel X,Y setzen  |  /strip reset = Ecke",
@@ -486,6 +490,10 @@ local TIPS = {
   " ",
   "Der KI-Tab darf frei bewegt und vergroessert werden.",
   "Spiel im Fenster- oder Rahmenlos-Modus, nicht Vollbild.",
+  " ",
+  "Login laeuft ab? Mit Claude Code einmal `claude setup-token`",
+  "ausfuehren: das ist ein Jahres-Login. Oder auf der KI-Seite den",
+  "Eintrag 'Let my own AI set this up' nutzen: die KI macht es.",
 }
 local tipFrame = CreateFrame("Frame", "KKTipFrame", UIParent, "BackdropTemplate")
 tipFrame:SetSize(430, 44 + #TIPS * 16)

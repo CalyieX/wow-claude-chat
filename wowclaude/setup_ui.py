@@ -98,7 +98,7 @@ def ai_prompt() -> str:
             "in the environment variable named for the service (e.g. OPENROUTER_API_KEY) rather than in the file. "
             "Tip: set up a long-lived login so it does not expire every few weeks - for Claude Code run `claude setup-token` "
             "(a login valid for a year) and store the token it prints in the environment variable CLAUDE_CODE_OAUTH_TOKEN; "
-            "for other services create a long-lived API key. "
+            "for other services create a long-lived API key. If my login has expired, set this up yourself: run the command, the user only has to confirm in the browser window it opens. "
             "Afterwards run: py -3 -m wowclaude doctor --deep  and tell me whether the AI answered.")
 
 

@@ -48,6 +48,9 @@ def handle_command(text: str) -> str | None:
         if problem:
             return "Browser did not open: " + problem
         return "Browser closed." if closing else "Browser opened."
+    if cmd == "!login":
+        from . import login
+        return login.submit(arg) if arg else login.start()
     if cmd == "!setup":
         from . import overlay, setup_ui
         url = setup_ui.start_background()
@@ -181,7 +184,11 @@ def run(root: Path, poll: float = 0.6) -> None:
                 cmd_reply = handle_command(state.message) if state.message.lstrip().startswith("!") else None
                 reply = cmd_reply if cmd_reply is not None else session.ask(question, config.load().get("model"))
             except Exception as exc:  # noqa: BLE001 - tell the player, keep running
-                reply = "Die KI antwortet gerade nicht. Tippe /wac und klick auf KI verbinden. (" + str(exc)[:80] + ")"
+                from . import login
+                if login.is_auth_error(str(exc)) and login.command():
+                    reply = "Your AI login has expired. " + login.start()  # the login page opens by itself
+                else:
+                    reply = "Die KI antwortet gerade nicht. Tippe /wac und klick auf KI verbinden. (" + str(exc)[:80] + ")"
             print(f"< {reply}", flush=True)
             try:
                 deliver(state, reply)

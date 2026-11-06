@@ -551,7 +551,7 @@ def slot_sprite(state: str = ""):
 
     out = Image.new("RGBA", (64, 64), (0, 0, 0, 0))
     out.alpha_composite(_art("UI-Quickslot.png"))
-    out.alpha_composite(Image.new("RGBA", (36, 36), (88, 88, 92, 255)), (14, 14))  # plain grey background (no icon)
+    out.alpha_composite(Image.new("RGBA", (36, 36), (16, 34, 92, 255)), (14, 14))  # plain dark blue background (no icon)
     out.alpha_composite(_art("UI-Quickslot2.png"))
     from PIL import ImageDraw  # a yellow globe (the browser symbol), drawn 4x larger and scaled down for smooth lines
     big = Image.new("RGBA", (144, 144), (0, 0, 0, 0))
