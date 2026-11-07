@@ -14,7 +14,7 @@ from ctypes import wintypes
 
 from PIL import Image, ImageDraw
 
-from . import chat_marks, config, overlay
+from . import chat_marks, chat_scroll, config, overlay
 
 EVENTS = config.HOME / "chat_events.jsonl"
 MAX_ENTRIES = 300
@@ -150,7 +150,7 @@ def paint(entries: list[tuple[str, str]], size: tuple[int, int], scroll: int = 0
         d.rectangle((0, size[1] - MARK_HOLE, fsize + MARK_HOLE, size[1] - 1), fill=(0, 0, 0, 0))
         return img
     # no background of its own: the real tab's see-through background shows, like a normal chat tab
-    img = chat_marks.render(entries, size, scroll=scroll, bg=(0, 0, 0, 0), shadow=True, font_size=fsize)
+    img = chat_marks.render(entries, size, scroll=scroll, bg=(0, 0, 0, 0), shadow=True, font_size=fsize, bar_w=chat_scroll.BAR_W)
     d = ImageDraw.Draw(img)
     d.rectangle((0, 0, MARK_HOLE - 1, MARK_HOLE - 1), fill=(0, 0, 0, 0))
     d.rectangle((size[0] - MARK_HOLE, 0, size[0] - 1, MARK_HOLE - 1), fill=(0, 0, 0, 0))
@@ -407,6 +407,10 @@ def run(poll: float = 0.25, find_every: float = 0.5) -> None:
                                ctypes.c_int, ctypes.c_uint]
     park = lambda: overlay.update_layered(hwnd, Image.new('RGBA', (1, 1), (0, 0, 0, 0)), -100, -100)
     misses = 0
+    try:
+        chat_scroll.start_hook()  # mouse wheel and scroll bar over the painted tab (read-only watching)
+    except Exception as exc:  # noqa: BLE001 - scrolling is a convenience
+        _log(f'scroll hook failed: {exc!r}')
     park()  # invisible until the tab is found (hiding the window itself made Tk lose it)
     entries: list[tuple[str, str]] = []
     offset = EVENTS.stat().st_size if EVENTS.exists() else 0
@@ -431,6 +435,7 @@ def run(poll: float = 0.25, find_every: float = 0.5) -> None:
         events, offset = read_new(offset)
         if events:
             entries = apply_events(entries, events)
+            chat_scroll.STATE["scroll"] = 0  # a new line: back to the bottom, like the game's own chat
             shown_key = None
         now = time.time()
         if now - last_find >= find_every:
@@ -457,13 +462,23 @@ def run(poll: float = 0.25, find_every: float = 0.5) -> None:
                 shown_key = None
             time.sleep(poll)
             continue
-        key = (frame, len(entries), entries[-1] if entries else None, fs)
+        w, h = frame[2] - frame[0], frame[3] - frame[1]
+        if not (entries and entries[-1][0] == "cli"):
+            rows, fit = chat_marks.row_metrics(entries, (w, h), fs, chat_scroll.BAR_W)
+            chat_scroll.STATE.update(frame=frame, rows=rows, fit=fit)
+            chat_scroll.STATE["scroll"] = chat_scroll.clamp(chat_scroll.STATE["scroll"], rows, fit)
+        else:
+            chat_scroll.STATE.update(frame=None, rows=0, fit=1, scroll=0)
+        chat_scroll.STATE["dirty"] = False
+        key = (frame, len(entries), entries[-1] if entries else None, fs, chat_scroll.STATE["scroll"])
         if key != shown_key or not visible:
             shown_key = key
-            w, h = frame[2] - frame[0], frame[3] - frame[1]
             report_tab_size((w, h), fs)
-            print(f'paint {frame} entries={len(entries)}', flush=True)
-            overlay.update_layered(hwnd, paint(entries, (w, h), fsize=fs), frame[0], frame[1])
+            print(f'paint {frame} entries={len(entries)} scroll={chat_scroll.STATE["scroll"]}', flush=True)
+            overlay.update_layered(hwnd, paint(entries, (w, h), scroll=chat_scroll.STATE["scroll"], fsize=fs), frame[0], frame[1])
             visible = True
             u.SetWindowPos(hwnd, -1, 0, 0, 0, 0, 0x1 | 0x2 | 0x10)  # topmost: NOSIZE|NOMOVE|NOACTIVATE
-        time.sleep(poll)
+        for _ in range(max(1, int(poll / 0.02))):  # short naps: a wheel notch is shown within ~20 ms
+            if chat_scroll.STATE["dirty"]:
+                break
+            time.sleep(0.02)

@@ -111,22 +111,39 @@ def default_font(size: int = 17):
 COLOURS = {"user": (255, 255, 153), "ai": (153, 217, 255), "sys": (170, 170, 170), "think": (200, 200, 120)}
 
 
+def row_metrics(entries: list[tuple[str, str]], size: tuple[int, int], font_size: int = 17, bar_w: int = 0,
+                font=None) -> tuple[int, int]:
+    """(wrapped rows in all, rows that fit on screen) for a box of ``size``; ``bar_w`` px on the right stay free."""
+    font = font or default_font(font_size)
+    lh = int(font.size * 1.3) if hasattr(font, "size") else 16
+    n = sum(len(wrap(text, size[0] - 12 - bar_w, font)) for _kind, text in entries)
+    return n, max(1, (size[1] - 8) // lh)
+
+
 def render(entries: list[tuple[str, str]], size: tuple[int, int], font=None, scroll: int = 0,
-           bg: tuple = (12, 12, 16, 255), shadow: bool = False, font_size: int = 17) -> Image.Image:
-    """Dark box ``size`` with the newest entries at the bottom. ``entries`` = [(kind, text)]; ``scroll`` = lines up."""
+           bg: tuple = (12, 12, 16, 255), shadow: bool = False, font_size: int = 17, bar_w: int = 0) -> Image.Image:
+    """Dark box ``size`` with the newest entries at the bottom. ``entries`` = [(kind, text)]; ``scroll`` = lines up.
+    With ``bar_w`` > 0 a scroll bar in the game's style is drawn on the right when there is more text than fits."""
     font = font or default_font(font_size)
     img = Image.new("RGBA", size, bg)
     draw = ImageDraw.Draw(img, "RGBA")
     lh = int(font.size * 1.3) if hasattr(font, "size") else 16
     rows: list[tuple[str, str]] = []
     for kind, text in entries:
-        rows += [(kind, ln) for ln in wrap(text, size[0] - 12, font)]
+        rows += [(kind, ln) for ln in wrap(text, size[0] - 12 - bar_w, font)]
     fit = max(1, (size[1] - 8) // lh)
-    end = len(rows) - max(0, scroll)
+    scroll = max(0, min(scroll, max(0, len(rows) - fit)))
+    end = len(rows) - scroll
     shown = rows[max(0, end - fit):max(0, end)]
     top = size[1] - 4 - len(shown) * lh  # newest line at the bottom, like a chat
     for i, (kind, ln) in enumerate(shown):
         if shadow:
             draw.text((7, top + i * lh + 1), ln, fill=(0, 0, 0, 255), font=font)
         draw.text((6, top + i * lh), ln, fill=COLOURS.get(kind, (255, 255, 255)) + (255,), font=font)
+    if bar_w and len(rows) > fit:
+        from .wowframe import scroll_image
+        h = size[1] - 2 * bar_w  # leave room for the corner marks the program reads
+        first = max(0, end - fit) / len(rows)
+        last = end / len(rows)
+        img.alpha_composite(scroll_image(bar_w, h, first, last), (size[0] - bar_w - 2, bar_w))
     return img
