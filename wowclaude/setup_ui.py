@@ -124,7 +124,8 @@ def _state() -> dict:
     except OSError:
         pass
     return {"backends": ["claude", "codex", "command", "openai-compatible", *backends.PRESETS],
-            "backend": backends.name(), "model": cfg.get("model", ""), "base_url": cfg.get("base_url", ""),
+            "backend": backends.name(), "backend_set": str(cfg.get("backend") or ""),
+            "model": (cfg.get("models") or {}).get(cfg.get("backend") or "") or cfg.get("model", ""), "base_url": cfg.get("base_url", ""),
             "command": cfg.get("command", ""), "has_key": bool(cfg.get("api_key")), "has_token": bool(cfg.get("claude_token")),
             "name": name, "persona": rest.strip("\n"), "found": backends.detect(), "prompt": ai_prompt(),
             "harness": claude.custom_harness() or claude.builtin_harness(), "harness_custom": claude.custom_harness() is not None,
@@ -141,6 +142,8 @@ def apply(data: dict) -> dict:
     """Write the settings from the page into config.json / persona.txt and report whether the backend is usable."""
     cfg = config.load()
     backend = str(data.get("backend", "claude")).strip().lower()
+    if not backend:
+        return {"ok": False, "status": "Choose an AI first: press Search and click one, or click a name under Other AIs."}
     if backend not in ["claude", "codex", "command", "openai-compatible", *backends.PRESETS]:
         return {"ok": False, "status": f"Unknown backend: {backend}"}
     cfg["backend"] = backend
@@ -150,6 +153,15 @@ def apply(data: dict) -> dict:
             cfg[k] = v
         else:
             cfg.pop(k, None)
+    models = dict(cfg.get("models") or {})  # the Harness window keeps the model per AI here: both places must say the same
+    if cfg.get("model"):
+        models[backend] = cfg["model"]
+    else:
+        models.pop(backend, None)
+    if models:
+        cfg["models"] = models
+    else:
+        cfg.pop("models", None)
     name = claude.clean_name(cfg.get("name"))  # the name is set in the game menu (AI name), not on this page
     if "name" in data:
         name = claude.clean_name(data.get("name"))

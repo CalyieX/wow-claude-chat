@@ -91,7 +91,7 @@ def run() -> None:
     lab(outer, "Found on this PC (press Search) - click one to use it:").pack(fill="x")
     foundf = tk.Frame(outer, bg=bg)
     foundf.pack(fill="x", pady=(0, 6))
-    backend_var = tk.StringVar(value=st["backend"])
+    backend_var = tk.StringVar(value=st["backend_set"])  # empty until an AI was really chosen: no default dressed up as a choice
     model_var = tk.StringVar(value=st["model"] or "")
     base_var = tk.StringVar(value=st["base_url"] or "")
     key_var = tk.StringVar()
