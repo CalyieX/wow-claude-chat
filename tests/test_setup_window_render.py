@@ -16,6 +16,7 @@ ROOT = Path(__file__).resolve().parents[1]
 
 SCRIPT = r'''
 import json, sys, tkinter as tk
+from tkinter import ttk
 sys.path.insert(0, sys.argv[1])
 module, kwargs = sys.argv[2], json.loads(sys.argv[3])
 from wowclaude import wowframe
@@ -35,7 +36,7 @@ def fake_mainloop(self, n=0):
         for c in w.winfo_children():
             if isinstance(c, tk.Text):
                 out.append(c.get("1.0", "end").strip())
-            elif isinstance(c, tk.Entry):
+            elif isinstance(c, (tk.Entry, ttk.Entry)):
                 out.append("[entry]" + c.get())
             else:
                 try:
@@ -142,6 +143,14 @@ def _fake_ai_server():
     from http.server import BaseHTTPRequestHandler, HTTPServer
 
     class H(BaseHTTPRequestHandler):
+        def do_GET(self):  # the model list
+            body = json.dumps({"data": [{"id": "zeta/big"}, {"id": "alpha/small:free"}, {"id": "openrouter/free"}, {"id": "beta/mid"}]}).encode()
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+
         def do_POST(self):
             self.rfile.read(int(self.headers.get("Content-Length", 0)))
             body = json.dumps({"choices": [{"message": {"content": "OK"}}]}).encode()
@@ -240,3 +249,23 @@ def test_unload_ends_a_running_cli_session_and_blocks_typed_lines(monkeypatch, t
     threading.Thread(target=m._input_loop, args=(m.gen,), daemon=True).start()
     assert stopped.wait(4)
     assert "No AI loaded" in m.send_line("hi")
+
+
+def test_list_models_reads_the_servers_own_list_free_ones_first(tmp_path, monkeypatch):
+    from wowclaude import backends, config
+    _isolated(tmp_path, monkeypatch)
+    srv = _fake_ai_server()
+    try:
+        got = backends.list_models("openai-compatible", f"http://127.0.0.1:{srv.server_port}/v1")
+    finally:
+        srv.shutdown()
+    assert got == ["alpha/small:free", "openrouter/free", "beta/mid", "zeta/big"]
+    assert backends.list_models("openai-compatible", "http://127.0.0.1:1/v1") == []  # nothing there: an honest empty list
+    assert backends.list_models("claude") == ["sonnet", "opus", "haiku"] and config.load() == {}
+
+
+def test_setup_window_has_the_model_list_button_and_the_plain_text_key_note(tmp_path):
+    t = _texts(tmp_path, "setup_window", {"backend": "openrouter", "model": "openrouter/free"})
+    assert "List" in t
+    assert any("saved as plain text in config.json" in x for x in t)
+    assert t[t.index("Model (empty = default)") + 1] == "[entry]openrouter/free"

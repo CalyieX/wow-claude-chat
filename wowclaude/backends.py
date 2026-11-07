@@ -177,6 +177,32 @@ def ask(system: str, history: list[tuple[str, str]], prompt: str, model: str | N
     raise RuntimeError(f"unknown backend {b}")
 
 
+def list_models(backend: str, base_url: str = "", api_key: str = "") -> list[str]:
+    """The models an AI offers right now (real data from its server), free ones first. [] when it cannot be listed."""
+    import json
+    import urllib.request
+    if backend == "claude":
+        return ["sonnet", "opus", "haiku"]
+    preset = PRESETS.get(backend)
+    if backend not in PRESETS and backend != "openai-compatible":
+        return []
+    base = (base_url or (preset[0] if preset else "")).rstrip("/")
+    cfg = config.load()
+    key = api_key or (cfg.get("api_key") if cfg.get("backend") == backend else "") or (os.environ.get(preset[2]) if preset and preset[2] else "")
+    if not base:
+        return []
+    headers = {"User-Agent": "wowclaude/1.0"}
+    if key:
+        headers["Authorization"] = "Bearer " + key
+    try:
+        with urllib.request.urlopen(urllib.request.Request(base + "/models", headers=headers), timeout=15) as r:
+            data = json.loads(r.read().decode("utf-8"))
+    except Exception:  # noqa: BLE001 - offline, wrong key, no such endpoint
+        return []
+    ids = [str(m.get("id")) for m in (data.get("data") if isinstance(data, dict) else data) or [] if isinstance(m, dict) and m.get("id")]
+    return sorted(set(ids), key=lambda i: (not i.endswith(":free") and i != "openrouter/free", i.lower()))
+
+
 def _port_open(port: int, timeout: float = 0.3) -> bool:
     import socket
     try:

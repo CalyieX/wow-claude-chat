@@ -170,13 +170,44 @@ def run() -> None:
             ("API key" + (" (saved)" if st["has_key"] else ""), key_var, "*"),
             ("Year login token" + (" (saved)" if st["has_token"] else ""), tok_var, "*"), ("Command (reads the prompt on stdin)", cmd_var, ""))
     key_e = None
+    model_box = None
     for i, (t, var, sh) in enumerate(rows):
         lab(grid, t).grid(row=i, column=0, sticky="w", pady=2)
-        e = entry(grid, var, sh)
+        if t.startswith("Model"):  # a list that is filled from the AI's own server; typing a name by hand still works
+            from tkinter import ttk
+            e = ttk.Combobox(grid, textvariable=var, values=[])
+            e.bind("<Button-1>", lambda ev, e=e: (win.focus(), e.focus_set()))
+            model_box = e
+        else:
+            e = entry(grid, var, sh)
         e.grid(row=i, column=1, sticky="ew", padx=6, pady=2)
         if t.startswith("API key"):
             key_e = e
     grid.columnconfigure(1, weight=1)
+    key_note = lab(outer, "The key is saved as plain text in config.json on this PC (only your user can read it). "
+                          "Or set it as an environment variable (e.g. OPENROUTER_API_KEY) and leave this empty.", "#b9b093")
+    key_note.pack(fill="x")
+
+    def load_models() -> None:
+        msg.config(text="Asking the AI's server for its models ...", fg=gold)
+
+        def work() -> None:
+            got = backends.list_models(backend_var.get().strip().lower(), base_var.get().strip(), key_var.get().strip())
+
+            def show() -> None:
+                if got:
+                    model_box.config(values=got)
+                    free = sum(1 for g in got if g.endswith(":free"))
+                    msg.config(text=f"{len(got)} models" + (f" ({free} free)" if free else "") + ": open the Model list and pick one.", fg="#7fd17f")
+                else:
+                    msg.config(text="No model list from this AI (offline, wrong key or it has no list). Type a model name by hand.", fg="#e0a060")
+            try:
+                win.root.after(0, show)
+            except Exception:  # noqa: BLE001
+                pass
+        threading.Thread(target=work, daemon=True).start()
+
+    btn(grid, "List", load_models).grid(row=1, column=2, padx=(0, 4), pady=2)
     lab(outer, "Extra instructions (optional, e.g. how it should talk):").pack(fill="x", pady=(6, 0))
     pbox = tk.Frame(outer, bg=bg)
     pbox.pack(fill="x")
