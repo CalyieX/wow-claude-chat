@@ -33,15 +33,15 @@ def test_nothing_to_scroll_when_all_text_fits():
 def test_bar_zones_and_clicks():
     setup()
     l, t, r, b = FRAME
-    x = r + chat_scroll.BAR_X + chat_scroll.BAR_W // 2
+    x = r + chat_scroll.BAR_X + 4  # the bar is 8 px wide, right at the tab's edge
     assert chat_scroll.bar_zone(FRAME, x, t + 5) == "up"
-    assert chat_scroll.bar_zone(FRAME, x, b - 5) == "bottom"
-    assert chat_scroll.bar_zone(FRAME, x, b - chat_scroll.BTN - 5) == "down"
+    assert chat_scroll.bar_zone(FRAME, x, b - 5) == "down"  # at the bottom: no "newest line" button, nothing to jump to
     assert chat_scroll.bar_zone(FRAME, x, t + 50) == "page_up"
-    assert chat_scroll.bar_zone(FRAME, x, b - 50) == "page_down"
     assert chat_scroll.bar_zone(FRAME, l + 10, t + 80) == ""  # on the text
     assert chat_scroll.nudge("click", x, t + 5)  # up arrow
     assert chat_scroll.STATE["scroll"] == chat_scroll.STEP
+    assert chat_scroll.bar_zone(FRAME, x, b - 5) == "bottom"  # scrolled up: the button below the bar is there
+    assert chat_scroll.bar_zone(FRAME, x, b - chat_scroll.JUMP_H - 8) == "down"
     assert chat_scroll.nudge("click", x, b - 5)  # to the newest line
     assert chat_scroll.STATE["scroll"] == 0
 
@@ -82,7 +82,7 @@ def test_game_bar_image_builds_from_pictures(tmp_path):
     old = chat_scroll.ASSETS
     chat_scroll.ASSETS = tmp_path
     try:
-        for kw in ({}, {"w": 16, "btn": 16, "jump": False}):
+        for kw in ({}, {"w": 16, "jump": False}):
             im = chat_scroll.game_bar_image(300, 0.2, 0.5, True, False, **kw)
             assert im is not None and im.size[1] == 300 and im.getbbox() is not None
         assert chat_scroll.bar_image(300, 0.2, 0.5, True, True).getbbox() is not None

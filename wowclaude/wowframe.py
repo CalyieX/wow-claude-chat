@@ -256,7 +256,7 @@ class WowScrollbar:
         state = {"first": 0.0, "last": 1.0, "drag": None}
 
         def track() -> tuple[int, int]:
-            return W, max(W + 10, c.winfo_height() - W)
+            return 19, max(29, c.winfo_height() - 19)  # the game's track: 19 px from both ends
 
         def draw(*_a) -> None:
             h = max(c.winfo_height(), 2 * W + 10)
@@ -265,7 +265,7 @@ class WowScrollbar:
             try:  # the game's own scroll bar pictures, cut from the player's client (see chat_scroll.game_bar_image)
                 from . import chat_scroll, config
                 chat_scroll.ASSETS = config.HOME / "scrollbar"
-                img = chat_scroll.game_bar_image(h, state["first"], state["last"], True, bool(state["drag"]), w=W, btn=W, jump=False)
+                img = chat_scroll.game_bar_image(h, state["first"], state["last"], True, bool(state["drag"]), w=W, jump=False)
             except Exception:  # noqa: BLE001 - pictures missing: the drawn bar
                 img = None
             c.photo = ImageTk.PhotoImage(img or scroll_image(W, h, state["first"], state["last"]))
@@ -277,9 +277,9 @@ class WowScrollbar:
 
         def press(e) -> None:
             h = c.winfo_height()
-            if e.y < W:
+            if e.y < 19:
                 command("scroll", -1, "units")
-            elif e.y > h - W:
+            elif e.y > h - 19:
                 command("scroll", 1, "units")
             else:
                 t0, t1 = track()

@@ -500,7 +500,9 @@ def run(poll: float = 0.25, find_every: float = 0.5) -> None:
                 except OSError:
                     pass
         chat_scroll.STATE["dirty"] = False
-        key = (frame, len(entries), entries[-1] if entries else None, fs, chat_scroll.STATE["scroll"], chat_scroll.STATE.get("thumb"))
+        lvl = chat_scroll.fade_level(time.time(), chat_scroll.cursor_over(frame))
+        chat_scroll.STATE["painted_level"] = lvl
+        key = (frame, len(entries), entries[-1] if entries else None, fs, chat_scroll.STATE["scroll"], chat_scroll.STATE.get("thumb"), lvl)
         if key != shown_key or not visible:
             shown_key = key
             report_tab_size((w, h), fs)
@@ -514,13 +516,14 @@ def run(poll: float = 0.25, find_every: float = 0.5) -> None:
                 end = rows - sc
                 th = chat_scroll.STATE.get("thumb")
                 first = th if th is not None else max(0, end - fit) / rows
-                bar = chat_scroll.bar_image(h, first, first + fit / rows, sc > 0 or th is not None, chat_scroll.DRAG['on'])
-                wide.alpha_composite(bar, (w + chat_scroll.BAR_X, 0))
+                if lvl > 0:
+                    bar = chat_scroll.bar_image(h, first, first + fit / rows, sc > 0 or th is not None, chat_scroll.DRAG['on'], alpha=lvl)
+                    wide.alpha_composite(bar, (w + chat_scroll.BAR_X - chat_scroll.OVERHANG, 0))
                 img = wide
             overlay.update_layered(hwnd, img, frame[0], frame[1])
             visible = True
             u.SetWindowPos(hwnd, -1, 0, 0, 0, 0, 0x1 | 0x2 | 0x10)  # topmost: NOSIZE|NOMOVE|NOACTIVATE
         for _ in range(max(1, int(poll / 0.02))):  # short naps: a wheel notch is shown within ~20 ms
-            if chat_scroll.STATE["dirty"]:
+            if chat_scroll.STATE["dirty"] or chat_scroll.fade_level(time.time(), chat_scroll.cursor_over(chat_scroll.STATE["frame"])) != chat_scroll.STATE.get("painted_level"):
                 break
             time.sleep(0.02)

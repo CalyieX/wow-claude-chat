@@ -9,11 +9,21 @@ import ctypes
 import threading
 from ctypes import wintypes
 
-BAR_X = 2  # gap between the text area and the bar
-BAR_W = 18  # width of the bar (up / down arrows, thumb)
+# Measures of the game's own chat scroll bar (MinimalScrollBar in a chat frame, read from the client's UI files):
+# the bar is 8 px wide and starts right at the chat frame's right edge; the arrows are 17 x 11 px and stick out to both sides;
+# the track runs from 19 px below the top to 19 px above the bottom; the thumb is never shorter than 23 px; the
+# "to the newest line" button (17 x 15) sits below the bar and only exists while the chat is scrolled up.
+BAR_X = 0  # gap between the text area and the bar (the game: none)
+BAR_W = 18  # width of the picture the bar is painted into (8 px bar + the arrows' overhang)
+OVERHANG = 5  # the picture starts this far left of the bar (arrows are wider than the bar)
 EXTRA = BAR_X + BAR_W + 4  # how much wider than the text area the painted window is
 STEP = 3  # lines per wheel notch / arrow click
-BTN = 18  # height of an arrow button
+CELL = 19  # the bar's track starts this far below the top and ends this far above the bottom
+ARROW_H = 11
+JUMP_H = 15  # height of the "to the newest line" button
+BTN = CELL  # (the drawn fallback look uses the same cells)
+FADE_IN = 0.6  # the game shows the bar at 60 % while the mouse is over the chat ...
+FADE_OUT = 2.0  # ... and fades it out over two seconds after the mouse left
 
 STATE: dict = {"thumb": None, "scroll": 0, "frame": None, "rows": 0, "fit": 1, "dirty": False}
 ASSETS = None  # folder with the game's own scroll bar pictures (cut from the player's own client, never shipped); None = drawn look
@@ -38,6 +48,17 @@ def clamp(scroll: int, rows: int, fit: int) -> int:
     return max(0, min(int(scroll), max(0, rows - fit)))
 
 
+def layout(h: int, jump_shown: bool) -> tuple[int, int, int]:
+    """(height of the bar, top of the track, bottom of the track) in a picture ``h`` px high. While the "to the newest
+    line" button is there the bar ends 2 px above it (the game anchors it so)."""
+    bar_h = h - (JUMP_H + 2) if jump_shown else h
+    return bar_h, CELL, bar_h - CELL
+
+
+def is_scrolled() -> bool:
+    return STATE["scroll"] > 0 or STATE["thumb"] is not None
+
+
 def bar_zone(frame, x: int, y: int) -> str:
     """Which part of the bar (it stands right of the text area) the screen point (x, y) is on:
     up, down, bottom (jump to the newest line), page_up, page_down, or ''."""
@@ -45,19 +66,26 @@ def bar_zone(frame, x: int, y: int) -> str:
         return ""
     l, t, r, b = frame
     h = b - t
-    bx0 = (r - l) + BAR_X
-    if not (bx0 <= x - l <= bx0 + BAR_W):
+    left = (r - l) + BAR_X - OVERHANG
+    if not (left <= x - l <= left + BAR_W):
         return ""
     ry = y - t
     if ry < 0 or ry > h:
         return ""
-    if ry < BTN:
-        return "up"
-    if ry > h - BTN:
+    scrolled = is_scrolled()
+    bar_h, t0, t1 = layout(h, scrolled)
+    if scrolled and ry >= h - JUMP_H:
         return "bottom"
-    if ry > h - 2 * BTN:
+    if ry >= bar_h:
+        return ""
+    if ry < t0:
+        return "up"
+    if ry > t1:
         return "down"
-    return "page_up" if ry < (BTN + h - 2 * BTN) / 2 else "page_down"
+    sp = thumb_span(frame)
+    if sp is None:
+        return ""
+    return "page_up" if y < sp[0] else "page_down"
 
 
 def _part(name: str):
@@ -83,50 +111,49 @@ def _put_centered(im, part, axis: float, top: int, cell: int = 0) -> None:
     im.alpha_composite(part, (x, y))
 
 
-def game_bar_image(h: int, first: float, last: float, scrolled: bool, dragging: bool = False, w: int = 0, btn: int = 0,
-                   jump: bool = True):
-    """The bar from the game's own pictures (the look of the real chat scroll bar), or None when they are not there."""
+def game_bar_image(h: int, first: float, last: float, scrolled: bool, dragging: bool = False, w: int = 0,
+                   jump: bool = True, alpha: float = 1.0):
+    """The bar from the game's own pictures, laid out like the game does it (see the measures at the top), or None when
+    the pictures are not there."""
     from PIL import Image
     if ASSETS is None or not (ASSETS / "minimal-scrollbar-arrow-top.png").exists():
         return None
     P = lambda n: _part("minimal-scrollbar-" + n)  # noqa: E731
-    w, btn = w or BAR_W, btn or BTN
+    w = w or BAR_W
     im = Image.new("RGBA", (w, h), (0, 0, 0, 0))
     axis = w / 2  # one axis for everything: arrows, track and thumb are centred on what is visible, not on the picture
-    dn_y = h - (2 if jump else 1) * btn  # top of the down arrow cell
-    t0, t1 = btn, dn_y
-    # track
-    top, bot, mid = P("track-top"), P("track-bottom"), P("track-middle")
+    bar_h, t0, t1 = layout(h, scrolled and jump)
     x = round(axis - 4)
+    top, bot, mid = P("track-top"), P("track-bottom"), P("track-middle")
     if mid is not None and top is not None and bot is not None and t1 - t0 > 16:
         im.alpha_composite(top, (x, t0))
         im.alpha_composite(mid.resize((8, t1 - t0 - 16), Image.NEAREST), (x, t0 + 8))
         im.alpha_composite(bot, (x, t1 - 8))
-    # arrows: top, bottom (down), and the jump-to-the-newest button while scrolled up
     a_up, a_dn = P("arrow-top"), P("arrow-bottom")
     if a_up is not None:
-        _put_centered(im, a_up, axis, 0, btn)
+        _put_centered(im, a_up, axis, 0)
     if a_dn is not None:
-        _put_centered(im, a_dn, axis, dn_y, btn)
+        _put_centered(im, a_dn, axis, bar_h - ARROW_H)
     if scrolled and jump:
         rb = P("arrow-returntobottom")
         if rb is not None:
-            _put_centered(im, rb, axis, h - btn, btn)
-    # thumb
+            _put_centered(im, rb, axis, h - JUMP_H)
     if t1 - t0 > 24 and last - first < 0.999:  # nothing to scroll: no thumb (a full-length thumb looks like a rod)
         kind = "-down" if dragging else ""
-        y0, y1 = thumb_extent(t1 - t0, first, last)  # the game's own rule (see thumb_extent)
+        y0, y1 = thumb_extent(t1 - t0, first, last)
         y0, y1 = t0 + y0, t0 + y1
         tt, tm, tb = P("small-thumb-top" + kind), P("small-thumb-middle" + kind), P("small-thumb-bottom" + kind)
         if tt is not None and tm is not None and tb is not None and y1 - y0 >= 16:
             im.alpha_composite(tt, (x, y0))
             im.alpha_composite(tm.resize((8, y1 - y0 - 16), Image.NEAREST), (x, y0 + 8))
             im.alpha_composite(tb, (x, y1 - 8))
+    if alpha < 0.999:
+        im.putalpha(im.getchannel("A").point(lambda v: int(v * max(0.0, alpha))))
     return im
 
 
-def bar_image(h: int, first: float, last: float, scrolled: bool, dragging: bool = False):
-    real = game_bar_image(h, first, last, scrolled, dragging)
+def bar_image(h: int, first: float, last: float, scrolled: bool, dragging: bool = False, alpha: float = 1.0):
+    real = game_bar_image(h, first, last, scrolled, dragging, alpha=alpha)
     if real is not None:
         return real
     return _drawn_bar_image(h, first, last, scrolled)
@@ -185,7 +212,7 @@ def thumb_span(frame):
         return None
     t = frame[1]
     h = frame[3] - frame[1]
-    t0, t1 = BTN, h - 2 * BTN
+    _bar_h, t0, t1 = layout(h, is_scrolled())
     y0, y1 = thumb_extent(t1 - t0, (rows - sc - fit) / rows, (rows - sc) / rows)
     return t + t0 + y0, t + t0 + y1
 
@@ -196,7 +223,7 @@ def drag_to(y: int) -> bool:
     if not frame or rows <= fit:
         return False
     h = frame[3] - frame[1]
-    t0, t1 = BTN, h - 2 * BTN
+    _bar_h, t0, t1 = layout(h, True)
     visible = fit / rows
     length = min(t1 - t0, max(MIN_THUMB, round(visible * (t1 - t0))))
     pct = max(0.0, min(1.0, (y - DRAG["off"] - frame[1] - t0) / max(1, (t1 - t0) - length)))
@@ -245,6 +272,27 @@ def nudge(kind: str, x: int, y: int) -> bool:
         return False
     STATE["scroll"], STATE["dirty"] = new, True
     return True
+
+
+def cursor_over(frame) -> bool:
+    """Is the mouse pointer over the chat tab or its bar? (only reads the pointer position)"""
+    if not frame:
+        return False
+    pt = wintypes.POINT()
+    if not ctypes.windll.user32.GetCursorPos(ctypes.byref(pt)):
+        return False
+    l, t, r, b = frame
+    return l - 4 <= pt.x <= r + BAR_X + BAR_W and t <= pt.y <= b
+
+
+def fade_level(now: float, over: bool) -> float:
+    """How visible the bar is: FADE_IN while the mouse is over the chat (or the thumb is held), then it fades out over
+    FADE_OUT seconds - the way the game's own chat does it. Quantised, so a repaint only happens when it visibly changes."""
+    if over or DRAG["on"]:
+        STATE["hover_t"] = now
+        return FADE_IN
+    gone = now - STATE.get("hover_t", -1e9)
+    return round(max(0.0, FADE_IN * (1 - gone / FADE_OUT)) / 0.05) * 0.05
 
 
 class _MSLLHOOK(ctypes.Structure):
