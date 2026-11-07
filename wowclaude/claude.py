@@ -473,7 +473,12 @@ class Session:
         from . import backends
         self._sync_harness()
         if backends.name() != "claude":
-            answer = backends.ask("" if own_harness("wow") else persona()[1], self.history, prompt + reminder(), model)
+            if own_harness("wow"):  # plain API / command backends have no folder: the player's own instructions go in as text
+                from . import harness_import
+                system = harness_import.api_system(config.load()) if backends.name() not in ("codex", "command") else ""
+            else:
+                system = persona()[1]
+            answer = backends.ask(system, self.history, prompt + reminder(), model)
             self.history.append((prompt, answer))
             return answer
         exe = claude_path()

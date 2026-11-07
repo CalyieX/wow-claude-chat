@@ -632,3 +632,16 @@ def test_openrouter_default_model_is_free():
     # a new OpenRouter key has no credits: the default must be the free router, a paid default would answer 402
     from wowclaude import backends as _b
     assert _b.PRESETS["openrouter"][1] == "openrouter/free"
+
+
+def test_own_ai_with_api_backend_gets_the_players_instructions(tmp_path, monkeypatch):
+    # plain API backends have no folder: Own AI sends the player's instructions, memory index and skills as the system text
+    from wowclaude import harness_import as hi
+    (tmp_path / "CLAUDE.md").write_text("I am a pirate AI. " + "x" * 30000, encoding="utf-8")
+    (tmp_path / "skills" / "arr").mkdir(parents=True)
+    (tmp_path / "skills" / "arr" / "SKILL.md").write_text("---\nname: arr\ndescription: talk like a pirate\n---\n", encoding="utf-8")
+    text = hi.api_system({"own_config_dir": str(tmp_path)})
+    assert "pirate AI" in text and "- arr: talk like a pirate" in text
+    assert len(text) < 12_000 + 4_000 + 3_000 + 600  # the budget for small models
+    monkeypatch.setattr(hi, "sources", lambda home=None: [])
+    assert hi.api_system({}) == ""

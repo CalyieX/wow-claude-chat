@@ -185,15 +185,16 @@ def _cut(text: str, limit: int) -> str:
     return text if len(text) <= limit else text[:limit].rsplit("\n", 1)[0] + "\n[... cut: too long for the harness]"
 
 
-def render(src: Source, game_part: str) -> str:
+def render(src: Source, game_part: str, instr_max: int = INSTR_MAX, index_max: int = INDEX_MAX,
+           skills_max: int = SKILLS_MAX) -> str:
     """The harness text: the player's own part first, then the game part (so the AI still knows the game and its tools)."""
     parts = []
     instr = _read(src.instructions_file)
     if instr:
-        parts.append(_cut(instr, INSTR_MAX))
+        parts.append(_cut(instr, instr_max))
     index = _read(src.memory_index)
     if index:
-        block = "--- Your own memory (index) ---\n" + _cut(index, INDEX_MAX)
+        block = "--- Your own memory (index) ---\n" + _cut(index, index_max)
         if src.memory_dir:
             block += f"\nThe memory files are in: {src.memory_dir}\nRead the ones you need with your file tools (when AI access is on)."
         parts.append(block)
@@ -201,7 +202,7 @@ def render(src: Source, game_part: str) -> str:
         lines, size = [], 0
         for name, desc, path in src.skills:
             line = f"- {name}: {desc} ({path})" if desc else f"- {name} ({path})"
-            if size + len(line) > SKILLS_MAX:
+            if size + len(line) > skills_max:
                 lines.append(f"[... {len(src.skills) - len(lines)} more skills]")
                 break
             lines.append(line)
@@ -264,3 +265,17 @@ def model_of(backend: str, cfg: dict, home: Path | None = None) -> str:
     from . import backends
     preset = backends.PRESETS.get(backend)
     return preset[1] if preset else backend
+
+
+API_LIMITS = {"instr_max": 12_000, "index_max": 4_000, "skills_max": 3_000}  # a plain API model has no file tools and often a small window
+
+
+def api_system(cfg: dict) -> str:
+    """Own AI for a plain API backend (OpenRouter, OpenAI ...): it has no folder of its own, so the player's instructions,
+    memory index and skill list (the folder chosen in the harness window, else the first one found) go in as the system text."""
+    folder = cfg.get("own_config_dir")
+    src = from_folder(Path(folder)) if folder else None
+    if not src or not src.found():
+        found = sources()
+        src = found[0] if found else None
+    return render(src, "", **API_LIMITS) if src else ""
