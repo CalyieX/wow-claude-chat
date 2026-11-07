@@ -423,6 +423,7 @@ def run(poll: float = 0.25, find_every: float = 0.5) -> None:
             nxt = raw.find(b"\n", offset)
             offset = size if nxt < 0 else nxt + 1
     frame, fs, last_find, shown_key, visible = None, 17, 0.0, None, False
+    hold_rows = None
     ui_ok = True  # False while the addon's marks stay away (loading screen)
     while True:
         try:
@@ -443,7 +444,7 @@ def run(poll: float = 0.25, find_every: float = 0.5) -> None:
         events, offset = read_new(offset)
         if events:
             entries = apply_events(entries, events)
-            chat_scroll.STATE["scroll"] = 0  # a new line: back to the bottom, like the game's own chat
+            hold_rows = chat_scroll.STATE["rows"] if chat_scroll.STATE["scroll"] > 0 else None  # scrolled up: stay on the same lines, like the game's own chat
             shown_key = None
         now = time.time()
         if now - last_find >= find_every:
@@ -474,6 +475,9 @@ def run(poll: float = 0.25, find_every: float = 0.5) -> None:
         if not (entries and entries[-1][0] == "cli"):
             rows, fit = chat_marks.row_metrics(entries, (w, h), fs)
             chat_scroll.STATE.update(frame=frame, rows=rows, fit=fit)
+            if hold_rows is not None:
+                chat_scroll.STATE["scroll"] += max(0, rows - hold_rows)
+                hold_rows = None
             chat_scroll.STATE["scroll"] = chat_scroll.clamp(chat_scroll.STATE["scroll"], rows, fit)
         else:
             chat_scroll.STATE.update(frame=None, rows=0, fit=1, scroll=0)

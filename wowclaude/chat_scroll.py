@@ -115,6 +115,7 @@ def drag_to(y: int) -> bool:
     new = clamp(round(rows - fit - first * rows), rows, fit)
     if new == STATE["scroll"]:
         return False
+    _log(f"drag to {y}: scroll {STATE['scroll']} -> {new}")
     STATE["scroll"], STATE["dirty"] = new, True
     return True
 
@@ -173,22 +174,32 @@ def start_hook() -> threading.Thread | None:
     box: dict = {}
 
     def proc(code, wparam, lparam):
+        block = False
         try:
             if code == 0 and wparam in (WM_MOUSEWHEEL, WM_LBUTTONDOWN, WM_MOUSEMOVE, WM_LBUTTONUP):
                 info = ctypes.cast(lparam, ctypes.POINTER(_MSLLHOOK)).contents
+                x, y = info.pt.x, info.pt.y
+                frame = STATE["frame"]
+                scrollable = bool(frame) and STATE["rows"] > STATE["fit"]
                 if wparam == WM_MOUSEWHEEL:
                     delta = ctypes.c_short((info.mouseData >> 16) & 0xFFFF).value
-                    nudge("wheel_up" if delta > 0 else "wheel_down", info.pt.x, info.pt.y)
+                    nudge("wheel_up" if delta > 0 else "wheel_down", x, y)
+                    block = scrollable and frame[0] <= x <= frame[2] + BAR_X + BAR_W and frame[1] <= y <= frame[3]  # no camera zoom
                 elif wparam == WM_LBUTTONDOWN:
-                    nudge("click", info.pt.x, info.pt.y)
+                    nudge("click", x, y)
+                    block = scrollable and bool(bar_zone(frame, x, y))  # the click belongs to the bar, not the camera
+                    DRAG["swallow_up"] = block
                 elif wparam == WM_MOUSEMOVE:
                     if DRAG["on"]:
-                        drag_to(info.pt.y)
+                        drag_to(y)
                 else:
                     DRAG["on"] = False
-        except Exception:  # noqa: BLE001 - never let a hook callback fail
-            pass
-        return u.CallNextHookEx(None, code, wparam, lparam)  # always pass the event on
+                    block = bool(DRAG.pop("swallow_up", False))
+        except Exception as exc:  # noqa: BLE001 - never let a hook callback fail
+            _log(f"hook error: {exc!r}")
+        if block:
+            return 1  # swallowed: the game never sees it
+        return u.CallNextHookEx(None, code, wparam, lparam)
 
     keep = PROC(proc)
 
