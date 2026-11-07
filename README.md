@@ -17,6 +17,14 @@ game, with saved pages, back/forward/reload, and a see-through mode. It hides wh
 
 ![The in-game browser showing the Warcraft wiki](docs/browser.png)
 
+The AI can also build real macros for you. It answers in the chat tab and the macro lands on your cursor:
+
+![Asking for a macro in the WoW AI chat tab](docs/macro.png)
+
+`/wac` opens the menu (AI setup, browser, CLI window, chat mode, harness ...):
+
+<img src="docs/menu.png" width="220" alt="The /wac menu">
+
 How it works: the addon draws a tiny colour strip in the top-left corner, a Python program on your PC reads it from the
 screen, asks the AI, and hands the answer back through pre-made addon files. By default the game never receives
 keystrokes or commands from this tool. (The return channel is the idea from the MIT-licensed *wow-ai* project.)
