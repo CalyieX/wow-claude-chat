@@ -69,3 +69,22 @@ def test_dragging_the_thumb_scrolls():
     assert chat_scroll.drag_to(sp[0] + 3 - 40)  # up = older lines
     assert chat_scroll.STATE["scroll"] > 0
     chat_scroll.DRAG["on"] = False
+
+
+def test_game_bar_image_builds_from_pictures(tmp_path):
+    from PIL import Image
+    sizes = {"arrow-top": (17, 11), "arrow-bottom": (17, 11), "arrow-returntobottom": (17, 15), "track-top": (8, 8),
+             "track-bottom": (8, 8), "track-middle": (8, 1), "small-thumb-top": (8, 8), "small-thumb-middle": (8, 40),
+             "small-thumb-bottom": (8, 8), "small-thumb-top-down": (8, 8), "small-thumb-middle-down": (8, 40),
+             "small-thumb-bottom-down": (8, 8)}
+    for name, size in sizes.items():
+        Image.new("RGBA", size, (200, 120, 60, 255)).save(tmp_path / f"minimal-scrollbar-{name}.png")
+    old = chat_scroll.ASSETS
+    chat_scroll.ASSETS = tmp_path
+    try:
+        for kw in ({}, {"w": 16, "btn": 16, "jump": False}):
+            im = chat_scroll.game_bar_image(300, 0.2, 0.5, True, False, **kw)
+            assert im is not None and im.size[1] == 300 and im.getbbox() is not None
+        assert chat_scroll.bar_image(300, 0.2, 0.5, True, True).getbbox() is not None
+    finally:
+        chat_scroll.ASSETS = old

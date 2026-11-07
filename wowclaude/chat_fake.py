@@ -506,10 +506,11 @@ def run(poll: float = 0.25, find_every: float = 0.5) -> None:
             report_tab_size((w, h), fs)
             print(f'paint {frame} entries={len(entries)} scroll={chat_scroll.STATE["scroll"]}', flush=True)
             img = paint(entries, (w, h), scroll=chat_scroll.STATE["scroll"], fsize=fs)
-            if chat_scroll.STATE["rows"] > chat_scroll.STATE["fit"]:
+            if True:  # the bar is always there (a full thumb when nothing scrolls), like a normal chat window
                 wide = Image.new("RGBA", (w + chat_scroll.EXTRA, h), (0, 0, 0, 0))
                 wide.paste(img, (0, 0))
                 rows, fit, sc = chat_scroll.STATE["rows"], chat_scroll.STATE["fit"], chat_scroll.STATE["scroll"]
+                rows = max(rows, fit, 1)
                 end = rows - sc
                 th = chat_scroll.STATE.get("thumb")
                 first = th if th is not None else max(0, end - fit) / rows

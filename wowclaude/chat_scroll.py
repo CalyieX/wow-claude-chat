@@ -78,8 +78,8 @@ def game_bar_image(h: int, first: float, last: float, scrolled: bool, dragging: 
     w, btn = w or BAR_W, btn or BTN
     im = Image.new("RGBA", (w, h), (0, 0, 0, 0))
     cx = w // 2
-    bot = h - (2 if jump else 1) * btn  # top of the down arrow's cell
-    t0, t1 = btn, bot
+    dn_y = h - (2 if jump else 1) * btn  # top of the down arrow cell
+    t0, t1 = btn, dn_y
     # track
     top, bot, mid = P("track-top"), P("track-bottom"), P("track-middle")
     x = cx - 4
@@ -92,7 +92,7 @@ def game_bar_image(h: int, first: float, last: float, scrolled: bool, dragging: 
     if a_up is not None:
         im.alpha_composite(a_up, (cx - a_up.width // 2, (btn - a_up.height) // 2))
     if a_dn is not None:
-        im.alpha_composite(a_dn, (cx - a_dn.width // 2, bot + (btn - a_dn.height) // 2))
+        im.alpha_composite(a_dn, (cx - a_dn.width // 2, dn_y + (btn - a_dn.height) // 2))
     if scrolled and jump:
         rb = P("arrow-returntobottom")
         if rb is not None:
