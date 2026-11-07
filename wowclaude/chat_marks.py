@@ -140,10 +140,4 @@ def render(entries: list[tuple[str, str]], size: tuple[int, int], font=None, scr
         if shadow:
             draw.text((7, top + i * lh + 1), ln, fill=(0, 0, 0, 255), font=font)
         draw.text((6, top + i * lh), ln, fill=COLOURS.get(kind, (255, 255, 255)) + (255,), font=font)
-    if bar_w and len(rows) > fit:
-        from .wowframe import scroll_image
-        h = size[1] - 2 * bar_w  # leave room for the corner marks the program reads
-        first = max(0, end - fit) / len(rows)
-        last = end / len(rows)
-        img.alpha_composite(scroll_image(bar_w, h, first, last), (size[0] - bar_w - 2, bar_w))
     return img

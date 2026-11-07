@@ -150,7 +150,7 @@ def paint(entries: list[tuple[str, str]], size: tuple[int, int], scroll: int = 0
         d.rectangle((0, size[1] - MARK_HOLE, fsize + MARK_HOLE, size[1] - 1), fill=(0, 0, 0, 0))
         return img
     # no background of its own: the real tab's see-through background shows, like a normal chat tab
-    img = chat_marks.render(entries, size, scroll=scroll, bg=(0, 0, 0, 0), shadow=True, font_size=fsize, bar_w=chat_scroll.BAR_W)
+    img = chat_marks.render(entries, size, scroll=scroll, bg=(0, 0, 0, 0), shadow=True, font_size=fsize)
     d = ImageDraw.Draw(img)
     d.rectangle((0, 0, MARK_HOLE - 1, MARK_HOLE - 1), fill=(0, 0, 0, 0))
     d.rectangle((size[0] - MARK_HOLE, 0, size[0] - 1, MARK_HOLE - 1), fill=(0, 0, 0, 0))
@@ -407,6 +407,7 @@ def run(poll: float = 0.25, find_every: float = 0.5) -> None:
                                ctypes.c_int, ctypes.c_uint]
     park = lambda: overlay.update_layered(hwnd, Image.new('RGBA', (1, 1), (0, 0, 0, 0)), -100, -100)
     misses = 0
+    chat_scroll.LOG = config.HOME / "scroll.log"
     try:
         chat_scroll.start_hook()  # mouse wheel and scroll bar over the painted tab (read-only watching)
     except Exception as exc:  # noqa: BLE001 - scrolling is a convenience
@@ -464,7 +465,7 @@ def run(poll: float = 0.25, find_every: float = 0.5) -> None:
             continue
         w, h = frame[2] - frame[0], frame[3] - frame[1]
         if not (entries and entries[-1][0] == "cli"):
-            rows, fit = chat_marks.row_metrics(entries, (w, h), fs, chat_scroll.BAR_W)
+            rows, fit = chat_marks.row_metrics(entries, (w, h), fs)
             chat_scroll.STATE.update(frame=frame, rows=rows, fit=fit)
             chat_scroll.STATE["scroll"] = chat_scroll.clamp(chat_scroll.STATE["scroll"], rows, fit)
         else:
@@ -475,7 +476,16 @@ def run(poll: float = 0.25, find_every: float = 0.5) -> None:
             shown_key = key
             report_tab_size((w, h), fs)
             print(f'paint {frame} entries={len(entries)} scroll={chat_scroll.STATE["scroll"]}', flush=True)
-            overlay.update_layered(hwnd, paint(entries, (w, h), scroll=chat_scroll.STATE["scroll"], fsize=fs), frame[0], frame[1])
+            img = paint(entries, (w, h), scroll=chat_scroll.STATE["scroll"], fsize=fs)
+            if chat_scroll.STATE["rows"] > chat_scroll.STATE["fit"] and not (entries and entries[-1][0] == "cli"):
+                wide = Image.new("RGBA", (w + chat_scroll.EXTRA, h), (0, 0, 0, 0))
+                wide.paste(img, (0, 0))
+                rows, fit, sc = chat_scroll.STATE["rows"], chat_scroll.STATE["fit"], chat_scroll.STATE["scroll"]
+                end = rows - sc
+                bar = chat_scroll.bar_image(h, max(0, end - fit) / rows, end / rows, sc > 0)
+                wide.alpha_composite(bar, (w + chat_scroll.BAR_X, 0))
+                img = wide
+            overlay.update_layered(hwnd, img, frame[0], frame[1])
             visible = True
             u.SetWindowPos(hwnd, -1, 0, 0, 0, 0, 0x1 | 0x2 | 0x10)  # topmost: NOSIZE|NOMOVE|NOACTIVATE
         for _ in range(max(1, int(poll / 0.02))):  # short naps: a wheel notch is shown within ~20 ms

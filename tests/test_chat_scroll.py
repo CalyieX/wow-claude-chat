@@ -33,31 +33,27 @@ def test_nothing_to_scroll_when_all_text_fits():
 def test_bar_zones_and_clicks():
     setup()
     l, t, r, b = FRAME
-    x = r - chat_scroll.BAR_W // 2 - 2
-    assert chat_scroll.bar_zone(FRAME, x, t + chat_scroll.BAR_W + 4) == "up"
-    assert chat_scroll.bar_zone(FRAME, x, b - chat_scroll.BAR_W - 4) == "down"
-    assert chat_scroll.bar_zone(FRAME, x, t + 80) == "page_up"
-    assert chat_scroll.bar_zone(FRAME, x, t + 140) == "page_down"
-    assert chat_scroll.bar_zone(FRAME, l + 10, t + 80) == ""
-    assert chat_scroll.nudge("click", x, t + chat_scroll.BAR_W + 4)  # up arrow
+    x = r + chat_scroll.BAR_X + chat_scroll.BAR_W // 2
+    assert chat_scroll.bar_zone(FRAME, x, t + 5) == "up"
+    assert chat_scroll.bar_zone(FRAME, x, b - 5) == "bottom"
+    assert chat_scroll.bar_zone(FRAME, x, b - chat_scroll.BTN - 5) == "down"
+    assert chat_scroll.bar_zone(FRAME, x, t + 50) == "page_up"
+    assert chat_scroll.bar_zone(FRAME, x, b - 50) == "page_down"
+    assert chat_scroll.bar_zone(FRAME, l + 10, t + 80) == ""  # on the text
+    assert chat_scroll.nudge("click", x, t + 5)  # up arrow
     assert chat_scroll.STATE["scroll"] == chat_scroll.STEP
+    assert chat_scroll.nudge("click", x, b - 5)  # to the newest line
+    assert chat_scroll.STATE["scroll"] == 0
 
 
-def test_render_draws_a_bar_only_when_text_overflows():
-    short = [("user", "hi")]
-    long = [("ai", "word " * 400)]
-    size = (400, 160)
-    a = chat_marks.render(short, size, bg=(0, 0, 0, 0), bar_w=16)
-    b = chat_marks.render(long, size, bg=(0, 0, 0, 0), bar_w=16)
-    right = lambda im: im.crop((size[0] - 20, 0, size[0], size[1])).getbbox()
-    assert right(a) is None and right(b) is not None
-    n, fit = chat_marks.row_metrics(long, size, 17, 16)
-    assert n > fit
+def test_bar_image_has_the_size_asked_for():
+    img = chat_scroll.bar_image(200, 0.2, 0.6, True)
+    assert img.size == (chat_scroll.BAR_W, 200) and img.getbbox() is not None
 
 
 def test_scrolled_render_shows_older_lines():
     entries = [("ai", f"line {i}") for i in range(30)]
     size = (400, 160)
-    bottom = chat_marks.render(entries, size, bg=(0, 0, 0, 255), bar_w=16, scroll=0)
-    older = chat_marks.render(entries, size, bg=(0, 0, 0, 255), bar_w=16, scroll=10)
+    bottom = chat_marks.render(entries, size, bg=(0, 0, 0, 255), scroll=0)
+    older = chat_marks.render(entries, size, bg=(0, 0, 0, 255), scroll=10)
     assert bottom.tobytes() != older.tobytes()
