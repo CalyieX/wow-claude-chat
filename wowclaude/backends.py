@@ -28,7 +28,7 @@ PRESETS = {  # name -> (base url, default model, environment variable holding th
     "lmstudio": ("http://localhost:1234/v1", "local-model", None),
     "deepseek": ("https://api.deepseek.com/v1", "deepseek-chat", "DEEPSEEK_API_KEY"),
     "openai": ("https://api.openai.com/v1", "gpt-4o-mini", "OPENAI_API_KEY"),
-    "openrouter": ("https://openrouter.ai/api/v1", "deepseek/deepseek-chat", "OPENROUTER_API_KEY"),
+    "openrouter": ("https://openrouter.ai/api/v1", "openrouter/free", "OPENROUTER_API_KEY"),  # free auto-router: works with a new key without credits
     "groq": ("https://api.groq.com/openai/v1", "llama-3.3-70b-versatile", "GROQ_API_KEY"),
     "mistral": ("https://api.mistral.ai/v1", "mistral-small-latest", "MISTRAL_API_KEY"),
     "gemini": ("https://generativelanguage.googleapis.com/v1beta/openai", "gemini-2.0-flash", "GEMINI_API_KEY"),

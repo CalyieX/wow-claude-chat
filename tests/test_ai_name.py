@@ -626,3 +626,9 @@ def test_cli_window_input_restarts_a_dead_session(monkeypatch, tmp_path):
     with open(tmp_path / "win_in.jsonl", "a", encoding="utf-8") as f:
         f.write('{"raw": "x"}\n')
     assert started.wait(3)
+
+
+def test_openrouter_default_model_is_free():
+    # a new OpenRouter key has no credits: the default must be the free router, a paid default would answer 402
+    from wowclaude import backends as _b
+    assert _b.PRESETS["openrouter"][1] == "openrouter/free"
