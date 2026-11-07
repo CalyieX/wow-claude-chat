@@ -482,7 +482,7 @@ def run(poll: float = 0.25, find_every: float = 0.5) -> None:
         else:
             chat_scroll.STATE.update(frame=None, rows=0, fit=1, scroll=0)
         chat_scroll.STATE["dirty"] = False
-        key = (frame, len(entries), entries[-1] if entries else None, fs, chat_scroll.STATE["scroll"])
+        key = (frame, len(entries), entries[-1] if entries else None, fs, chat_scroll.STATE["scroll"], chat_scroll.STATE.get("thumb"))
         if key != shown_key or not visible:
             shown_key = key
             report_tab_size((w, h), fs)
@@ -493,7 +493,9 @@ def run(poll: float = 0.25, find_every: float = 0.5) -> None:
                 wide.paste(img, (0, 0))
                 rows, fit, sc = chat_scroll.STATE["rows"], chat_scroll.STATE["fit"], chat_scroll.STATE["scroll"]
                 end = rows - sc
-                bar = chat_scroll.bar_image(h, max(0, end - fit) / rows, end / rows, sc > 0)
+                th = chat_scroll.STATE.get("thumb")
+                first = th if th is not None else max(0, end - fit) / rows
+                bar = chat_scroll.bar_image(h, first, first + fit / rows, sc > 0 or th is not None)
                 wide.alpha_composite(bar, (w + chat_scroll.BAR_X, 0))
                 img = wide
             overlay.update_layered(hwnd, img, frame[0], frame[1])

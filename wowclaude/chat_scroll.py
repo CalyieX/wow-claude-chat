@@ -15,7 +15,7 @@ EXTRA = BAR_X + BAR_W + 4  # how much wider than the text area the painted windo
 STEP = 3  # lines per wheel notch / arrow click
 BTN = 18  # height of an arrow button
 
-STATE: dict = {"scroll": 0, "frame": None, "rows": 0, "fit": 1, "dirty": False}
+STATE: dict = {"thumb": None, "scroll": 0, "frame": None, "rows": 0, "fit": 1, "dirty": False}
 LOG = None  # path of a small diagnostic log (set by the overlay): what the hook saw
 
 WM_MOUSEWHEEL, WM_LBUTTONDOWN, WM_MOUSEMOVE, WM_LBUTTONUP = 0x020A, 0x0201, 0x0200, 0x0202
@@ -112,11 +112,14 @@ def drag_to(y: int) -> bool:
     h = frame[3] - frame[1]
     t0, t1 = BTN, h - 2 * BTN
     first = (y - DRAG["off"] - frame[1] - t0) / max(1, t1 - t0)
+    first = max(0.0, min(first, (rows - fit) / rows))  # the thumb follows the mouse exactly, not line by line
     new = clamp(round(rows - fit - first * rows), rows, fit)
-    if new == STATE["scroll"]:
+    if STATE["thumb"] == first:
         return False
-    _log(f"drag to {y}: scroll {STATE['scroll']} -> {new}")
-    STATE["scroll"], STATE["dirty"] = new, True
+    STATE["thumb"], STATE["dirty"] = first, True
+    if new != STATE["scroll"]:
+        _log(f"drag to {y}: scroll {STATE['scroll']} -> {new}")
+        STATE["scroll"] = new
     return True
 
 
@@ -148,6 +151,7 @@ def nudge(kind: str, x: int, y: int) -> bool:
             _log(f"{kind} at {x},{y}: outside (frame={frame})")
         return False
     new = clamp(STATE["scroll"] + delta, STATE["rows"], STATE["fit"])
+    STATE["thumb"] = None
     _log(f"{kind} at {x},{y}: scroll {STATE['scroll']} -> {new}")
     if new == STATE["scroll"]:
         return False
@@ -194,6 +198,7 @@ def start_hook() -> threading.Thread | None:
                         drag_to(y)
                 else:
                     DRAG["on"] = False
+                    STATE["thumb"], STATE["dirty"] = None, True
                     block = bool(DRAG.pop("swallow_up", False))
         except Exception as exc:  # noqa: BLE001 - never let a hook callback fail
             _log(f"hook error: {exc!r}")
