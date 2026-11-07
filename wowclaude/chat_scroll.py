@@ -9,7 +9,7 @@ import ctypes
 import threading
 from ctypes import wintypes
 
-BAR_X = 6  # gap between the text area and the bar
+BAR_X = 2  # gap between the text area and the bar
 BAR_W = 18  # width of the bar (up / down arrows, thumb)
 EXTRA = BAR_X + BAR_W + 4  # how much wider than the text area the painted window is
 STEP = 3  # lines per wheel notch / arrow click
