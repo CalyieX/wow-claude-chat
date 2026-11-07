@@ -75,7 +75,21 @@ def find_frame(img: Image.Image) -> tuple[int, int, int, int] | None:
     return found[0] if found else None
 
 
+_WRAPS: dict = {}
+
+
 def wrap(text: str, width_px: int, font) -> list[str]:
+    """Line breaks for ``text`` (remembered: the same text at the same width is wrapped once, which keeps scrolling smooth)."""
+    key = (text, width_px, id(font))
+    hit = _WRAPS.get(key)
+    if hit is None:
+        if len(_WRAPS) > 2000:
+            _WRAPS.clear()
+        hit = _WRAPS[key] = _wrap(text, width_px, font)
+    return hit
+
+
+def _wrap(text: str, width_px: int, font) -> list[str]:
     lines: list[str] = []
     for para in text.split("\n"):
         cur = ""
