@@ -12,6 +12,11 @@ You: how do I get to the Undercity from Tirisfal?
 Claude: Follow the road south-east to the Ruins of Lordaeron, the elevator is at the entrance.
 ```
 
+**Also in the box:** a small **in-game browser** (wiki, guides, YouTube, even Prime Video) in a WoW-styled window over the
+game, with saved pages, back/forward/reload, and a see-through mode. It hides when you switch to another program.
+
+![The in-game browser showing the Warcraft wiki](docs/browser.png)
+
 How it works: the addon draws a tiny colour strip in the top-left corner, a Python program on your PC reads it from the
 screen, asks the AI, and hands the answer back through pre-made addon files. By default the game never receives
 keystrokes or commands from this tool. (The return channel is the idea from the MIT-licensed *wow-ai* project.)
@@ -49,9 +54,10 @@ If `wowclaude` is not found, use `py -3 -m wowclaude ...`.
 
 `/wac` -> **Open Browser** (or `/browser`, or ask the AI to show a page with `[[play URL]]`) opens a small always-on-top
 Chrome/Edge window over the game, styled like the game's own windows: address bar for URLs or search words, ghost button
-(see-through, clicks go to the game), minimize (becomes a draggable action-bar-style button), close, resize grip.
+(see-through, clicks go to the game), saved pages (arrow down), back / forward / reload, minimize (becomes a draggable action-bar-style button), close, resize grip.
 It starts on Google. It has its own profile (log in to YouTube, Netflix ... once), remembers position and size, follows
-and scales with the game window when you move or resize it, and hides while the game is minimized. Also from a
+and scales with the game window when you move or resize it, and hides while the game is minimized or another
+program is in front (set `"overlay_always_on_top": true` in `~/.wowclaude/config.json` to keep it on top). Also from a
 terminal: `wowclaude overlay https://www.youtube.com --corner br --size 480x270`. If it does not open, see
 `~/.wowclaude/overlay.log`.
 
