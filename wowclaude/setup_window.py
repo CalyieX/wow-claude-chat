@@ -175,7 +175,17 @@ def run() -> None:
         lab(grid, t).grid(row=i, column=0, sticky="w", pady=2)
         if t.startswith("Model"):  # a list that is filled from the AI's own server; typing a name by hand still works
             from tkinter import ttk
-            e = ttk.Combobox(grid, textvariable=var, values=[])
+            style = ttk.Style(win.root)
+            style.theme_use("clam")  # the default theme ignores colours: dark field like the other entries
+            style.configure("Wow.TCombobox", fieldbackground="#1d1a12", background="#2a2418", foreground=fg, arrowcolor=gold,
+                            bordercolor="#5c4a20", lightcolor="#1d1a12", darkcolor="#1d1a12", insertcolor=gold,
+                            selectbackground="#3a2a10", selectforeground=gold)
+            style.map("Wow.TCombobox", fieldbackground=[("readonly", "#1d1a12"), ("focus", "#1d1a12")], foreground=[("focus", fg)])
+            win.root.option_add("*TCombobox*Listbox.background", "#1d1a12")
+            win.root.option_add("*TCombobox*Listbox.foreground", fg)
+            win.root.option_add("*TCombobox*Listbox.selectBackground", "#5c1a10")
+            win.root.option_add("*TCombobox*Listbox.selectForeground", gold)
+            e = ttk.Combobox(grid, textvariable=var, values=[], style="Wow.TCombobox")
             e.bind("<Button-1>", lambda ev, e=e: (win.focus(), e.focus_set()))
             model_box = e
         else:

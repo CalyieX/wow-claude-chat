@@ -12,5 +12,6 @@ def _isolated_home(tmp_path, monkeypatch):
     monkeypatch.setattr(config, "PERSONA", home / "persona.txt")
     monkeypatch.setattr(config, "HARNESS", home / "harness.txt")
     monkeypatch.setattr(config, "SESSION", home / "session.txt")
+    monkeypatch.setattr(config, "LAST_ANSWER", home / "last_answer.json")  # the live status must never be written by a test
     monkeypatch.delenv("WOWCLAUDE_CLAUDE", raising=False)
     monkeypatch.setattr(config, "client_root", lambda *a, **k: (a[0] if a and a[0] else k.get("root")) and __import__("pathlib").Path(a[0] if a and a[0] else k.get("root")))  # never autodetect (and write into) the real game folder

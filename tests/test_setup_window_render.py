@@ -269,3 +269,9 @@ def test_setup_window_has_the_model_list_button_and_the_plain_text_key_note(tmp_
     assert "List" in t
     assert any("saved as plain text in config.json" in x for x in t)
     assert t[t.index("Model (empty = default)") + 1] == "[entry]openrouter/free"
+
+
+def test_no_test_writes_the_real_last_answer_file():
+    """The setup window shows last_answer.json as live data: a test run must never put its own results there."""
+    from wowclaude import config
+    assert config.LAST_ANSWER.parent == config.HOME and "wowclaude-home" in str(config.HOME)
