@@ -435,6 +435,38 @@ def save_state(**kw) -> None:
         pass
 
 
+def icon(kind: str, size: int = 16, color: str = "#ffd100"):
+    """A crisp button picture (drawn big, scaled down): 'left', 'right', 'down' arrows or 'reload'. A PIL image."""
+    from PIL import Image, ImageDraw
+    k = 8
+    S = size * k
+    im = Image.new("RGBA", (S, S), (0, 0, 0, 0))
+    d = ImageDraw.Draw(im)
+    w = int(S * 0.15)
+    c = color
+    if kind in ("left", "right", "down"):
+        pts = {"left": [(0.62, 0.22), (0.36, 0.5), (0.62, 0.78)],
+               "right": [(0.38, 0.22), (0.64, 0.5), (0.38, 0.78)],
+               "down": [(0.22, 0.38), (0.5, 0.64), (0.78, 0.38)]}[kind]
+        pts = [(x * S, y * S) for x, y in pts]
+        d.line(pts, fill=c, width=w, joint="curve")
+        for x, y in (pts[0], pts[-1]):
+            d.ellipse((x - w / 2, y - w / 2, x + w / 2, y + w / 2), fill=c)
+    else:  # reload: an open circle with an arrow head
+        import math
+        m = S * 0.2
+        d.arc((m, m, S - m, S - m), start=20, end=300, fill=c, width=w)
+        th = math.radians(300)  # the arc ends here, running clockwise: the head points along the tangent
+        cx = cy = S / 2
+        r = S / 2 - m - w / 2
+        px, py = cx + r * math.cos(th), cy + r * math.sin(th)
+        tx, ty = -math.sin(th), math.cos(th)  # tangent
+        nx, ny = math.cos(th), math.sin(th)  # outward
+        L, W = S * 0.26, S * 0.2
+        d.polygon([(px + tx * L, py + ty * L), (px + nx * W, py + ny * W), (px - nx * W, py - ny * W)], fill=c)
+    return im.resize((size, size), Image.LANCZOS)
+
+
 def bookmarks() -> list[dict]:
     """The saved pages: [{"title", "url"}], in the order they were added."""
     out = []
@@ -821,10 +853,13 @@ def frame_loop(hwnd: int, x: int, y: int, w: int, h: int, opacity: int, click_th
     var = tk.StringVar(value=saved.get("url", ""))
     if port:
         start_poller(port)
-    def bar_button(glyph, command):
-        btn = tk.Button(bar, text=glyph, command=command, width=2, relief="flat",
-                        bg="#2a2417", fg="#ffd100", activebackground="#5c4a1a", activeforeground="#ffffff",
-                        font=("Arial", 7), bd=0, highlightthickness=0, takefocus=0)
+    pics = {}
+
+    def bar_button(kind, command):
+        from PIL import ImageTk
+        pics[kind] = ImageTk.PhotoImage(icon(kind))
+        btn = tk.Button(bar, image=pics[kind], command=command, relief="flat", width=22,
+                        bg="#2a2417", activebackground="#5c4a1a", bd=0, highlightthickness=0, takefocus=0)
         btn.pack(side="left", fill="y")
         return btn
 
@@ -860,10 +895,10 @@ def frame_loop(hwnd: int, x: int, y: int, w: int, h: int, opacity: int, click_th
         finally:
             m.grab_release()
 
-    bar_button("▾", show_bookmarks)  # saved pages
-    for glyph, step in (("◀", -1), ("▶", 1)):  # back / forward in the page history
+    bar_button("down", show_bookmarks)  # saved pages
+    for glyph, step in (("left", -1), ("right", 1)):  # back / forward in the page history
         bar_button(glyph, lambda st=step: port and in_background(history_step, port, st))
-    bar_button("⟳", lambda: port and in_background(reload_page, port))  # reload
+    bar_button("reload", lambda: port and in_background(reload_page, port))  # reload
     entry = tk.Entry(bar, textvariable=var, bg="#0d0c09", fg="#ffd100", insertbackground="#ffd100", relief="flat",
                      font=("Arial", 9), highlightthickness=1, highlightbackground="#5c5c5c", highlightcolor="#b4b4b4",
                      selectbackground="#5c4a1a", selectforeground="#ffffff")
