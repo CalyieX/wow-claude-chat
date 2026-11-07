@@ -337,11 +337,18 @@ class CliMode:
         if self.window:
             return self._window_loop(gen)
         last = ""
+        checked = 0.0
         while not self.stop_flag and self.gen == gen:
-            self.dirty.wait(0.5)
+            self.dirty.wait(0.05)  # short: the scroll bar over the tab writes cli_scroll.json and wants a quick answer
+            if self._apply_scroll_file():
+                self.dirty.set()
+            if not self.dirty.is_set() and time.time() - checked < 0.5:
+                continue
+            checked = time.time()
             self.dirty.clear()
             self._resize_if_needed()
             text = self._lines()
+            self._publish_state()
             if "Enter to confirm" in text or "Esc to cancel" in text:  # the tool waits for an answer
                 text += chr(10) + "[It asks a question: open the CLI window (/term) or use /k up|down|enter]"
             if "Not logged in" in text or "/login" in text:
@@ -351,9 +358,44 @@ class CliMode:
             if text != last:
                 last = text
                 self._post(text)
-            time.sleep(0.25)  # at most four repaints a second
+            time.sleep(0.08)  # about twelve repaints a second at most
             if not self.running():
                 break
+
+    def _publish_state(self) -> None:
+        """How much there is to scroll in the tab: the scroll bar over the tab (chat_fake) reads this."""
+        with self.lock:
+            top = len(self.screen.history.top)
+            disp = [ln.rstrip() for ln in self.screen.display]
+            while disp and not disp[-1]:
+                disp.pop()
+            state = {"total": top + len(disp), "fit": self.screen.lines, "offset": min(self.offset, top)}
+        if state != getattr(self, "_state_sent", None):
+            self._state_sent = state
+            try:
+                (config.HOME / "cli_state.json").write_text(json.dumps(state), encoding="utf-8")
+            except OSError:
+                pass
+
+    def _apply_scroll_file(self) -> bool:
+        """The scroll bar over the tab asked for a position (cli_scroll.json): True when the view changed."""
+        f = config.HOME / "cli_scroll.json"
+        try:
+            stamp = f.stat().st_mtime_ns
+        except OSError:
+            return False
+        if stamp == getattr(self, "_scroll_stamp", 0):
+            return False
+        self._scroll_stamp = stamp
+        try:
+            want = int(json.loads(f.read_text(encoding="utf-8")).get("offset", 0))
+        except (OSError, ValueError, TypeError):
+            return False
+        with self.lock:
+            new = max(0, min(want, len(self.screen.history.top)))
+            changed = new != self.offset
+            self.offset = new
+        return changed
 
     def _resize_if_needed(self) -> None:
         cols, rows = window_size() if self.window else tab_size()

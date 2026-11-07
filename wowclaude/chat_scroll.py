@@ -68,15 +68,18 @@ def _part(name: str):
         return None
 
 
-def game_bar_image(h: int, first: float, last: float, scrolled: bool, dragging: bool = False):
+def game_bar_image(h: int, first: float, last: float, scrolled: bool, dragging: bool = False, w: int = 0, btn: int = 0,
+                   jump: bool = True):
     """The bar from the game's own pictures (the look of the real chat scroll bar), or None when they are not there."""
     from PIL import Image
     if ASSETS is None or not (ASSETS / "minimal-scrollbar-arrow-top.png").exists():
         return None
     P = lambda n: _part("minimal-scrollbar-" + n)  # noqa: E731
-    im = Image.new("RGBA", (BAR_W, h), (0, 0, 0, 0))
-    cx = BAR_W // 2
-    t0, t1 = BTN, h - 2 * BTN
+    w, btn = w or BAR_W, btn or BTN
+    im = Image.new("RGBA", (w, h), (0, 0, 0, 0))
+    cx = w // 2
+    bot = h - (2 if jump else 1) * btn  # top of the down arrow's cell
+    t0, t1 = btn, bot
     # track
     top, bot, mid = P("track-top"), P("track-bottom"), P("track-middle")
     x = cx - 4
@@ -87,13 +90,13 @@ def game_bar_image(h: int, first: float, last: float, scrolled: bool, dragging: 
     # arrows: top, bottom (down), and the jump-to-the-newest button while scrolled up
     a_up, a_dn = P("arrow-top"), P("arrow-bottom")
     if a_up is not None:
-        im.alpha_composite(a_up, (cx - a_up.width // 2, (BTN - a_up.height) // 2))
+        im.alpha_composite(a_up, (cx - a_up.width // 2, (btn - a_up.height) // 2))
     if a_dn is not None:
-        im.alpha_composite(a_dn, (cx - a_dn.width // 2, h - 2 * BTN + (BTN - a_dn.height) // 2))
-    if scrolled:
+        im.alpha_composite(a_dn, (cx - a_dn.width // 2, bot + (btn - a_dn.height) // 2))
+    if scrolled and jump:
         rb = P("arrow-returntobottom")
         if rb is not None:
-            im.alpha_composite(rb, (cx - rb.width // 2, h - BTN + (BTN - rb.height) // 2))
+            im.alpha_composite(rb, (cx - rb.width // 2, h - btn + (btn - rb.height) // 2))
     # thumb
     if t1 - t0 > 24:
         kind = "-down" if dragging else ""

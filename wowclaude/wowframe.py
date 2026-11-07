@@ -261,7 +261,14 @@ class WowScrollbar:
         def draw(*_a) -> None:
             h = max(c.winfo_height(), 2 * W + 10)
             c.delete("all")
-            c.photo = ImageTk.PhotoImage(scroll_image(W, h, state["first"], state["last"]))
+            img = None
+            try:  # the game's own scroll bar pictures, cut from the player's client (see chat_scroll.game_bar_image)
+                from . import chat_scroll, config
+                chat_scroll.ASSETS = config.HOME / "scrollbar"
+                img = chat_scroll.game_bar_image(h, state["first"], state["last"], True, bool(state["drag"]), w=W, btn=W, jump=False)
+            except Exception:  # noqa: BLE001 - pictures missing: the drawn bar
+                img = None
+            c.photo = ImageTk.PhotoImage(img or scroll_image(W, h, state["first"], state["last"]))
             c.create_image(0, 0, image=c.photo, anchor="nw")
 
         def set_(first, last) -> None:

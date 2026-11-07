@@ -425,6 +425,7 @@ def run(poll: float = 0.25, find_every: float = 0.5) -> None:
             offset = size if nxt < 0 else nxt + 1
     frame, fs, last_find, shown_key, visible = None, 17, 0.0, None, False
     hold_rows = None
+    cli = {"seen": 0, "sent": 0}  # CLI mode: the scroll position the tool reported / that was asked of it
     ui_ok = True  # False while the addon's marks stay away (loading screen)
     while True:
         try:
@@ -480,8 +481,24 @@ def run(poll: float = 0.25, find_every: float = 0.5) -> None:
                 chat_scroll.STATE["scroll"] += max(0, rows - hold_rows)
                 hold_rows = None
             chat_scroll.STATE["scroll"] = chat_scroll.clamp(chat_scroll.STATE["scroll"], rows, fit)
-        else:
-            chat_scroll.STATE.update(frame=None, rows=0, fit=1, scroll=0)
+        else:  # CLI mode: the tool keeps the scrollback; the bar here only asks it to show another part (cli_scroll.json)
+            hold_rows = None
+            try:
+                st = json.loads((config.HOME / "cli_state.json").read_text(encoding="utf-8"))
+                total, fit, off = int(st["total"]), max(1, int(st["fit"])), int(st["offset"])
+            except (OSError, ValueError, KeyError, TypeError):
+                total, fit, off = 0, 1, 0
+            if off != cli["seen"]:  # the tool moved by itself (new output: back to the live screen)
+                cli["seen"] = cli["sent"] = off
+                chat_scroll.STATE["scroll"] = off
+            chat_scroll.STATE.update(frame=frame, rows=total, fit=fit)
+            chat_scroll.STATE["scroll"] = chat_scroll.clamp(chat_scroll.STATE["scroll"], total, fit)
+            if chat_scroll.STATE["scroll"] != cli["sent"]:
+                cli["sent"] = chat_scroll.STATE["scroll"]
+                try:
+                    (config.HOME / "cli_scroll.json").write_text(json.dumps({"offset": cli["sent"]}), encoding="utf-8")
+                except OSError:
+                    pass
         chat_scroll.STATE["dirty"] = False
         key = (frame, len(entries), entries[-1] if entries else None, fs, chat_scroll.STATE["scroll"], chat_scroll.STATE.get("thumb"))
         if key != shown_key or not visible:
@@ -489,7 +506,7 @@ def run(poll: float = 0.25, find_every: float = 0.5) -> None:
             report_tab_size((w, h), fs)
             print(f'paint {frame} entries={len(entries)} scroll={chat_scroll.STATE["scroll"]}', flush=True)
             img = paint(entries, (w, h), scroll=chat_scroll.STATE["scroll"], fsize=fs)
-            if chat_scroll.STATE["rows"] > chat_scroll.STATE["fit"] and not (entries and entries[-1][0] == "cli"):
+            if chat_scroll.STATE["rows"] > chat_scroll.STATE["fit"]:
                 wide = Image.new("RGBA", (w + chat_scroll.EXTRA, h), (0, 0, 0, 0))
                 wide.paste(img, (0, 0))
                 rows, fit, sc = chat_scroll.STATE["rows"], chat_scroll.STATE["fit"], chat_scroll.STATE["scroll"]
