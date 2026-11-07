@@ -26,7 +26,18 @@ local function layout()
   local _, ph = GetPhysicalScreenSize()
   host:SetScale(768 / (ph * UIParent:GetEffectiveScale()))
   host:ClearAllPoints()
-  if KKMapDB.stripX then host:SetPoint("TOPLEFT", UIParent, "BOTTOMLEFT", KKMapDB.stripX, KKMapDB.stripY)
+  if KKMapDB.stripX then
+    local pw, ph = GetPhysicalScreenSize()
+    if KKMapDB.stripY and not KKMapDB.stripDown then  -- old format: height above the bottom edge; now: distance below the top edge
+      local sc = host:GetEffectiveScale()
+      local top = UIParent:GetTop() * UIParent:GetEffectiveScale() / sc
+      KKMapDB.stripDown = top - KKMapDB.stripY
+    end
+    -- stay inside the window, whatever size it has now (fullscreen, smaller, resized)
+    local w, h = (host:GetWidth() or 200), (host:GetHeight() or 40)
+    local x = math.max(0, math.min(KKMapDB.stripX, 700, pw - w))
+    local d = math.max(0, math.min(KKMapDB.stripDown or 29, 460, ph - h))
+    host:SetPoint("TOPLEFT", UIParent, "TOPLEFT", x, -d)
   else host:SetPoint("TOPLEFT", UIParent, "TOPLEFT", 3, -29) end  -- 3 px in: the gold frame stays fully visible
 end
 
@@ -201,8 +212,8 @@ deco:SetScript("OnUpdate", function()
   local x, y = cx / s - 40, cy / s - 13
   local top = UIParent:GetTop() * UIParent:GetEffectiveScale() / s
   x = math.max(0, math.min(x, 700)); y = math.max(top - 460, math.min(y, top))
-  KKMapDB.stripX, KKMapDB.stripY = x, y
-  host:ClearAllPoints(); host:SetPoint("TOPLEFT", UIParent, "BOTTOMLEFT", x, y)
+  KKMapDB.stripX, KKMapDB.stripY, KKMapDB.stripDown = x, y, top - y
+  layout()
 end)
 local function applyVisible()
   local ae = (ChatEdit_GetActiveWindow and ChatEdit_GetActiveWindow()) and true or false
@@ -979,9 +990,10 @@ SlashCmdList["KKMAP"] = function(msg)
     local sc = host:GetEffectiveScale()
     local top = UIParent:GetTop() * UIParent:GetEffectiveScale() / sc
     KKMapDB.stripX, KKMapDB.stripY = math.min(tonumber(mx), 700), top - math.min(tonumber(my), 460)
+    KKMapDB.stripDown = math.min(tonumber(my), 460)
     layout(); return
   end
-  if msg == "reset" then KKMapDB.stripX, KKMapDB.stripY = nil, nil; layout(); print("KKMap: strip back in the corner") return end
+  if msg == "reset" then KKMapDB.stripX, KKMapDB.stripY, KKMapDB.stripDown = nil, nil, nil; layout(); print("KKMap: strip back in the corner") return end
   if msg == "always" then KKMapDB.always = true; KKMapDB.off = false; host:Show(); host:SetAlpha(1); stripOn = true; render(); print("KKMap: strip always visible") return end
   if msg == "auto" then KKMapDB.always = false; KKMapDB.off = false; host:Show(); print("KKMap: strip only when needed") return end
   if msg == "off" then KKMapDB.off = true; host:Hide()
@@ -990,8 +1002,19 @@ SlashCmdList["KKMAP"] = function(msg)
 end
 local ev = CreateFrame("Frame")
 ev:RegisterEvent("PLAYER_LOGIN")
-ev:SetScript("OnEvent", function()
+ev:RegisterEvent("DISPLAY_SIZE_CHANGED")  -- window resized / fullscreen toggled: keep the strip in the picture
+ev:RegisterEvent("UI_SCALE_CHANGED")
+ev:SetScript("OnEvent", function(_, event)
+  if event ~= "PLAYER_LOGIN" then layout() return end
   claudeFrame()  -- creates / finds the AI tab and puts the corner marks on it
   hookEditBoxes()
+  -- Safety net: whatever happens (resize, fullscreen, scale change, a bad saved position), the strip is pulled back
+  -- into the picture within two seconds.
+  C_Timer.NewTicker(2, function()
+    if deco.drag then return end
+    local l, t, r, b = host:GetLeft(), host:GetTop(), host:GetRight(), host:GetBottom()
+    local pl, pt, pr, pb = UIParent:GetLeft(), UIParent:GetTop(), UIParent:GetRight(), UIParent:GetBottom()
+    if not (l and t and r and b and pl and pt and pr and pb) or l < pl or r > pr or b < pb or t > pt then layout() end
+  end)
   if KKMapDB.off then host:Hide() else render() end
 end)
