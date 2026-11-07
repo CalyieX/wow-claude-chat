@@ -172,8 +172,16 @@ def run(tab: str = "wow") -> None:
                 body += ("Live access: this AI runs with its own folder, login, memory and skills - nothing is copied.\n"
                          "Set the switch in the Harness menu to Own to talk to it in the game.\n\n" + harness_import.overview(src))
             else:
-                body += ("No folder with instructions, memory or skills - it answers as the bare model.\n"
-                         "Model, API address and keys: AI Setup (game menu).")
+                text = harness_import.api_system(cfg) if active not in ("codex", "command") else ""
+                if text:  # an API model has no folder of its own: Own mode sends the player's instructions as text
+                    body += (f"Own mode sends your instructions, memory index and skill list as text with every question ({len(text) // 1000 + 1} KB).\n"
+                             "The memory files and skills themselves are not copied.\n")
+                else:
+                    body += "No folder with instructions, memory or skills found - it answers as the bare model.\n"
+                body += "Model, API address and keys: AI Setup (game menu)."
+        if active:
+            modes = {k: ("Own" if cfg.get("own_harness_" + k) else "WoW AI") for k in ("wow", "cli", "win")}
+            body += f"\n\nHarness now:  WoW chat = {modes['wow']}   |   CLI chat = {modes['cli']}   |   CLI window = {modes['win']}"
         if active:
             model_var.set((cfg.get("models") or {}).get(active) or cfg.get("model") or "")
             mrow.pack(side="top", fill="x", pady=(0, 4), before=info)
