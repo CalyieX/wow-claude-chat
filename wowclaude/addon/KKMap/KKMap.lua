@@ -1010,11 +1010,11 @@ ev:SetScript("OnEvent", function(_, event)
   hookEditBoxes()
   -- Safety net: whatever happens (resize, fullscreen, scale change, a bad saved position), the strip is pulled back
   -- into the picture within two seconds.
-  C_Timer.NewTicker(2, function()
+  if C_Timer and C_Timer.NewTicker then C_Timer.NewTicker(2, function()
     if deco.drag then return end
     local l, t, r, b = host:GetLeft(), host:GetTop(), host:GetRight(), host:GetBottom()
     local pl, pt, pr, pb = UIParent:GetLeft(), UIParent:GetTop(), UIParent:GetRight(), UIParent:GetBottom()
     if not (l and t and r and b and pl and pt and pr and pb) or l < pl or r > pr or b < pb or t > pt then layout() end
-  end)
+  end) end
   if KKMapDB.off then host:Hide() else render() end
 end)
