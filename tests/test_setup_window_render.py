@@ -223,3 +223,20 @@ def test_setup_window_shows_off_state_and_the_last_answer(tmp_path):
     t = _texts(tmp_path, "setup_window", {"backend": "cerebras", "model": "m"})
     assert any(x.startswith("Last answer:") and "FAILED (cerebras, m): 402 payment" in x for x in t)
     assert "Unload" in t and "Test now" in t
+
+
+def test_unload_ends_a_running_cli_session_and_blocks_typed_lines(monkeypatch, tmp_path):
+    """Unload must not leave a running command line tool answering: the session ends within a second."""
+    import threading
+    from wowclaude import cli_mode, config
+    monkeypatch.setattr(config, "HOME", tmp_path)
+    monkeypatch.setattr(config, "CONFIG", tmp_path / "config.json")
+    (tmp_path / "win_in.jsonl").write_text("", encoding="utf-8")
+    config.save({"backend": "claude", "ai_off": True})
+    m = cli_mode.CliMode(window=True)
+    stopped = threading.Event()
+    monkeypatch.setattr(m, "running", lambda: True)
+    monkeypatch.setattr(m, "stop", lambda: stopped.set())
+    threading.Thread(target=m._input_loop, args=(m.gen,), daemon=True).start()
+    assert stopped.wait(4)
+    assert "No AI loaded" in m.send_line("hi")

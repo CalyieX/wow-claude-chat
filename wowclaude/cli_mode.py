@@ -265,8 +265,15 @@ class CliMode:
         """Keys typed in the CLI window go straight into the tool."""
         path = config.HOME / "win_in.jsonl"
         pos = path.stat().st_size if path.exists() else 0
+        checked = 0.0
         while not self.stop_flag and self.gen == gen:
             time.sleep(0.05)
+            if time.time() - checked > 1.0:  # "Unload" in the AI setup ends a running tool session too
+                checked = time.time()
+                if not config.ai_loaded() and self.running():
+                    _log("AI unloaded: tool session ended")
+                    self.stop()
+                    return
             try:
                 size = path.stat().st_size
                 if size < pos:
@@ -369,6 +376,8 @@ class CliMode:
 
     # -- player -> terminal -------------------------------------------------------------------------------------
     def send_line(self, text: str) -> str:
+        if not config.ai_loaded():
+            return "No AI loaded. Open AI Setup (/kk) and load one."
         why = self.start() if not self.running() else ""
         if why:
             return why
