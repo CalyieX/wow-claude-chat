@@ -33,7 +33,7 @@ def alive(max_age: float = 4.0) -> bool:
 _MUTEX = []  # keeps the handle of the single-instance lock alive as long as this process runs
 
 
-def single_instance(name: str = "Local\wowclaude-chat-overlay") -> bool:
+def single_instance(name: str = "Local\\wowclaude-chat-overlay") -> bool:
     """True for the first overlay program only. The bridge starts a new one whenever the heartbeat is older than 4 seconds
     (a busy PC is enough), and without this lock the old one kept running too: two programs painting the same chat."""
     import ctypes
