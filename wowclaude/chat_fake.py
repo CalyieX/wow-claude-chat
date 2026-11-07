@@ -408,6 +408,7 @@ def run(poll: float = 0.25, find_every: float = 0.5) -> None:
     park = lambda: overlay.update_layered(hwnd, Image.new('RGBA', (1, 1), (0, 0, 0, 0)), -100, -100)
     misses = 0
     chat_scroll.LOG = config.HOME / "scroll.log"
+    chat_scroll.ASSETS = config.HOME / "scrollbar"
     try:
         chat_scroll.start_hook()  # mouse wheel and scroll bar over the painted tab (read-only watching)
     except Exception as exc:  # noqa: BLE001 - scrolling is a convenience
@@ -495,7 +496,7 @@ def run(poll: float = 0.25, find_every: float = 0.5) -> None:
                 end = rows - sc
                 th = chat_scroll.STATE.get("thumb")
                 first = th if th is not None else max(0, end - fit) / rows
-                bar = chat_scroll.bar_image(h, first, first + fit / rows, sc > 0 or th is not None)
+                bar = chat_scroll.bar_image(h, first, first + fit / rows, sc > 0 or th is not None, chat_scroll.DRAG['on'])
                 wide.alpha_composite(bar, (w + chat_scroll.BAR_X, 0))
                 img = wide
             overlay.update_layered(hwnd, img, frame[0], frame[1])

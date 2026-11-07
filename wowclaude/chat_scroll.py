@@ -16,6 +16,7 @@ STEP = 3  # lines per wheel notch / arrow click
 BTN = 18  # height of an arrow button
 
 STATE: dict = {"thumb": None, "scroll": 0, "frame": None, "rows": 0, "fit": 1, "dirty": False}
+ASSETS = None  # folder with the game's own scroll bar pictures (cut from the player's own client, never shipped); None = drawn look
 LOG = None  # path of a small diagnostic log (set by the overlay): what the hook saw
 
 WM_MOUSEWHEEL, WM_LBUTTONDOWN, WM_MOUSEMOVE, WM_LBUTTONUP = 0x020A, 0x0201, 0x0200, 0x0202
@@ -59,7 +60,62 @@ def bar_zone(frame, x: int, y: int) -> str:
     return "page_up" if ry < (BTN + h - 2 * BTN) / 2 else "page_down"
 
 
-def bar_image(h: int, first: float, last: float, scrolled: bool):
+def _part(name: str):
+    from PIL import Image
+    try:
+        return Image.open(ASSETS / (name + ".png")).convert("RGBA")
+    except (OSError, TypeError):
+        return None
+
+
+def game_bar_image(h: int, first: float, last: float, scrolled: bool, dragging: bool = False):
+    """The bar from the game's own pictures (the look of the real chat scroll bar), or None when they are not there."""
+    from PIL import Image
+    if ASSETS is None or not (ASSETS / "minimal-scrollbar-arrow-top.png").exists():
+        return None
+    P = lambda n: _part("minimal-scrollbar-" + n)  # noqa: E731
+    im = Image.new("RGBA", (BAR_W, h), (0, 0, 0, 0))
+    cx = BAR_W // 2
+    t0, t1 = BTN, h - 2 * BTN
+    # track
+    top, bot, mid = P("track-top"), P("track-bottom"), P("track-middle")
+    x = cx - 4
+    if mid is not None and top is not None and bot is not None and t1 - t0 > 16:
+        im.alpha_composite(top, (x, t0))
+        im.alpha_composite(mid.resize((8, t1 - t0 - 16), Image.NEAREST), (x, t0 + 8))
+        im.alpha_composite(bot, (x, t1 - 8))
+    # arrows: top, bottom (down), and the jump-to-the-newest button while scrolled up
+    a_up, a_dn = P("arrow-top"), P("arrow-bottom")
+    if a_up is not None:
+        im.alpha_composite(a_up, (cx - a_up.width // 2, (BTN - a_up.height) // 2))
+    if a_dn is not None:
+        im.alpha_composite(a_dn, (cx - a_dn.width // 2, h - 2 * BTN + (BTN - a_dn.height) // 2))
+    if scrolled:
+        rb = P("arrow-returntobottom")
+        if rb is not None:
+            im.alpha_composite(rb, (cx - rb.width // 2, h - BTN + (BTN - rb.height) // 2))
+    # thumb
+    if t1 - t0 > 24:
+        kind = "-down" if dragging else ""
+        y0 = t0 + int(first * (t1 - t0))
+        y1 = min(t1, max(y0 + 23, t0 + int(last * (t1 - t0))))
+        y0 = max(t0, y1 - max(23, y1 - y0))
+        tt, tm, tb = P("small-thumb-top" + kind), P("small-thumb-middle" + kind), P("small-thumb-bottom" + kind)
+        if tt is not None and tm is not None and tb is not None and y1 - y0 >= 16:
+            im.alpha_composite(tt, (x, y0))
+            im.alpha_composite(tm.resize((8, y1 - y0 - 16), Image.NEAREST), (x, y0 + 8))
+            im.alpha_composite(tb, (x, y1 - 8))
+    return im
+
+
+def bar_image(h: int, first: float, last: float, scrolled: bool, dragging: bool = False):
+    real = game_bar_image(h, first, last, scrolled, dragging)
+    if real is not None:
+        return real
+    return _drawn_bar_image(h, first, last, scrolled)
+
+
+def _drawn_bar_image(h: int, first: float, last: float, scrolled: bool):
     """The bar in the look of the game's own chat scroll bar: arrows up / down, a thin track with a tan thumb and the
     'to the newest line' button (drawn big, scaled down)."""
     from PIL import Image, ImageDraw

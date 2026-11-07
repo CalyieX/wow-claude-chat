@@ -1004,10 +1004,19 @@ local ev = CreateFrame("Frame")
 ev:RegisterEvent("PLAYER_LOGIN")
 ev:RegisterEvent("DISPLAY_SIZE_CHANGED")  -- window resized / fullscreen toggled: keep the strip in the picture
 ev:RegisterEvent("UI_SCALE_CHANGED")
+ev:RegisterEvent("PLAYER_LOGOUT")  -- also fires on /reload: remember whether the AI tab was in front
 ev:SetScript("OnEvent", function(_, event)
+  if event == "PLAYER_LOGOUT" then
+    local f = chatFrame
+    KKMapDB.aiTabShown = (f ~= nil and f ~= DEFAULT_CHAT_FRAME and SELECTED_CHAT_FRAME == f) or nil
+    return
+  end
   if event ~= "PLAYER_LOGIN" then layout() return end
   claudeFrame()  -- creates / finds the AI tab and puts the corner marks on it
   hookEditBoxes()
+  if KKMapDB.aiTabShown and C_Timer and C_Timer.After then  -- after a /reload the game shows the first tab: bring the AI tab back
+    C_Timer.After(1.5, function() if SlashCmdList["KKTAB"] then SlashCmdList["KKTAB"]() end end)
+  end
   -- Safety net: whatever happens (resize, fullscreen, scale change, a bad saved position), the strip is pulled back
   -- into the picture within two seconds.
   if C_Timer and C_Timer.NewTicker then C_Timer.NewTicker(2, function()
