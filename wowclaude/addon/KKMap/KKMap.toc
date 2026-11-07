@@ -1,7 +1,7 @@
 ## Interface: 11508, 11509, 11510, 20505, 30403, 40402, 40403, 50503, 50504, 16001, 110205, 110207, 120000, 120001
 ## Title: WoW AI Chat
 ## Notes: Chat with an AI (Claude, ChatGPT, Ollama ...) inside the WoW chat. Needs the free companion program: the project page (wow-claude-chat)
-## Version: 1.2
+## Version: 1.3
 ## Category: Chat/Communication
 ## SavedVariables: KKMapDB
 Name.lua
