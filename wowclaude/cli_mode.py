@@ -159,6 +159,8 @@ class CliMode:
         self.dirty = threading.Event()
         self.lock = threading.Lock()
         self.stop_flag = False
+        self.hidden = False  # chat mode: the tool keeps running (its conversation stays) but the tab shows the chat
+        self.repost = False
         self.gen = 0  # one number per start(): the loops of an earlier start end by themselves
 
     # -- lifecycle ---------------------------------------------------------------------------------------------
@@ -202,7 +204,18 @@ class CliMode:
             threading.Thread(target=self._input_loop, args=(gen,), daemon=True).start()
         return ""
 
+    def hide(self) -> None:
+        """Back to the normal chat tab without ending the tool: switching back finds the conversation as it was."""
+        self.hidden = True
+        self._post(None)
+
+    def show(self) -> None:
+        self.hidden = False
+        self.repost = True
+        self.dirty.set()
+
     def stop(self) -> None:
+        self.hidden = False
         self.stop_flag = True
         try:
             if self.proc is not None:
@@ -355,7 +368,9 @@ class CliMode:
                 text += chr(10) + "[Not logged in: type  /login  in the game chat - the sign-in page opens in the game browser]"
             if not self.running():
                 text += "\n[the command line tool ended - type anything to start it again, /aimode chat to leave]"
-            if text != last:
+            if self.repost:
+                self.repost, last = False, ""
+            if text != last and not self.hidden:
                 last = text
                 self._post(text)
             time.sleep(0.08)  # about twelve repaints a second at most
@@ -497,6 +512,9 @@ def set_mode(mode: str) -> str:
         cfg["ai_mode"] = "cli"
         config.save(cfg)
         _write_state()
+        if _cli.running():  # it kept running in the background: show the conversation as it was
+            _cli.show()
+            return "CLI mode on (the conversation is still there). /aimode chat leaves CLI mode."
         why = _cli.start()
         if why:
             return why
@@ -505,7 +523,10 @@ def set_mode(mode: str) -> str:
     cfg.pop("ai_mode", None)
     config.save(cfg)
     _write_state()
-    _cli.stop()
+    if _cli.running():
+        _cli.hide()  # keep the CLI conversation alive for the way back
+    else:
+        _cli.stop()
     return "Chat mode on."
 
 

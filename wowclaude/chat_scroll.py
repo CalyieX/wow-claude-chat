@@ -98,7 +98,7 @@ def game_bar_image(h: int, first: float, last: float, scrolled: bool, dragging: 
         if rb is not None:
             im.alpha_composite(rb, (cx - rb.width // 2, h - btn + (btn - rb.height) // 2))
     # thumb
-    if t1 - t0 > 24:
+    if t1 - t0 > 24 and last - first < 0.999:  # nothing to scroll: no thumb (a full-length thumb looks like a rod)
         kind = "-down" if dragging else ""
         y0 = t0 + int(first * (t1 - t0))
         y1 = min(t1, max(y0 + 23, t0 + int(last * (t1 - t0))))
