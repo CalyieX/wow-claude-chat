@@ -414,7 +414,14 @@ def run(poll: float = 0.25, find_every: float = 0.5) -> None:
         _log(f'scroll hook failed: {exc!r}')
     park()  # invisible until the tab is found (hiding the window itself made Tk lose it)
     entries: list[tuple[str, str]] = []
-    offset = EVENTS.stat().st_size if EVENTS.exists() else 0
+    offset = 0  # replay the recent history, so a restart does not empty the tab
+    if EVENTS.exists():
+        size = EVENTS.stat().st_size
+        offset = max(0, size - 40000)
+        if offset:
+            raw = EVENTS.read_bytes()
+            nxt = raw.find(b"\n", offset)
+            offset = size if nxt < 0 else nxt + 1
     frame, fs, last_find, shown_key, visible = None, 17, 0.0, None, False
     ui_ok = True  # False while the addon's marks stay away (loading screen)
     while True:
