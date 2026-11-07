@@ -645,3 +645,12 @@ def test_own_ai_with_api_backend_gets_the_players_instructions(tmp_path, monkeyp
     assert len(text) < 12_000 + 4_000 + 3_000 + 600  # the budget for small models
     monkeypatch.setattr(hi, "sources", lambda home=None: [])
     assert hi.api_system({}) == ""
+
+
+def test_setup_window_names_the_loaded_ai(monkeypatch):
+    # the setup window must never say "no AI loaded" while config.json has one: it shows backend and model
+    from wowclaude import setup_window
+    monkeypatch.setattr(setup_window.config, "load", lambda: {"backend": "openrouter", "models": {"openrouter": "openrouter/free"}})
+    assert setup_window.current_ai() == "openrouter, model openrouter/free"
+    monkeypatch.setattr(setup_window.config, "load", lambda: {})
+    assert setup_window.current_ai() == ""

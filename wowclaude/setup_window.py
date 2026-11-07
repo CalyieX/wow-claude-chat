@@ -50,6 +50,16 @@ def deep_search() -> list[dict]:
     return found
 
 
+def current_ai() -> str:
+    """The AI that is set in config.json right now, as one line (empty when none was chosen yet)."""
+    from . import harness_import
+    cfg = config.load()
+    backend = cfg.get("backend")
+    if not backend:
+        return ""
+    return f"{backend}, model {harness_import.model_of(backend, cfg)}"
+
+
 def run() -> None:
     import tkinter as tk
     from .wowframe import FramedWindow, WowScrollbar
@@ -101,8 +111,12 @@ def run() -> None:
     def draw_found() -> None:
         for w in foundf.winfo_children():
             w.destroy()
+        now = current_ai()
+        if now:  # the AI that answers right now: never say "no AI" while one is loaded
+            lab(foundf, "Loaded now: " + now, "#7fd17f").pack(fill="x", pady=(0, 4))
         if not found:
-            lab(foundf, "No AI loaded yet. Press Search to look for the AIs on this PC (or enter an API key below).", "#b9b093").pack(fill="x")
+            lab(foundf, ("Press Search to look for other AIs on this PC (or enter an API key below)." if now else
+                         "No AI loaded yet. Press Search to look for the AIs on this PC (or enter an API key below)."), "#b9b093").pack(fill="x")
         for i, f in enumerate(found):
             b = btn(foundf, ("* " if i == 0 else "") + f["label"], lambda f=f: use_found(f))
             b.pack(fill="x", pady=2)
@@ -182,6 +196,7 @@ def run() -> None:
             c = setup_ui._check()
             def show() -> None:
                 msg.config(text=c["status"], fg="#7fd17f" if c["ok"] else "#ff8a80")
+                draw_found()
                 if c["ok"]:
                     load_btn.pack_forget()
                 elif not load_btn.winfo_ismapped():  # the AI did not load: offer to try again without restarting anything
