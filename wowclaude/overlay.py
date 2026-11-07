@@ -353,6 +353,30 @@ def _cdp(port: int, method: str, params: dict) -> bool:
     return True
 
 
+PAGE: dict = {"found": None, "t": 0.0}  # last (ws url, page url) seen by the poller thread; the Tk thread only reads this
+
+
+def start_poller(port: int, every: float = 2.0) -> "threading.Thread":
+    """Ask the browser for its page in the background, so the window never waits on DevTools (it can be slow or stuck)."""
+    import threading
+
+    def loop() -> None:
+        while True:
+            PAGE["found"] = _page_ws(port)
+            PAGE["t"] = time.time()
+            time.sleep(every)
+
+    t = threading.Thread(target=loop, daemon=True, name="overlay-page-poller")
+    t.start()
+    return t
+
+
+def in_background(fn, *args) -> None:
+    """Run a DevTools call off the Tk thread (fire and forget)."""
+    import threading
+    threading.Thread(target=fn, args=args, daemon=True).start()
+
+
 def history_step(port: int, step: int) -> bool:
     """Back (-1) or forward (+1) in the page's history."""
     return _cdp(port, "Runtime.evaluate", {"expression": "history.go(%d)" % (-1 if step < 0 else 1)})
@@ -769,8 +793,10 @@ def frame_loop(hwnd: int, x: int, y: int, w: int, h: int, opacity: int, click_th
     bar.attributes("-topmost", True)
     bar.configure(bg="#2a2417")
     var = tk.StringVar(value=saved.get("url", ""))
+    if port:
+        start_poller(port)
     for glyph, step in (("◀", -1), ("▶", 1)):  # back / forward in the page history
-        btn = tk.Button(bar, text=glyph, command=lambda st=step: port and history_step(port, st), width=2, relief="flat",
+        btn = tk.Button(bar, text=glyph, command=lambda st=step: port and in_background(history_step, port, st), width=2, relief="flat",
                         bg="#2a2417", fg="#ffd100", activebackground="#5c4a1a", activeforeground="#ffffff",
                         font=("Arial", 7), bd=0, highlightthickness=0, takefocus=0)
         btn.pack(side="left", fill="y")
@@ -780,7 +806,8 @@ def frame_loop(hwnd: int, x: int, y: int, w: int, h: int, opacity: int, click_th
     entry.pack(fill="both", expand=True, padx=1, pady=1)
 
     def go(_e=None):
-        if port and navigate(port, var.get()):
+        if port:
+            in_background(navigate, port, var.get())
             root.focus_force()
         return "break"
 
@@ -955,7 +982,7 @@ def frame_loop(hwnd: int, x: int, y: int, w: int, h: int, opacity: int, click_th
             draw()
             if zone(e) == "close":
                 persist()
-                found = _page_ws(port) if port else None
+                found = PAGE["found"] if port else None
                 if found and found[1].startswith(("http://", "https://")):
                     save_state(last_page=found[1])  # closed with X: open this page again next time
                 user32.PostMessageW(wintypes.HWND(hwnd), 0x0010, 0, 0)
@@ -1055,8 +1082,8 @@ def frame_loop(hwnd: int, x: int, y: int, w: int, h: int, opacity: int, click_th
                 place_bar()
             n = cache.get("n", 0) + 1
             cache["n"] = n
-            if port and n % 8 == 0 and root.focus_get() is not entry:  # keep the address bar in sync with the page
-                found = _page_ws(port)
+            if port and n % 4 == 0 and root.focus_get() is not entry:  # keep the address bar in sync with the page
+                found = PAGE["found"]
                 if found and found[1] and found[1] != var.get() and not found[1].startswith("chrome-error"):
                     var.set(found[1])
                 if found and found[1].startswith(("http://", "https://")) and found[1] != load_state().get("last_page"):

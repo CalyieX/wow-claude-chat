@@ -49,11 +49,13 @@ def run(tab: str = "wow") -> None:
              bd=1).pack(side="left", padx=6)
     tk.Button(mrow, text="Set", command=lambda: set_model(), bg="#5c1a10", fg=gold, activebackground="#7d2417", activeforeground=gold,
               relief="solid", bd=1, padx=10).pack(side="left")
-    info = tk.Text(own, bg="#15130e", fg="#f0e6c8", font=("Consolas", 10), wrap="word", bd=1, relief="solid")
-    ibar = WowScrollbar(own, info.yview)
+    ibox = tk.Frame(own, bg="#15130e")
+    info = tk.Text(ibox, bg="#15130e", fg="#f0e6c8", font=("Consolas", 10), wrap="word", bd=1, relief="solid")
+    ibar = WowScrollbar(ibox, info.yview)
     info.configure(yscrollcommand=ibar.set)
     ibar.pack(side="right", fill="y")
     info.pack(side="left", fill="both", expand=True)
+    ibox.pack(side="top", fill="both", expand=True)
     shown = {"tab": "wow"}
 
     def show(tab: str) -> None:
@@ -184,7 +186,7 @@ def run(tab: str = "wow") -> None:
             body += f"\n\nHarness now:  WoW chat = {modes['wow']}   |   CLI chat = {modes['cli']}   |   CLI window = {modes['win']}"
         if active:
             model_var.set((cfg.get("models") or {}).get(active) or cfg.get("model") or "")
-            mrow.pack(side="top", fill="x", pady=(0, 4), before=info)
+            mrow.pack(side="top", fill="x", pady=(0, 4), before=ibox)
         else:
             mrow.pack_forget()
         info.insert("1.0", body)

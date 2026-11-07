@@ -748,6 +748,8 @@ local function buildMenu()
   button("Connect AI", function() sendToClaude("!setup") end, "Opens the setup window: choose your AI (Claude, Codex, ChatGPT ...), sign in, pick the model and the persona.")
   button("Browser", function() sendToClaude("!browser") end, "Opens the game browser window (web pages, YouTube ...) over the game. Yours to use; the AI may use it too.")
   button("CLI window", function() sendToClaude("!term") end, "Opens a real terminal window with its own AI session: arrow keys, scrolling, copy and paste. Its harness is set under Harness.")
+  local YEL, GREY = "|cffffd100", "|cff808080"
+  local modeBtn = button("", function() setCliFlag(""); sendToClaude("!aimode") end, "WoW: the normal game chat, short answers with macros, overlays and memos. CLI: your AI's original command line tool in the chat tab.\n\nNote: chat and CLI are two different sessions with separate memory. The conversation does not carry over when you switch.")
   button("AI name", function() StaticPopup_Show("KKAINAME") end, "The name your AI uses in the chat.")
   button("Your name", function() StaticPopup_Show("KKPLAYERNAME") end, "The name the AI calls you.")
   local stripBtn
@@ -758,8 +760,6 @@ local function buildMenu()
     stripBtn:SetText(stripLabel())
     if applyVisible then applyVisible() end
   end, "The connection strip the AI program reads the game through. Auto: it shows only when needed. Always on: always visible.")
-  local YEL, GREY = "|cffffd100", "|cff808080"
-  local modeBtn = button("", function() setCliFlag(""); sendToClaude("!aimode") end, "WoW: the normal game chat, short answers with macros, overlays and memos. CLI: your AI's original command line tool in the chat tab.\n\nNote: chat and CLI are two different sessions with separate memory. The conversation does not carry over when you switch.")
   local accessBtn = button("", function() setAccessFlag(""); sendToClaude("!access") end, "ON: the AI may use files and programs on this computer. OFF: it can only search the web.")
   refreshLabels = function()
     local cli, acc = stateOf("cli"), stateOf("access")
