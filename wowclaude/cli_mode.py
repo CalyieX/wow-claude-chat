@@ -166,6 +166,8 @@ class CliMode:
         return bool(self.proc is not None and self.proc.isalive())
 
     def start(self) -> str:
+        if not config.ai_loaded():
+            return "No AI loaded. Open AI Setup (/kk) and load one."
         ok, why = available()
         if not ok:
             return why

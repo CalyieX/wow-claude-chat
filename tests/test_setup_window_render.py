@@ -54,7 +54,7 @@ print("@@" + json.dumps(out))
 def _texts(tmp_path, module, config=None, files=None, **kwargs):
     """Every label, button, entry and text-box content of the window, built in a fresh process with `tmp_path` as home."""
     home = tmp_path / "home"
-    (home / ".wowclaude").mkdir(parents=True)
+    (home / ".wowclaude").mkdir(parents=True, exist_ok=True)
     if config is not None:
         (home / ".wowclaude" / "config.json").write_text(json.dumps(config), encoding="utf-8")
     for rel, text in (files or {}).items():
@@ -131,6 +131,95 @@ def test_harness_window_names_loaded_ai_model_and_the_harness_switches(tmp_path)
 
 
 def test_harness_window_api_backend_with_own_folder_says_the_instructions_are_sent(tmp_path):
-    t = _texts(tmp_path, "harness_window", {"backend": "openrouter"}, {".claude/CLAUDE.md": "I am a pirate AI."}, tab="own")
+    t = _texts(tmp_path, "harness_window", {"backend": "openrouter"}, {".claude" + "/CLAUDE.md": "I am a pirate AI."}, tab="own")
     info = next(x for x in t if x.startswith("LOADED:"))
     assert "Own mode sends your instructions" in info and "bare model" not in info
+
+
+def _fake_ai_server():
+    """A tiny OpenAI-style server on localhost: the real HTTP path of an API backend, without any account."""
+    import threading
+    from http.server import BaseHTTPRequestHandler, HTTPServer
+
+    class H(BaseHTTPRequestHandler):
+        def do_POST(self):
+            self.rfile.read(int(self.headers.get("Content-Length", 0)))
+            body = json.dumps({"choices": [{"message": {"content": "OK"}}]}).encode()
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+
+        def log_message(self, *a):
+            pass
+
+    srv = HTTPServer(("127.0.0.1", 0), H)
+    threading.Thread(target=srv.serve_forever, daemon=True).start()
+    return srv
+
+
+def _isolated(tmp_path, monkeypatch):
+    from wowclaude import config
+    monkeypatch.setattr(config, "HOME", tmp_path)
+    monkeypatch.setattr(config, "CONFIG", tmp_path / "config.json")
+    monkeypatch.setattr(config, "PERSONA", tmp_path / "persona.txt")
+    monkeypatch.setattr(config, "LAST_ANSWER", tmp_path / "last_answer.json")
+    monkeypatch.delenv("WOWCLAUDE_BACKEND", raising=False)
+
+
+def test_unload_stops_every_answer_and_loading_again_restores_it(tmp_path, monkeypatch):
+    from wowclaude import claude, config, setup_ui
+    _isolated(tmp_path, monkeypatch)
+    srv = _fake_ai_server()
+    try:
+        base = f"http://127.0.0.1:{srv.server_port}/v1"
+        assert setup_ui.apply({"backend": "openai-compatible", "base_url": base, "model": "m"})["ok"]
+        s = claude.Session()
+        assert s.ask("hi") == "OK"
+        assert setup_ui.unload()["ok"] and not config.ai_loaded()
+        with pytest.raises(RuntimeError, match="No AI loaded"):
+            s.ask("hi")
+        assert config.load()["backend"] == "openai-compatible" and config.load()["model"] == "m"  # settings stay
+        setup_ui.apply({"backend": "openai-compatible", "base_url": base, "model": "m"})  # clicking an AI loads it again
+        assert config.ai_loaded() and s.ask("hi again") == "OK"
+    finally:
+        srv.shutdown()
+
+
+def test_probe_asks_a_real_question_and_records_the_result(tmp_path, monkeypatch):
+    from wowclaude import config, setup_ui
+    _isolated(tmp_path, monkeypatch)
+    srv = _fake_ai_server()
+    try:
+        setup_ui.apply({"backend": "openai-compatible", "base_url": f"http://127.0.0.1:{srv.server_port}/v1", "model": "m"})
+        r = setup_ui.probe()
+        assert r["ok"] and "answered: OK" in r["status"]
+        rec = config.last_answer()
+        assert rec["ok"] and rec["backend"] == "openai-compatible" and rec["model"] == "m" and rec["seconds"] >= 0
+    finally:
+        srv.shutdown()
+    setup_ui.apply({"backend": "openai-compatible", "base_url": "http://127.0.0.1:1/v1", "model": "m"})  # nothing listens there
+    r = setup_ui.probe()
+    assert not r["ok"] and not config.last_answer()["ok"] and config.last_answer()["error"]
+
+
+def test_describe_last_is_plain_about_success_failure_and_nothing_yet():
+    from wowclaude import setup_window
+    assert "none yet" in setup_window.describe_last({}, 100.0)
+    ok = {"t": 90.0, "ok": True, "seconds": 2.5, "backend": "claude", "model": "sonnet"}
+    assert setup_window.describe_last(ok, 100.0) == "Last answer: 10 s ago, ok, 2.5 s (claude, sonnet)"
+    bad = {"t": 0.0, "ok": False, "seconds": 1.0, "backend": "cerebras", "model": "m", "error": "402 payment"}
+    assert setup_window.describe_last(bad, 300.0) == "Last answer: 5 min ago, FAILED (cerebras, m): 402 payment"
+
+
+def test_setup_window_shows_off_state_and_the_last_answer(tmp_path):
+    t = _texts(tmp_path, "setup_window", {"backend": "claude", "models": {"claude": "sonnet"}, "ai_off": True})
+    assert "AI is off: nothing answers until you load one." in t
+    assert not any(x.startswith("Loaded now") for x in t)
+    (tmp_path / "home" / ".wowclaude" / "last_answer.json").write_text(
+        json.dumps({"t": __import__("time").time() - 5, "ok": False, "seconds": 3.0, "backend": "cerebras", "model": "m",
+                    "error": "402 payment"}), encoding="utf-8")
+    t = _texts(tmp_path, "setup_window", {"backend": "cerebras", "model": "m"})
+    assert any(x.startswith("Last answer:") and "FAILED (cerebras, m): 402 payment" in x for x in t)
+    assert "Unload" in t and "Test now" in t

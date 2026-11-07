@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import time
 import os
 import string
 from pathlib import Path
@@ -26,6 +27,35 @@ def model_for(backend: str) -> str | None:
     """The model chosen for this AI (Own AI tab), else the general one from the AI Setup page, else None = the AI's default."""
     c = load()
     return (c.get("models") or {}).get(backend) or c.get("model") or None
+
+
+def ai_loaded() -> bool:
+    """False after "Unload" in the AI setup: nothing answers until an AI is loaded again."""
+    return not load().get("ai_off")
+
+
+LAST_ANSWER = HOME / "last_answer.json"
+
+
+def record_answer(ok: bool, seconds: float, error: str = "") -> None:
+    """The result of the last real question to the AI (chat, CLI start or Test now): the setup window shows it live."""
+    try:
+        from . import backends, harness_import
+        cfg = load()
+        b = backends.name()
+        rec = {"t": time.time(), "ok": bool(ok), "seconds": round(float(seconds), 1), "backend": b,
+               "model": harness_import.model_of(b, cfg), "error": str(error)[:160]}
+        HOME.mkdir(parents=True, exist_ok=True)
+        LAST_ANSWER.write_text(json.dumps(rec), encoding="utf-8")
+    except Exception:  # noqa: BLE001 - a status file must never break an answer
+        pass
+
+
+def last_answer() -> dict:
+    try:
+        return json.loads(LAST_ANSWER.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return {}
 
 
 def save(cfg: dict) -> None:

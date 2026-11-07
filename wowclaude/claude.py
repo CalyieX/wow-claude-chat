@@ -470,6 +470,18 @@ class Session:
             self.history = []
 
     def ask(self, prompt: str, model: str | None = None) -> str:
+        if not config.ai_loaded():
+            raise RuntimeError("No AI loaded. Open AI Setup (/kk) and load one.")
+        started = time.time()
+        try:
+            answer = self._ask(prompt, model)
+        except Exception as exc:
+            config.record_answer(False, time.time() - started, str(exc))
+            raise
+        config.record_answer(True, time.time() - started)
+        return answer
+
+    def _ask(self, prompt: str, model: str | None = None) -> str:
         from . import backends
         self._sync_harness()
         if backends.name() != "claude":

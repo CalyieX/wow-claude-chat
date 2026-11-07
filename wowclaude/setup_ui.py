@@ -132,6 +132,38 @@ def _state() -> dict:
             "input_control": bool(cfg.get("input_control")), "computer_access": bool(cfg.get("computer_access"))}
 
 
+def is_off() -> bool:
+    return not config.ai_loaded()
+
+
+def unload() -> dict:
+    """The AI stays configured (model, key) but nothing answers until it is loaded again."""
+    cfg = config.load()
+    cfg["ai_off"] = True
+    config.save(cfg)
+    return {"ok": True, "status": "AI unloaded: nothing answers now. Click an AI to load it again."}
+
+
+def probe() -> dict:
+    """A real question to the loaded AI, not just a look at the settings: {ok, status, seconds}. Shown live in the setup window."""
+    import time
+    if not config.ai_loaded():
+        return {"ok": False, "status": "No AI loaded.", "seconds": 0.0}
+    started = time.time()
+    b = backends.name()
+    try:
+        if b == "claude":
+            ok, status = claude.check_login()
+        else:
+            answer = backends.ask("Answer with the single word OK.", [], "Say OK.", config.model_for(b))
+            ok, status = True, f"{b} answered: {answer.strip()[:60]}"
+    except Exception as exc:  # noqa: BLE001
+        ok, status = False, str(exc)[:160]
+    seconds = time.time() - started
+    config.record_answer(ok, seconds, "" if ok else status)
+    return {"ok": ok, "status": f"{status} ({seconds:.1f} s)", "seconds": seconds}
+
+
 def _check() -> dict:
     """Slow (Claude Code answers a real question): the page asks separately, after it has loaded."""
     ok, status = claude.check_login() if backends.name() == "claude" else backends.check()
@@ -147,6 +179,7 @@ def apply(data: dict) -> dict:
     if backend not in ["claude", "codex", "command", "openai-compatible", *backends.PRESETS]:
         return {"ok": False, "status": f"Unknown backend: {backend}"}
     cfg["backend"] = backend
+    cfg.pop("ai_off", None)  # saving an AI loads it
     for k in ("model", "base_url", "command"):
         v = str(data.get(k, "")).strip()
         if v:

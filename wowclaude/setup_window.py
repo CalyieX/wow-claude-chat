@@ -51,13 +51,25 @@ def deep_search() -> list[dict]:
 
 
 def current_ai() -> str:
-    """The AI that is set in config.json right now, as one line (empty when none was chosen yet)."""
+    """The AI that is loaded right now, as one line (empty when none was chosen yet or it was unloaded)."""
     from . import harness_import
     cfg = config.load()
     backend = cfg.get("backend")
-    if not backend:
+    if not backend or cfg.get("ai_off"):
         return ""
     return f"{backend}, model {harness_import.model_of(backend, cfg)}"
+
+
+def describe_last(rec: dict, now: float) -> str:
+    """The last real answer of the AI, as one line for the live panel."""
+    if not rec:
+        return "Last answer: none yet (press Test now, or ask something in the game)."
+    ago = max(0, int(now - float(rec.get("t", now))))
+    when = f"{ago} s ago" if ago < 120 else f"{ago // 60} min ago"
+    who = f"{rec.get('backend', '?')}, {rec.get('model', '?')}"
+    if rec.get("ok"):
+        return f"Last answer: {when}, ok, {rec.get('seconds', 0)} s ({who})"
+    return f"Last answer: {when}, FAILED ({who}): {rec.get('error', '')}"
 
 
 def run() -> None:
@@ -88,7 +100,13 @@ def run() -> None:
     outer = tk.Frame(win.inner, bg=bg)
     outer.pack(side="top", fill="both", expand=True, padx=8, pady=6)
 
-    lab(outer, "Found on this PC (press Search) - click one to use it:").pack(fill="x")
+    live = tk.Frame(outer, bg=bg)
+    live.pack(fill="x")
+    now_lab = tk.Label(live, text="", bg=bg, fg=gold, anchor="w", justify="left", wraplength=560)
+    now_lab.pack(side="left", fill="x", expand=True)
+    last_lab = tk.Label(outer, text="", bg=bg, fg="#b9b093", anchor="w", justify="left", wraplength=700)
+    last_lab.pack(fill="x", pady=(0, 6))
+    lab(outer, "Found on this PC (press Search) - click one to load it:").pack(fill="x")
     foundf = tk.Frame(outer, bg=bg)
     foundf.pack(fill="x", pady=(0, 6))
     backend_var = tk.StringVar(value=st["backend_set"])  # empty until an AI was really chosen: no default dressed up as a choice
@@ -111,12 +129,8 @@ def run() -> None:
     def draw_found() -> None:
         for w in foundf.winfo_children():
             w.destroy()
-        now = current_ai()
-        if now:  # the AI that answers right now: never say "no AI" while one is loaded
-            lab(foundf, "Loaded now: " + now, "#7fd17f").pack(fill="x", pady=(0, 4))
         if not found:
-            lab(foundf, ("Press Search to look for other AIs on this PC (or enter an API key below)." if now else
-                         "No AI loaded yet. Press Search to look for the AIs on this PC (or enter an API key below)."), "#b9b093").pack(fill="x")
+            lab(foundf, "Press Search to look for the AIs on this PC (or enter an API key below).", "#b9b093").pack(fill="x")
         for i, f in enumerate(found):
             b = btn(foundf, ("* " if i == 0 else "") + f["label"], lambda f=f: use_found(f))
             b.pack(fill="x", pady=2)
@@ -217,5 +231,41 @@ def run() -> None:
     close_btn = btn(bottom, "Close", win.close)
     close_btn.pack(side="left", padx=(0, 8))
     load_btn = btn(bottom, "Load AI again", save)  # only shown when the last check failed
+    def refresh_live() -> None:
+        """Real data, read again every 2 seconds: what is loaded and how the last answer went."""
+        import time
+        now = current_ai()
+        if now:
+            now_lab.config(text="Loaded now: " + now, fg="#7fd17f")
+            if not unload_btn.winfo_ismapped():
+                unload_btn.pack(side="right")
+        else:
+            off = setup_ui.is_off()
+            now_lab.config(text=("AI is off: nothing answers until you load one." if off else "No AI loaded yet."), fg="#ff8a80" if off else gold)
+            unload_btn.pack_forget()
+        last_lab.config(text=describe_last(config.last_answer(), time.time()))
+        try:
+            win.root.after(2000, refresh_live)
+        except Exception:  # noqa: BLE001 - window closed
+            pass
+
+    def do_unload() -> None:
+        msg.config(text=setup_ui.unload()["status"], fg=gold)
+        refresh_live()
+
+    def test_now() -> None:
+        msg.config(text="Asking the AI a real question ...", fg=gold)
+
+        def work() -> None:
+            r = setup_ui.probe()
+            try:
+                win.root.after(0, lambda: (msg.config(text=r["status"], fg="#7fd17f" if r["ok"] else "#ff8a80"), refresh_live()))
+            except Exception:  # noqa: BLE001
+                pass
+        threading.Thread(target=work, daemon=True).start()
+
+    unload_btn = btn(live, "Unload", do_unload)
+    btn(bottom, "Test now", test_now).pack(side="left", padx=(0, 8), before=close_btn)
     draw_found()
+    refresh_live()
     win.root.mainloop()
