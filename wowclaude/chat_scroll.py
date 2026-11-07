@@ -18,7 +18,8 @@ BTN = 18  # height of an arrow button
 STATE: dict = {"scroll": 0, "frame": None, "rows": 0, "fit": 1, "dirty": False}
 LOG = None  # path of a small diagnostic log (set by the overlay): what the hook saw
 
-WM_MOUSEWHEEL, WM_LBUTTONDOWN = 0x020A, 0x0201
+WM_MOUSEWHEEL, WM_LBUTTONDOWN, WM_MOUSEMOVE, WM_LBUTTONUP = 0x020A, 0x0201, 0x0200, 0x0202
+DRAG: dict = {"on": False, "off": 0}
 
 
 def _log(text: str) -> None:
@@ -90,6 +91,34 @@ def bar_image(h: int, first: float, last: float, scrolled: bool):
     return im.resize((w, h), Image.LANCZOS)
 
 
+def thumb_span(frame):
+    """(top, bottom) of the thumb in screen y, or None."""
+    rows, fit, sc = STATE["rows"], STATE["fit"], STATE["scroll"]
+    if not frame or rows <= fit:
+        return None
+    t = frame[1]
+    h = frame[3] - frame[1]
+    t0, t1 = BTN, h - 2 * BTN
+    y0 = t0 + int((rows - sc - fit) / rows * (t1 - t0))
+    y1 = max(y0 + 10, t0 + int((rows - sc) / rows * (t1 - t0)))
+    return t + y0, t + min(y1, t1)
+
+
+def drag_to(y: int) -> bool:
+    frame = STATE["frame"]
+    rows, fit = STATE["rows"], STATE["fit"]
+    if not frame or rows <= fit:
+        return False
+    h = frame[3] - frame[1]
+    t0, t1 = BTN, h - 2 * BTN
+    first = (y - DRAG["off"] - frame[1] - t0) / max(1, t1 - t0)
+    new = clamp(round(rows - fit - first * rows), rows, fit)
+    if new == STATE["scroll"]:
+        return False
+    STATE["scroll"], STATE["dirty"] = new, True
+    return True
+
+
 def nudge(kind: str, x: int, y: int) -> bool:
     """Apply a wheel notch (kind 'wheel_up'/'wheel_down') or a left click at the screen point. True if it changed anything."""
     frame = STATE["frame"]
@@ -105,6 +134,11 @@ def nudge(kind: str, x: int, y: int) -> bool:
         delta = -STEP
     elif kind == "click":
         z = bar_zone(frame, x, y)
+        sp = thumb_span(frame)
+        if z in ("page_up", "page_down") and sp and sp[0] <= y <= sp[1]:
+            DRAG["on"], DRAG["off"] = True, y - sp[0]
+            _log(f"drag start at {x},{y}")
+            return False
         delta = {"up": STEP, "down": -STEP, "page_up": STATE["fit"] - 1, "page_down": -(STATE["fit"] - 1)}.get(z, 0)
         if z == "bottom":
             delta = -STATE["scroll"]
@@ -140,13 +174,18 @@ def start_hook() -> threading.Thread | None:
 
     def proc(code, wparam, lparam):
         try:
-            if code == 0 and wparam in (WM_MOUSEWHEEL, WM_LBUTTONDOWN):
+            if code == 0 and wparam in (WM_MOUSEWHEEL, WM_LBUTTONDOWN, WM_MOUSEMOVE, WM_LBUTTONUP):
                 info = ctypes.cast(lparam, ctypes.POINTER(_MSLLHOOK)).contents
                 if wparam == WM_MOUSEWHEEL:
                     delta = ctypes.c_short((info.mouseData >> 16) & 0xFFFF).value
                     nudge("wheel_up" if delta > 0 else "wheel_down", info.pt.x, info.pt.y)
-                else:
+                elif wparam == WM_LBUTTONDOWN:
                     nudge("click", info.pt.x, info.pt.y)
+                elif wparam == WM_MOUSEMOVE:
+                    if DRAG["on"]:
+                        drag_to(info.pt.y)
+                else:
+                    DRAG["on"] = False
         except Exception:  # noqa: BLE001 - never let a hook callback fail
             pass
         return u.CallNextHookEx(None, code, wparam, lparam)  # always pass the event on

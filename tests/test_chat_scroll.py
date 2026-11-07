@@ -57,3 +57,15 @@ def test_scrolled_render_shows_older_lines():
     bottom = chat_marks.render(entries, size, bg=(0, 0, 0, 255), scroll=0)
     older = chat_marks.render(entries, size, bg=(0, 0, 0, 255), scroll=10)
     assert bottom.tobytes() != older.tobytes()
+
+
+def test_dragging_the_thumb_scrolls():
+    setup()
+    l, t, r, b = FRAME
+    x = r + chat_scroll.BAR_X + chat_scroll.BAR_W // 2
+    sp = chat_scroll.thumb_span(FRAME)
+    chat_scroll.nudge("click", x, sp[0] + 3)
+    assert chat_scroll.DRAG["on"]
+    assert chat_scroll.drag_to(sp[0] + 3 - 40)  # up = older lines
+    assert chat_scroll.STATE["scroll"] > 0
+    chat_scroll.DRAG["on"] = False
