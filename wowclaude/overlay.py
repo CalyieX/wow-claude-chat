@@ -106,9 +106,41 @@ def _windows() -> dict[int, str]:
     return out
 
 
+_GAME = {"h": 0}
+GAME_CLASSES = ("GxWindowClass", "GxWindowClassD3d")
+
+
+def _class_of(hwnd: int) -> str:
+    buf = ctypes.create_unicode_buffer(64)
+    user32.GetClassNameW(wintypes.HWND(hwnd), buf, 64)
+    return buf.value
+
+
 def _game_hwnd() -> int:
-    return (user32.FindWindowW("GxWindowClass", None) or user32.FindWindowW("GxWindowClassD3d", None)
-            or user32.FindWindowW(None, "World of Warcraft"))
+    """The game window. Remembered by its handle and checked by window class, so a changed title cannot lose it."""
+    h = _GAME["h"]
+    if h and user32.IsWindow(wintypes.HWND(h)) and _class_of(h) in GAME_CLASSES:
+        return h
+    h = (user32.FindWindowW("GxWindowClass", None) or user32.FindWindowW("GxWindowClassD3d", None)
+         or user32.FindWindowW(None, "World of Warcraft") or 0)
+    _GAME["h"] = int(h)
+    return int(h)
+
+
+def _pid_of(hwnd: int) -> int:
+    pid = wintypes.DWORD(0)
+    user32.GetWindowThreadProcessId(wintypes.HWND(hwnd), ctypes.byref(pid))
+    return pid.value
+
+
+def game_in_front(extra_pids=()) -> bool:
+    """True while the game, this window or its browser is the window in front. Another program in front: False."""
+    fg = user32.GetForegroundWindow()
+    if not fg:
+        return True  # nothing in front (e.g. during a switch): do not flicker
+    pid = _pid_of(fg)
+    game = _game_hwnd()
+    return pid == os.getpid() or pid in extra_pids or bool(game and pid == _pid_of(game))
 
 
 def keep_page_above_game(page: int) -> None:
@@ -1116,6 +1148,20 @@ def frame_loop(hwnd: int, x: int, y: int, w: int, h: int, opacity: int, click_th
         fw, fh = dims()
         return (r.left, r.top, r.right - r.left, r.bottom - r.top) == (S["x"] - EDGE, S["y"] - TOP, fw, fh)
 
+    pending = {"id": None}
+
+    def later(ms):
+        pending["id"] = root.after(ms, tick)
+
+    def wake():
+        """A window event arrived: run the next round now instead of waiting for the timer."""
+        try:
+            if pending["id"] is not None:
+                root.after_cancel(pending["id"])
+            pending["id"] = root.after(0, tick)
+        except tk.TclError:
+            pass
+
     def tick():
         """Never let one failed round stop the loop: the frame must keep following the browser."""
         try:
@@ -1128,7 +1174,7 @@ def frame_loop(hwnd: int, x: int, y: int, w: int, h: int, opacity: int, click_th
                     f.write(f"tick error: {exc!r}\n")
             except OSError:
                 pass
-            root.after(500, tick)
+            later(500)
 
     def _tick():
         touch_alive()  # tells the always-on WAC button (chat_fake) that the browser window is up
@@ -1136,14 +1182,15 @@ def frame_loop(hwnd: int, x: int, y: int, w: int, h: int, opacity: int, click_th
             persist()
             root.destroy()
             return
-        if game_minimized():  # integrated look: nothing floats over the desktop while the game is minimized
+        away = (not config.load().get("overlay_always_on_top")) and _game_hwnd() and not game_in_front({_pid_of(hwnd)})
+        if game_minimized() or away:  # integrated look: nothing floats over the desktop while the game is minimized or another program is in front
             if not S["hid"]:
                 S["hid"] = True
                 user32.ShowWindow(wintypes.HWND(hwnd), 0)
                 root.withdraw()
                 bar.withdraw()
                 fl.withdraw()
-            root.after(400, tick)
+            later(400)
             return
         if S["hid"]:
             S["hid"] = False
@@ -1189,8 +1236,25 @@ def frame_loop(hwnd: int, x: int, y: int, w: int, h: int, opacity: int, click_th
                     save_state(last_page=found[1])  # the page to come back to when the browser is opened again
         else:
             user32.SetWindowPos(ctypes.c_void_p(FL["h"]), wintypes.HWND(HWND_TOPMOST), 0, 0, 0, 0, 0x53)
-        root.after(250, tick)
+        later(250)
 
+    watch = {"sig": None}
+
+    def watcher():
+        """Cheap look every 100 ms: when the game moved, was minimized, or another program came to the front, run the
+        full round at once. (A SetWinEventHook callback crashed Python inside the Tk loop, so this polls instead.)"""
+        try:
+            if user32.IsWindow(wintypes.HWND(hwnd)):
+                sig = (game_rect(), game_minimized(), user32.GetForegroundWindow())
+                if sig != watch["sig"]:
+                    if watch["sig"] is not None:
+                        wake()
+                    watch["sig"] = sig
+                root.after(100, watcher)
+        except tk.TclError:
+            pass
+
+    watcher()
     tick()
     root.mainloop()
 
