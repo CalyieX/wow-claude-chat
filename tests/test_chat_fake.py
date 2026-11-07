@@ -28,3 +28,15 @@ def test_paint_keeps_marks_visible():
     img = cf.paint([("ai", "x")], (300, 120))
     assert img.getpixel((2, 2))[3] == 0 and img.getpixel((297, 2))[3] == 0 and img.getpixel((2, 117))[3] == 0
     assert img.getchannel("A").getbbox() is not None  # the text is there
+
+
+def test_only_one_overlay_program_paints_the_chat():
+    """A busy PC delays the heartbeat, the bridge starts a second overlay: it must stop at once instead of painting twice."""
+    import os
+    import uuid
+    if os.name != "nt":
+        return
+    from wowclaude import chat_fake
+    name = "Local\wowclaude-test-" + uuid.uuid4().hex
+    assert chat_fake.single_instance(name) is True
+    assert chat_fake.single_instance(name) is False

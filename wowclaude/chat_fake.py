@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import ctypes
 import json
+import os
 import time
 from ctypes import wintypes
 
@@ -27,6 +28,27 @@ def alive(max_age: float = 4.0) -> bool:
         return time.time() - HEART.stat().st_mtime <= max_age
     except OSError:
         return False
+
+
+_MUTEX = []  # keeps the handle of the single-instance lock alive as long as this process runs
+
+
+def single_instance(name: str = "Local\wowclaude-chat-overlay") -> bool:
+    """True for the first overlay program only. The bridge starts a new one whenever the heartbeat is older than 4 seconds
+    (a busy PC is enough), and without this lock the old one kept running too: two programs painting the same chat."""
+    import ctypes
+    if os.name != "nt":
+        return True
+    k32 = ctypes.windll.kernel32
+    k32.CreateMutexW.restype = ctypes.c_void_p
+    handle = k32.CreateMutexW(None, False, name)
+    if not handle:
+        return True  # cannot tell: better two overlays than none
+    if k32.GetLastError() == 183:  # ERROR_ALREADY_EXISTS
+        k32.CloseHandle(ctypes.c_void_p(handle))
+        return False
+    _MUTEX.append(handle)
+    return True
 
 
 def start() -> None:
@@ -374,6 +396,8 @@ class Dock:
 
 
 def run(poll: float = 0.25, find_every: float = 0.5) -> None:
+    if not single_instance():
+        return  # another overlay program already paints the chat
     root, hwnd = _make_window()
     root.update()
     dock = Dock(root) if hasattr(overlay, "slot_sprite") else None
