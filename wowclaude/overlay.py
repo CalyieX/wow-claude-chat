@@ -435,6 +435,32 @@ def save_state(**kw) -> None:
         pass
 
 
+def bookmarks() -> list[dict]:
+    """The saved pages: [{"title", "url"}], in the order they were added."""
+    out = []
+    for b in load_state().get("bookmarks") or []:
+        if isinstance(b, dict) and str(b.get("url", "")).startswith(("http://", "https://")):
+            out.append({"title": str(b.get("title") or b["url"]), "url": b["url"]})
+    return out
+
+
+def add_bookmark(url: str, title: str = "") -> bool:
+    """Save a page (once per address). False for addresses that make no sense to keep."""
+    if not url.startswith(("http://", "https://")) or any(b["url"] == url for b in bookmarks()):
+        return False
+    host = urllib.parse.urlparse(url).netloc.removeprefix("www.")
+    save_state(bookmarks=bookmarks() + [{"title": (title or host or url)[:40], "url": url}])
+    return True
+
+
+def remove_bookmark(url: str) -> None:
+    save_state(bookmarks=[b for b in bookmarks() if b["url"] != url])
+
+
+def reload_page(port: int) -> bool:
+    return _cdp(port, "Page.reload", {})
+
+
 def run(url: str | None = None, corner: str | None = None, size: str | None = None, opacity: int = 100,
         click_through: bool = False) -> int:
     if os.name != "nt":
@@ -795,11 +821,49 @@ def frame_loop(hwnd: int, x: int, y: int, w: int, h: int, opacity: int, click_th
     var = tk.StringVar(value=saved.get("url", ""))
     if port:
         start_poller(port)
-    for glyph, step in (("◀", -1), ("▶", 1)):  # back / forward in the page history
-        btn = tk.Button(bar, text=glyph, command=lambda st=step: port and in_background(history_step, port, st), width=2, relief="flat",
+    def bar_button(glyph, command):
+        btn = tk.Button(bar, text=glyph, command=command, width=2, relief="flat",
                         bg="#2a2417", fg="#ffd100", activebackground="#5c4a1a", activeforeground="#ffffff",
                         font=("Arial", 7), bd=0, highlightthickness=0, takefocus=0)
         btn.pack(side="left", fill="y")
+        return btn
+
+    def open_url(u):
+        if port:
+            in_background(navigate, port, u)
+
+    def bookmark_menu():
+        """The saved pages: click one to open it; add the current page; remove one."""
+        m = tk.Menu(bar, tearoff=0, bg="#15130e", fg="#ffd100", activebackground="#5c4a1a", activeforeground="#ffffff", bd=1)
+        cur = (PAGE["found"] or ("", ""))[1]
+        can_add = cur.startswith(("http://", "https://")) and not any(b["url"] == cur for b in bookmarks())
+        m.add_command(label="+ Add this page", state="normal" if can_add else "disabled",
+                      command=lambda: add_bookmark(cur))
+        saved = bookmarks()
+        if saved:
+            m.add_separator()
+        for b in saved:
+            m.add_command(label=b["title"], command=lambda u=b["url"]: open_url(u))
+        if saved:
+            m.add_separator()
+            rm = tk.Menu(m, tearoff=0, bg="#15130e", fg="#ffd100", activebackground="#5c4a1a", activeforeground="#ffffff")
+            for b in saved:
+                rm.add_command(label=b["title"], command=lambda u=b["url"]: remove_bookmark(u))
+            m.add_cascade(label="Remove", menu=rm)
+        return m
+
+    def show_bookmarks():
+        m = bookmark_menu()
+        x, y = bar.winfo_rootx(), bar.winfo_rooty() + bar.winfo_height()
+        try:
+            m.tk_popup(x, y)
+        finally:
+            m.grab_release()
+
+    bar_button("▾", show_bookmarks)  # saved pages
+    for glyph, step in (("◀", -1), ("▶", 1)):  # back / forward in the page history
+        bar_button(glyph, lambda st=step: port and in_background(history_step, port, st))
+    bar_button("⟳", lambda: port and in_background(reload_page, port))  # reload
     entry = tk.Entry(bar, textvariable=var, bg="#0d0c09", fg="#ffd100", insertbackground="#ffd100", relief="flat",
                      font=("Arial", 9), highlightthickness=1, highlightbackground="#5c5c5c", highlightcolor="#b4b4b4",
                      selectbackground="#5c4a1a", selectforeground="#ffffff")
