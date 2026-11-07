@@ -88,3 +88,38 @@ def test_game_bar_image_builds_from_pictures(tmp_path):
         assert chat_scroll.bar_image(300, 0.2, 0.5, True, True).getbbox() is not None
     finally:
         chat_scroll.ASSETS = old
+
+
+def test_thumb_shrinks_with_more_text_and_reaches_both_ends():
+    sizes = []
+    for rows in (30, 100, 1000):
+        top = chat_scroll.thumb_extent(400, 0, 21 / rows)
+        bottom = chat_scroll.thumb_extent(400, (rows - 21) / rows, 1)
+        assert top[0] == 0 and bottom[1] == 400  # reaches both ends
+        sizes.append(top[1] - top[0])
+    assert sizes[0] > sizes[1] > sizes[2] >= chat_scroll.MIN_THUMB
+
+
+def test_arrows_track_and_thumb_share_one_axis(tmp_path):
+    from PIL import Image
+    def part(name, size, box):  # a picture whose visible pixels do not start at 0 (like the game's arrows)
+        im = Image.new("RGBA", size, (0, 0, 0, 0))
+        im.paste((200, 120, 60, 255), box)
+        im.save(tmp_path / f"minimal-scrollbar-{name}.png")
+    for n in ("arrow-top", "arrow-bottom"):
+        part(n, (17, 11), (1, 1, 17, 11))
+    part("arrow-returntobottom", (17, 15), (1, 0, 17, 15))
+    part("track-top", (8, 8), (1, 1, 7, 8)); part("track-bottom", (8, 8), (1, 0, 7, 7)); part("track-middle", (8, 1), (1, 0, 7, 1))
+    for n in ("top", "bottom"):
+        part("small-thumb-" + n, (8, 8), (0, 0, 8, 8))
+    part("small-thumb-middle", (8, 40), (0, 0, 8, 40))
+    old = chat_scroll.ASSETS
+    chat_scroll.ASSETS = tmp_path
+    try:
+        im = chat_scroll.game_bar_image(400, 0.3, 0.6, True)
+    finally:
+        chat_scroll.ASSETS = old
+    alpha = im.getchannel("A").point(lambda v: 255 if v > 40 else 0)
+    for y0, y1 in ((0, 18), (30, 60), (364, 382), (382, 400)):
+        box = alpha.crop((0, y0, im.width, y1)).getbbox()
+        assert (box[0] + box[2]) / 2 == im.width / 2, (y0, box)

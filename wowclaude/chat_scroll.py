@@ -68,6 +68,21 @@ def _part(name: str):
         return None
 
 
+def _bbox(part):
+    """Where the visible pixels of a picture are (the pictures carry empty margins: centre on what is seen)."""
+    box = part.getchannel("A").point(lambda v: 255 if v > 40 else 0).getbbox()
+    return box or (0, 0, part.width, part.height)
+
+
+def _put_centered(im, part, axis: float, top: int, cell: int = 0) -> None:
+    """Paste ``part`` so that its visible pixels sit exactly on the vertical ``axis`` (and, with ``cell``, in the middle of
+    a cell of that height starting at ``top``)."""
+    x0, y0, x1, y1 = _bbox(part)
+    x = round(axis - (x0 + x1) / 2)
+    y = top + (round((cell - (y1 - y0)) / 2) - y0 if cell else 0)
+    im.alpha_composite(part, (x, y))
+
+
 def game_bar_image(h: int, first: float, last: float, scrolled: bool, dragging: bool = False, w: int = 0, btn: int = 0,
                    jump: bool = True):
     """The bar from the game's own pictures (the look of the real chat scroll bar), or None when they are not there."""
@@ -77,12 +92,12 @@ def game_bar_image(h: int, first: float, last: float, scrolled: bool, dragging: 
     P = lambda n: _part("minimal-scrollbar-" + n)  # noqa: E731
     w, btn = w or BAR_W, btn or BTN
     im = Image.new("RGBA", (w, h), (0, 0, 0, 0))
-    cx = w // 2
+    axis = w / 2  # one axis for everything: arrows, track and thumb are centred on what is visible, not on the picture
     dn_y = h - (2 if jump else 1) * btn  # top of the down arrow cell
     t0, t1 = btn, dn_y
     # track
     top, bot, mid = P("track-top"), P("track-bottom"), P("track-middle")
-    x = cx - 4
+    x = round(axis - 4)
     if mid is not None and top is not None and bot is not None and t1 - t0 > 16:
         im.alpha_composite(top, (x, t0))
         im.alpha_composite(mid.resize((8, t1 - t0 - 16), Image.NEAREST), (x, t0 + 8))
@@ -90,19 +105,18 @@ def game_bar_image(h: int, first: float, last: float, scrolled: bool, dragging: 
     # arrows: top, bottom (down), and the jump-to-the-newest button while scrolled up
     a_up, a_dn = P("arrow-top"), P("arrow-bottom")
     if a_up is not None:
-        im.alpha_composite(a_up, (cx - a_up.width // 2, (btn - a_up.height) // 2))
+        _put_centered(im, a_up, axis, 0, btn)
     if a_dn is not None:
-        im.alpha_composite(a_dn, (cx - a_dn.width // 2, dn_y + (btn - a_dn.height) // 2))
+        _put_centered(im, a_dn, axis, dn_y, btn)
     if scrolled and jump:
         rb = P("arrow-returntobottom")
         if rb is not None:
-            im.alpha_composite(rb, (cx - rb.width // 2, h - btn + (btn - rb.height) // 2))
+            _put_centered(im, rb, axis, h - btn, btn)
     # thumb
     if t1 - t0 > 24 and last - first < 0.999:  # nothing to scroll: no thumb (a full-length thumb looks like a rod)
         kind = "-down" if dragging else ""
-        y0 = t0 + int(first * (t1 - t0))
-        y1 = min(t1, max(y0 + 23, t0 + int(last * (t1 - t0))))
-        y0 = max(t0, y1 - max(23, y1 - y0))
+        y0, y1 = thumb_extent(t1 - t0, first, last)  # the game's own rule (see thumb_extent)
+        y0, y1 = t0 + y0, t0 + y1
         tt, tm, tb = P("small-thumb-top" + kind), P("small-thumb-middle" + kind), P("small-thumb-bottom" + kind)
         if tt is not None and tm is not None and tb is not None and y1 - y0 >= 16:
             im.alpha_composite(tt, (x, y0))
@@ -150,6 +164,20 @@ def _drawn_bar_image(h: int, first: float, last: float, scrolled: bool):
     return im.resize((w, h), Image.LANCZOS)
 
 
+MIN_THUMB = 23  # the game's MinimalScrollBar: minThumbExtent
+
+
+def thumb_extent(track: int, first: float, last: float) -> tuple[int, int]:
+    """(top, bottom) of the thumb inside a track of ``track`` px, the way the game's scroll bar does it: the thumb is as
+    long as the part of the text that is visible (but never shorter than MIN_THUMB), and it travels the track minus its
+    own length - so it shrinks as the text grows and still reaches both ends."""
+    visible = max(1e-6, min(1.0, last - first))
+    length = min(track, max(MIN_THUMB, round(visible * track)))
+    pct = 0.0 if visible >= 1 else max(0.0, min(1.0, first / (1 - visible)))
+    top = round(pct * (track - length))
+    return top, top + length
+
+
 def thumb_span(frame):
     """(top, bottom) of the thumb in screen y, or None."""
     rows, fit, sc = STATE["rows"], STATE["fit"], STATE["scroll"]
@@ -158,9 +186,8 @@ def thumb_span(frame):
     t = frame[1]
     h = frame[3] - frame[1]
     t0, t1 = BTN, h - 2 * BTN
-    y0 = t0 + int((rows - sc - fit) / rows * (t1 - t0))
-    y1 = max(y0 + 10, t0 + int((rows - sc) / rows * (t1 - t0)))
-    return t + y0, t + min(y1, t1)
+    y0, y1 = thumb_extent(t1 - t0, (rows - sc - fit) / rows, (rows - sc) / rows)
+    return t + t0 + y0, t + t0 + y1
 
 
 def drag_to(y: int) -> bool:
@@ -170,8 +197,10 @@ def drag_to(y: int) -> bool:
         return False
     h = frame[3] - frame[1]
     t0, t1 = BTN, h - 2 * BTN
-    first = (y - DRAG["off"] - frame[1] - t0) / max(1, t1 - t0)
-    first = max(0.0, min(first, (rows - fit) / rows))  # the thumb follows the mouse exactly, not line by line
+    visible = fit / rows
+    length = min(t1 - t0, max(MIN_THUMB, round(visible * (t1 - t0))))
+    pct = max(0.0, min(1.0, (y - DRAG["off"] - frame[1] - t0) / max(1, (t1 - t0) - length)))
+    first = pct * (1 - visible)  # the thumb follows the mouse exactly, not line by line
     new = clamp(round(rows - fit - first * rows), rows, fit)
     if STATE["thumb"] == first:
         return False

@@ -284,6 +284,7 @@ def test_cli_mode_screen_events_replace_each_other_and_paint():
 
 def test_cli_mode_tab_size_and_keys(monkeypatch, tmp_path):
     from wowclaude import cli_mode, chat_fake, config
+    monkeypatch.setattr(cli_mode, "SIZE_FILE", tmp_path / "tabsize.json")  # not the live file of a running overlay
     assert cli_mode.tab_size() == cli_mode.DEFAULT_SIZE
     chat_fake.report_tab_size((500, 300), 17)
     cols, rows = cli_mode.tab_size()
